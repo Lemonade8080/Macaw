@@ -33,12 +33,12 @@ int FApplication::Run(HINSTANCE Instance, int ShowCommand) {
         return FALSE;
     }
 
-    mContext.mRenderer.Create(mWindowHandle, mLoadingWindowWidth, mLoadingWindowHeight);
+    mContext.mRenderer.Create(mWindowState.mWindowHandle, mLoadingWindowWidth, mLoadingWindowHeight);
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui_ImplWin32_Init(static_cast<void*>(mWindowHandle));
+    ImGui_ImplWin32_Init(static_cast<void*>(mWindowState.mWindowHandle));
     ImGui_ImplDX11_Init(mContext.mRenderer.GetDevice(), mContext.mRenderer.GetDeviceContext());
-    mImGuiInitialized = true;
+    mWindowState.mImGuiInitialized = true;
     ImGui::StyleColorsDark();
 
     ImGuiIO& Io{ImGui::GetIO()};
@@ -47,7 +47,7 @@ int FApplication::Run(HINSTANCE Instance, int ShowCommand) {
 
     const HACCEL AcceleratorTable{LoadAccelerators(Instance, MAKEINTRESOURCE(IDC_MACAW))};
     FLoadingScreen LoadingScreen{};
-    const HWND WindowHandle{mWindowHandle};
+    const HWND WindowHandle{mWindowState.mWindowHandle};
     const bool Loaded{LoadingScreen.Run(mContext.mRenderer, AcceleratorTable, [this, WindowHandle](FLoadingProgress& Progress) {
         return InitializeApplication(Progress, WindowHandle);
     })};
@@ -61,9 +61,9 @@ int FApplication::Run(HINSTANCE Instance, int ShowCommand) {
     mAcceptGameInput.store(true, std::memory_order_release);
     Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "Macaw Engine Initialized.");
     mLastTickTime = std::chrono::steady_clock::now();
-    mFrameEnabled = true;
+    mWindowState.mFrameEnabled = true;
     const int ExitCode{RunMessageLoop(AcceleratorTable)};
-    mFrameEnabled = false;
+    mWindowState.mFrameEnabled = false;
     SaveState();
     Shutdown();
     mContext.mRenderer.ReportLiveObjects();
@@ -178,10 +178,10 @@ int FApplication::RunMessageLoop(HACCEL AcceleratorTable) {
 }
 
 void FApplication::RenderFrame() {
-    if (!mFrameEnabled || mRenderingFrame) {
+    if (!mWindowState.mFrameEnabled || mWindowState.mRenderingFrame) {
         return;
     }
-    mRenderingFrame = true;
+    mWindowState.mRenderingFrame = true;
     const auto CurrentTickTime{std::chrono::steady_clock::now()};
     const float DeltaTime{std::chrono::duration<float>(CurrentTickTime - mLastTickTime).count()};
     mLastTickTime = CurrentTickTime;
@@ -215,7 +215,7 @@ void FApplication::RenderFrame() {
 
     mContext.mRenderer.EndFrame();
     mContext.mMouseInput.EndFrame();
-    mRenderingFrame = false;
+    mWindowState.mRenderingFrame = false;
 }
 
 void FApplication::SaveState() {
@@ -228,7 +228,7 @@ void FApplication::SaveState() {
 }
 
 void FApplication::Shutdown() {
-    mFrameEnabled = false;
+    mWindowState.mFrameEnabled = false;
     mAcceptGameInput.store(false, std::memory_order_release);
     if (mContext.mThumbnailRenderer != nullptr) {
         mContext.mThumbnailRenderer->Terminate();
@@ -236,11 +236,11 @@ void FApplication::Shutdown() {
     if (mContext.mEditorUIManager != nullptr) {
         mContext.mEditorUIManager->ReleaseRenderResources();
     }
-    if (mImGuiInitialized) {
+    if (mWindowState.mImGuiInitialized) {
         ImGui_ImplDX11_Shutdown();
         ImGui_ImplWin32_Shutdown();
         ImGui::DestroyContext();
-        mImGuiInitialized = false;
+        mWindowState.mImGuiInitialized = false;
     }
     mContext.mRenderer.BindAssetRegistry(nullptr);
     mContext.mMenuPanel.reset();
@@ -253,9 +253,9 @@ void FApplication::Shutdown() {
     mContext.mEditorContext.reset();
     mEditorLogo.Reset();
     mPendingExternalFileDrops.clear();
-    if (mWindowHandle != nullptr) {
-        DestroyWindow(mWindowHandle);
-        mWindowHandle = nullptr;
+    if (mWindowState.mWindowHandle != nullptr) {
+        DestroyWindow(mWindowState.mWindowHandle);
+        mWindowState.mWindowHandle = nullptr;
     }
     if (mContext.mRenderer.GetDeviceContext() != nullptr) {
         mContext.mRenderer.Terminate();
