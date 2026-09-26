@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -19,16 +19,12 @@ struct PipelineUnit {
     FShader mVertexShader{};
     FShader mPixelShader{};
     FShader mGeometryShader{};
-
     Microsoft::WRL::ComPtr<ID3D11InputLayout> mInputLayout{};
     Microsoft::WRL::ComPtr<ID3D11RasterizerState> mRasterizerState{};
     Microsoft::WRL::ComPtr<ID3D11BlendState> mBlendState{};
     Microsoft::WRL::ComPtr<ID3D11DepthStencilState> mDepthStencilState{};
-
     D3D11_PRIMITIVE_TOPOLOGY mPrimitiveTopology{D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST};
-
     bool mInitialized{false};
-
     UINT mStencilRef{0};
 };
 
@@ -64,6 +60,7 @@ public:
     void SetRenderMode(ERenderMode Mode);
     bool RenderModeSettable(ERenderMode Mode);
     ERenderMode GetRenderMode() const;
+    ERenderMode ResolveRenderMode(ERenderMode Mode) const;
 
 private:
     bool InitializeFamily(ID3D11Device* Device, const std::filesystem::path& FamilyDirectory);

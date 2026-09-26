@@ -1,18 +1,32 @@
-﻿#pragma once
+#pragma once
 
 #include "ILineRenderer.h"
 
 class FLineRenderer : public ILineRenderer {
 private:
-    struct FQuadVertex { FVector2D mCorner{}; };
+    struct FQuadVertex {
+        FVector2D mCorner{};
+    };
 
-    struct FLineInstance { FVector4 mStartAndWidth{}; FVector4 mEndAndPadding{}; FVector4 mColor{}; };
+    struct FLineInstance {
+        FVector4 mStartAndWidth{};
+        FVector4 mEndAndPadding{};
+        FVector4 mColor{};
+    };
 
-    struct FLineFrameConstants { FMatrix mViewProjection{}; FVector4 mViewport{}; FVector4 mGridFade{}; };
+    struct FLineFrameConstants {
+        FMatrix mViewProjection{};
+        FVector4 mViewport{};
+        FVector4 mGridFade{};
+    };
 
     static_assert(sizeof(FLineFrameConstants) == sizeof(Uint32) * 24);
 
-    struct FLineBatch { TArray<FLineInstance> mInstances{}; FGraphicsBuffer mInstanceBuffer{}; Uint32 mCapacity{0}; };
+    struct FLineBatch {
+        TArray<FLineInstance> mInstances{};
+        FGraphicsBuffer mInstanceBuffer{};
+        Uint32 mCapacity{0};
+    };
 
 public:
     FLineRenderer() = default;

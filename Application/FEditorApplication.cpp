@@ -32,11 +32,12 @@ void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime)
         }
 
         FRenderProbe& Probe{Context.mWorld->BuildRenderProbe()};
-        Context.mEditorView->RenderInProbe(Probe, Camera, Viewport->GetRenderViewport());
-        Context.mRenderer.RenderScene(Viewport->GetRenderSurface(), Probe, Camera, Viewport->GetRenderSettings());
-        Context.mEditorView->RenderSceneGuides(Context.mRenderer.GetDeviceContext(), Camera, Viewport->GetCameraPosition(), Viewport->GetRenderViewport());
-        Context.mRenderer.RenderGizmos(Viewport->GetRenderSurface(), Probe, Camera);
-        Context.mRenderer.RenderText(Probe, Camera);
-        Context.mEditorView->RenderOrientationAxis(Context.mRenderer.GetDeviceContext(), Camera, Viewport->GetRenderViewport());
+        Context.mEditorView->BuildRenderProbes(Probe, Camera, Viewport->GetCameraPosition(), Viewport->GetRenderViewport());
+        FRenderView View{};
+        View.mTarget = &Viewport->GetRenderSurface();
+        View.mCamera = Camera;
+        View.mSettings = Viewport->GetRenderSettings();
+        View.mRenderMode = static_cast<ERenderMode>(Context.mEditorContext->GetRenderModeState());
+        Context.mRenderer.RenderView(View, Probe);
     }
 }

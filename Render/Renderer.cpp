@@ -1,20 +1,10 @@
-﻿#include "pch.h"
+#include "pch.h"
 
 #include "Renderer.h"
 #include "Core/Base/ErrorHandler.h"
 
-#include "Asset/Pipeline/UPipeline.h"
-#include "Asset/UTexture.h"
-
 #include <ranges>
-#include <range/v3/view/chunk_by.hpp>
-
-#include "ImGui/imgui.h"
-#include "ImGui/imgui_internal.h"
-#include "ImGui/imgui_impl_dx11.h"
-#include "ImGui/imgui_impl_win32.h"
-
-#include "../Core/Console/Console.h"
+#include <cmath>
 
 FRenderer::~FRenderer() = default;
 
@@ -33,17 +23,17 @@ void FRenderer::Create(HWND WindowHandle, UINT Width, UINT Height) {
 }
 
 bool FRenderer::Initialize() {
-    if (!CreateSamplerStates() || !mModelContextArray.Initialize(mDevice.Get(), mDeviceContext.Get(), 128) || !mLightContextArray.Initialize(mDevice.Get(), mDeviceContext.Get(), 16) || !mRootConstants.Initialize(mDevice.Get()) || !mTextRenderer.Initialize(mDevice.Get(), 256) || !mBillboardRenderer.Initialize(mDevice.Get(), 64)) {
+    if (!CreateSamplerStates() || !mMeshRenderer.Initialize(mDevice.Get(), mDeviceContext.Get()) || !mLightContextArray.Initialize(mDevice.Get(), mDeviceContext.Get(), 16) || !mTextRenderer.Initialize(mDevice.Get(), 256) || !mBillboardRenderer.Initialize(mDevice.Get(), 64)) {
         return false;
     }
 
-    mFrameContexts.reserve(128);
+    mLineRenderer.Initialize(mDevice.Get());
     return true;
 }
 
 void FRenderer::BeginUiRender() {
     mBackBufferSurface->Bind(mDeviceContext.Get());
-    mBackBufferSurface->Clear(mDeviceContext.Get(), UiClearColor);
+    mBackBufferSurface->Clear(mDeviceContext.Get(), mUiClearColor);
 }
 
 void FRenderer::BindSamplerStates() {
@@ -71,233 +61,110 @@ void FRenderer::BindAssetRegistry(FAssetRegistry* InAssetRegistry) {
     mAssetRegistry = InAssetRegistry;
 }
 
-void FRenderer::RenderScene(IRenderSurface& Target, FRenderProbe& Probe, const CameraProbe& Camera, const FRenderSettings& Settings) {
-    const float ClearColor[4]{Settings.mClearColor.mX, Settings.mClearColor.mY, Settings.mClearColor.mZ, Settings.mClearColor.mW};
-    Target.Bind(mDeviceContext.Get());
-    Target.Clear(mDeviceContext.Get(), ClearColor);
+void FRenderer::BeginFrame(float DeltaTime) {
+    if (std::isfinite(DeltaTime) && DeltaTime > 0.0f) {
+        mAnimationTime = std::fmod(mAnimationTime + DeltaTime, 25.0f);
+        mAnimationFrame = static_cast<Uint32>(mAnimationTime / 0.1f) % 250;
+    }
+}
 
-    if (!UploadLightContext(Probe)) {
+void FRenderer::RenderView(const FRenderView& View, const FRenderProbe& Probe) {
+    if (View.mTarget == nullptr || !View.mTarget->IsValid() || mDeviceContext == nullptr) {
         return;
     }
-
-    if (Probe.mBForceUnlit) {
-        for (FActorProbe& ActorProbe : Probe.mActorProbes) {
-            ActorProbe.mFlags |= static_cast<Uint32>(ERenderObjectFlags::Unlit);
+    ID3D11ShaderResourceView* NullResource{nullptr};
+    mDeviceContext->PSSetShaderResources(0, 1, &NullResource);
+    View.mTarget->Bind(mDeviceContext.Get());
+    const float ClearColor[]{View.mSettings.mClearColor.mX, View.mSettings.mClearColor.mY, View.mSettings.mClearColor.mZ, View.mSettings.mClearColor.mW};
+    View.mTarget->Clear(mDeviceContext.Get(), ClearColor);
+    if (mAssetRegistry == nullptr || !UploadLightContext(Probe)) {
+        return;
+    }
+    mAssetRegistry->GetMaterialBuffer().Flush(mDeviceContext.Get());
+    mRenderQueue.Build(*mAssetRegistry, View, Probe);
+    const FRenderContext Context{mDevice.Get(), mDeviceContext.Get(), mAssetRegistry, *mLightContextArray.GetSRV(), mFrameLightCount, mAnimationFrame};
+    constexpr std::array Passes{ERenderPass::SceneGeometry, ERenderPass::SelectionOutline, ERenderPass::SceneGuides, ERenderPass::Gizmo, ERenderPass::Text, ERenderPass::Billboard, ERenderPass::OrientationAxis};
+    for (const ERenderPass Pass : Passes) {
+        if (View.IsPassEnabled(Pass)) {
+            ExecutePass(Pass, Context, View, Probe);
         }
     }
-
-    if (mAssetRegistry != nullptr) {
-        mAssetRegistry->GetMaterialBuffer().Flush(mDeviceContext.Get());
-    }
-    RenderActorList(Probe.mActorProbes, Camera, false, Settings.mBRenderSky);
-    RenderOutline(Probe.mActorProbes, Camera, Settings.mBRenderSky);
+    View.mTarget->Bind(mDeviceContext.Get());
 }
 
 bool FRenderer::UploadLightContext(const FRenderProbe& Probe) {
+    ID3D11ShaderResourceView* NullResource{nullptr};
+    mDeviceContext->PSSetShaderResources(2, 1, &NullResource);
     if (!mLightContextArray.UploadDiscard(mDevice.Get(), mDeviceContext.Get(), Probe.mLightProbes)) {
         return false;
     }
-
     mFrameLightCount = mLightContextArray.GetCount();
-    mDeviceContext->PSSetShaderResources(2, 1, mLightContextArray.GetSRV());
     return true;
 }
 
-void FRenderer::RenderGizmos(IRenderSurface& Target, FRenderProbe& Probe, const CameraProbe& Camera) {
-    if (Probe.mGizmoProbes.empty()) {
-        return;
-    }
-
-    Target.ClearDepth(mDeviceContext.Get());
-
-    RenderActorList(Probe.mGizmoProbes, Camera);
-}
-
-void FRenderer::RenderOutline(const TArray<FActorProbe>& ActorProbes, const CameraProbe& Camera, bool BRenderSky) {
-    TArray<FActorProbe> OutlineProbes{};
-
-    for (const FActorProbe& ActorProbe : ActorProbes) {
-        if ((ActorProbe.mFlags & static_cast<Uint32>(ERenderObjectFlags::Selected)) != 0) {
-            OutlineProbes.push_back(ActorProbe);
-        }
-    }
-
-    if (OutlineProbes.empty()) {
-        return;
-    }
-
-    RenderActorList(OutlineProbes, Camera, true, BRenderSky);
-}
-
-void FRenderer::RenderActorList(TArray<FActorProbe>& ActorProbes, const CameraProbe& Camera, bool BOutline, bool BRenderSky) {
-    if (ActorProbes.empty() || mAssetRegistry == nullptr) {
-        return;
-    }
-
-    struct FDrawItem {
-        FActorProbe mProbe{};
-        FAssetHandle mMaterialHandle{};
-        Uint32 mMaterialGroupIndex{0};
-        Uint32 mFirstIndex{0};
-        Uint32 mIndexCount{0};
-    };
-
-    const FAssetHandle SkyPipelineHandle{mAssetRegistry->FindAsset(FAssetPath{"/Game/Pipeline/SkyDome.json"})};
-    TArray<FDrawItem> DrawItems{};
-    for (const FActorProbe& Probe : ActorProbes) {
-        if (!BRenderSky && Probe.mPipelineHandle == SkyPipelineHandle) {
-            continue;
-        }
-
-        UMesh* Mesh{mAssetRegistry->ResolveAsset<UMesh>(Probe.mMeshHandle)};
-        if (Mesh == nullptr || mAssetRegistry->ResolveAsset<UPipeline>(Probe.mPipelineHandle) == nullptr) {
-            continue;
-        }
-
-        const auto AddDrawItem{[&DrawItems, &Probe, this](FAssetHandle MaterialHandle, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount) {
-            UMaterial* Material{mAssetRegistry->ResolveAsset<UMaterial>(MaterialHandle)};
-            if (Material == nullptr || IndexCount == 0) {
-                return;
-            }
-
-            const Uint32 ResolvedGroupIndex{Material->GetGPUIndex(MaterialGroupIndex) != UINT32_MAX ? MaterialGroupIndex : 0u};
-            if (Material->GetGPUIndex(ResolvedGroupIndex) == UINT32_MAX) {
-                return;
-            }
-
-            DrawItems.push_back(FDrawItem{ .mProbe = Probe, .mMaterialHandle = MaterialHandle, .mMaterialGroupIndex = ResolvedGroupIndex, .mFirstIndex = FirstIndex, .mIndexCount = IndexCount});
-        }};
-
-        const TArray<UMesh::FSubMesh>& SubMeshes{Mesh->GetSubMeshes()};
-        if (SubMeshes.empty()) {
-            AddDrawItem(Probe.mMaterialHandle, 0, 0, static_cast<Uint32>(Mesh->GetIndices().size()));
-            continue;
-        }
-
-        for (const UMesh::FSubMesh& SubMesh : SubMeshes) {
-            AddDrawItem(Probe.mMaterialHandle, SubMesh.mMaterialGroupIndex, SubMesh.mFirstIndex, SubMesh.mIndexCount);
-        }
-    }
-
-    if (DrawItems.empty()) {
-        return;
-    }
-
-    auto GetRenderChunkKey{[this](const FDrawItem& Data) {
-        const FMaterialChunkSignature Signature{mAssetRegistry->ResolveAsset<UMaterial>(Data.mMaterialHandle)->BuildChunkSignature(Data.mMaterialGroupIndex)};
-        return TTuple{ Data.mProbe.mPipelineHandle.mId, Data.mProbe.mPipelineHandle.mGeneration, Signature.mTextureFieldCount, Signature.mTextureHandles, Data.mProbe.mMeshHandle.mId, Data.mProbe.mMeshHandle.mGeneration, Data.mMaterialHandle.mId, Data.mMaterialHandle.mGeneration, Data.mMaterialGroupIndex, Data.mFirstIndex, Data.mIndexCount};
-    }};
-
-    std::ranges::sort(DrawItems, {}, GetRenderChunkKey);
-
-    auto Groups{DrawItems | ranges::views::chunk_by([&GetRenderChunkKey](const FDrawItem& A, const FDrawItem& B) {
-                    return GetRenderChunkKey(A) == GetRenderChunkKey(B);
-                })};
-
-    mFrameContexts.clear();
-    mFrameContexts.reserve(DrawItems.size());
-
-    std::ranges::transform(Groups | std::views::join, std::back_inserter(mFrameContexts), [&](const auto& AC) {
-        return ModelContext{ .mWorld = AC.mProbe.mWorld, .mMaterialIndex = mAssetRegistry->ResolveAsset<UMaterial>(AC.mMaterialHandle)->GetGPUIndex(AC.mMaterialGroupIndex), .mFlags = AC.mProbe.mFlags};
-    });
-
-    ID3D11ShaderResourceView* NullModelContext{nullptr};
-    mDeviceContext->VSSetShaderResources(0, 1, &NullModelContext);
-    mDeviceContext->PSSetShaderResources(0, 1, &NullModelContext);
-    if (!mModelContextArray.UploadDiscard(mDevice.Get(), mDeviceContext.Get(), mFrameContexts)) {
-        return;
-    }
-
-    mDeviceContext->VSSetShaderResources(0, 1, mModelContextArray.GetSRV());
-    mDeviceContext->PSSetShaderResources(0, 1, mModelContextArray.GetSRV());
-
-    mDeviceContext->VSSetShaderResources(1, 1, mAssetRegistry->GetMaterialBuffer().GetSRV());
-    mDeviceContext->PSSetShaderResources(1, 1, mAssetRegistry->GetMaterialBuffer().GetSRV());
-
-    struct CameraData {
-        FMatrix mView{};
-        FMatrix mProjection{};
-        FMatrix mViewProjection{};
-    };
-
-    mRootConstants.SetGraphicsRoot32BitConstants(CameraData{ .mView = Camera.mView, .mProjection = Camera.mProjection, .mViewProjection = Camera.mViewProjection}, 0);
-
-    mRootConstants.SetGraphicsRoot32BitConstant(mFrameLightCount, 49);
-    mRootConstants.Bind(mDeviceContext.Get(), 0, EGraphicsShaderStage::Graphics);
-    Uint32 InstanceCount{0};
-    FMaterialChunkSignature BoundTextureSet{};
-    bool BTextureSetBound{false};
-
+void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FRenderProbe& Probe) {
+    View.mTarget->Bind(mDeviceContext.Get());
     BindSamplerStates();
-
-    for (auto G : Groups) {
-        const FDrawItem& First{G.front()};
-        const FMaterialChunkSignature Signature{mAssetRegistry->ResolveAsset<UMaterial>(First.mMaterialHandle)->BuildChunkSignature(First.mMaterialGroupIndex)};
-
-        UPipeline* Pipeline{mAssetRegistry->ResolveAsset<UPipeline>(First.mProbe.mPipelineHandle)};
-        if (BOutline) {
-            Pipeline->SetRenderMode(ERenderMode::Outline);
-        }
-
-        UMesh* Mesh{mAssetRegistry->ResolveAsset<UMesh>(First.mProbe.mMeshHandle)};
-
-        const bool BLitWireframe{!BOutline && Pipeline->GetRenderMode() == ERenderMode::LitWireframe};
-        if (BLitWireframe) {
-            Pipeline->Bind(mDeviceContext.Get(), ERenderMode::Lit);
-        } else {
-            Pipeline->Bind(mDeviceContext.Get());
-        }
-
-        if (!BTextureSetBound || BoundTextureSet != Signature) {
-            std::array<ID3D11ShaderResourceView*, MaxMaterialTextureFields> TextureSRVs{};
-
-            for (Uint8 TextureFieldIndex{0}; TextureFieldIndex < Signature.mTextureFieldCount; ++TextureFieldIndex) {
-                UTexture* Texture{mAssetRegistry->ResolveAsset<UTexture>(Signature.GetTextureHandle(TextureFieldIndex))};
-                TextureSRVs[TextureFieldIndex] = Texture != nullptr ? Texture->GetSRV() : nullptr;
+    switch (Pass) {
+        case ERenderPass::SceneGeometry:
+            mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), View.mCamera, View.mRenderMode);
+            break;
+        case ERenderPass::SelectionOutline:
+            mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), View.mCamera, ERenderMode::Outline);
+            break;
+        case ERenderPass::SceneGuides:
+            DrawSceneGuides(View, Probe);
+            break;
+        case ERenderPass::Gizmo:
+            if (!Probe.mGizmoProbes.empty()) {
+                View.mTarget->ClearDepth(mDeviceContext.Get());
+                mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), View.mCamera, ERenderMode::Lit);
             }
-
-            mDeviceContext->PSSetShaderResources(3, static_cast<UINT>(TextureSRVs.size()), TextureSRVs.data());
-            mDeviceContext->VSSetShaderResources(3, static_cast<UINT>(TextureSRVs.size()), TextureSRVs.data());
-
-            BoundTextureSet = Signature;
-            BTextureSetBound = true;
-        }
-
-        ID3D11Buffer* VertexBuffers[]{ Mesh->GetVertexBuffer(EVertexAttribute::Position), Mesh->GetVertexBuffer(EVertexAttribute::Normal), Mesh->GetVertexBuffer(EVertexAttribute::UV), Mesh->GetVertexBuffer(EVertexAttribute::Color)};
-
-        Uint32 Strides[]{ Mesh->GetVertexStride(EVertexAttribute::Position), Mesh->GetVertexStride(EVertexAttribute::Normal), Mesh->GetVertexStride(EVertexAttribute::UV), Mesh->GetVertexStride(EVertexAttribute::Color)};
-
-        Uint32 Offsets[]{0, 0, 0, 0};
-
-        ID3D11Buffer* IndexBuffer{Mesh->GetIndexBuffer()};
-
-        mDeviceContext->IASetVertexBuffers(0, _countof(VertexBuffers), VertexBuffers, Strides, Offsets);
-        mDeviceContext->IASetIndexBuffer(IndexBuffer, DXGI_FORMAT_R32_UINT, 0);
-
-        mRootConstants.SetGraphicsRoot32BitConstant(InstanceCount, 48);
-
-        if (ImGui::GetCurrentContext() != nullptr) {
-            auto& Io{ImGui::GetIO()};
-            float DT{Io.DeltaTime};
-            mCountTime += DT;
-            if (mCountTime >= 0.1f) {
-                mCurrentFrame = (mCurrentFrame + 1) % 250;
-                mCountTime = 0.f;
-            }
-        }
-
-        mRootConstants.SetGraphicsRoot32BitConstant(mCurrentFrame, 50);
-
-        mRootConstants.Commit(mDeviceContext.Get());
-
-        mDeviceContext->DrawIndexedInstanced(First.mIndexCount, static_cast<Uint32>(G.size()), First.mFirstIndex, 0, 0);
-        if (BLitWireframe) {
-            Pipeline->Bind(mDeviceContext.Get(), ERenderMode::LitWireframe);
-            mDeviceContext->DrawIndexedInstanced(First.mIndexCount, static_cast<Uint32>(G.size()), First.mFirstIndex, 0, 0);
-        }
-
-        InstanceCount += static_cast<Uint32>(G.size());
+            break;
+        case ERenderPass::Text:
+            mTextRenderer.Render(mDeviceContext.Get(), Probe.mTextProbes, View.mCamera, mAssetRegistry);
+            break;
+        case ERenderPass::Billboard:
+            mBillboardRenderer.Render(mDeviceContext.Get(), Probe.mBillboardProbes, View.mCamera, mAssetRegistry, View.mRenderMode);
+            break;
+        case ERenderPass::OrientationAxis:
+            DrawOrientationAxis(View);
+            break;
+        default:
+            break;
     }
+}
+
+void FRenderer::DrawSceneGuides(const FRenderView& View, const FRenderProbe& Probe) {
+    mLineRenderer.Clear();
+    for (const FLineProbe& Line : Probe.mSceneGuides.GetLines()) {
+        mLineRenderer.AddGridLine(Line.mStart, Line.mEnd, Line.mColor, Line.mWidthPixels, Line.mGridSpacing, Line.mDepthMode);
+    }
+    if (!mLineRenderer.IsEmpty()) {
+        const D3D11_VIEWPORT& Viewport{View.mTarget->GetViewport()};
+        mLineRenderer.Render(mDeviceContext.Get(), FLineViewData{View.mCamera.mViewProjection, FVector2D{Viewport.Width, Viewport.Height}, Probe.mGridFade});
+    }
+}
+
+void FRenderer::DrawOrientationAxis(const FRenderView& View) {
+    constexpr float Margin{5.0f};
+    const D3D11_VIEWPORT& Viewport{View.mTarget->GetViewport()};
+    const float AvailableSize{std::min(Viewport.Width, Viewport.Height) - Margin * 2.0f};
+    if (AvailableSize <= 0.0f) {
+        return;
+    }
+    const float RequestedSize{View.mOrientationAxisSize > 0.0f ? View.mOrientationAxisSize : std::min(std::min(Viewport.Width, Viewport.Height) * 0.15f, 160.0f)};
+    const float AxisSize{std::min(RequestedSize, AvailableSize)};
+    const D3D11_VIEWPORT AxisViewport{Viewport.TopLeftX + Margin, Viewport.TopLeftY + Margin, AxisSize, AxisSize, Viewport.MinDepth, Viewport.MaxDepth};
+    mDeviceContext->RSSetViewports(1, &AxisViewport);
+    FMatrix AxisView{View.mCamera.mView};
+    AxisView.Translation(FVector3{0.0f, 0.0f, 3.0f});
+    const FMatrix Projection{FMatrix::CreateOrthographic(2.5f, 2.5f, 0.1f, 10.0f)};
+    mLineRenderer.Clear();
+    mLineRenderer.AddRay(FVector3{}, FVector3{1.0f, 0.0f, 0.0f}, 1.0f, FVector4{1.0f, 0.0f, 0.0f, 1.0f}, 3.0f);
+    mLineRenderer.AddRay(FVector3{}, FVector3{0.0f, 1.0f, 0.0f}, 1.0f, FVector4{0.0f, 1.0f, 0.0f, 1.0f}, 3.0f);
+    mLineRenderer.AddRay(FVector3{}, FVector3{0.0f, 0.0f, 1.0f}, 1.0f, FVector4{0.0f, 0.0f, 1.0f, 1.0f}, 3.0f);
+    mLineRenderer.Render(mDeviceContext.Get(), FLineViewData{AxisView * Projection, FVector2D{AxisSize, AxisSize}});
 }
 
 void FRenderer::ReSize(Uint32 Width, Uint32 Height) {
@@ -313,6 +180,9 @@ void FRenderer::ReSize(Uint32 Width, Uint32 Height) {
 
 void FRenderer::Terminate() {
     mDeviceContext->ClearState();
+    mLineRenderer.Reset();
+    mMeshRenderer.Reset();
+    mLightContextArray.Reset();
 
     if (mBackBufferSurface != nullptr) {
         mBackBufferSurface->Reset();
@@ -343,17 +213,9 @@ void FRenderer::CreateDeviceAndSwapChain(HWND WindowHandle) {
     SwapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
 #ifdef _DEBUG
-    ErrorHandler::ReportHRESULT(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
-                                                              D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_DEBUG,
-                                                              FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION,
-                                                              &SwapChainDesc, &mSwapChain, &mDevice, nullptr, &mDeviceContext),
-                                "[ FRenderer ]", "Failed to create Direct3D device and swap chain.", ErrorHandler::EErrorLevel::Critical);
+    ErrorHandler::ReportHRESULT(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_DEBUG, FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION, &SwapChainDesc, &mSwapChain, &mDevice, nullptr, &mDeviceContext), "[ FRenderer ]", "Failed to create Direct3D device and swap chain.", ErrorHandler::EErrorLevel::Critical);
 #else
-    ErrorHandler::ReportHRESULT(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
-                                                              D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-                                                              FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION,
-                                                              &SwapChainDesc, &mSwapChain, &mDevice, nullptr, &mDeviceContext),
-                                "[ FRenderer ]", "Failed to create Direct3D device and swap chain.", ErrorHandler::EErrorLevel::Critical);
+    ErrorHandler::ReportHRESULT(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION, &SwapChainDesc, &mSwapChain, &mDevice, nullptr, &mDeviceContext), "[ FRenderer ]", "Failed to create Direct3D device and swap chain.", ErrorHandler::EErrorLevel::Critical);
 #endif
     mSwapChain->GetDesc(&SwapChainDesc);
 }
@@ -395,11 +257,4 @@ bool FRenderer::CreateSamplerStates() {
     ShadowDescription.BorderColor[3] = 1.0f;
     Succeeded = CreateSampler(5, ShadowDescription, "ShadowCompare") && Succeeded;
     return Succeeded;
-}
-
-void FRenderer::RenderText(const FRenderProbe& Probe, const CameraProbe& Camera) {
-    if (mAssetRegistry != nullptr) {
-        mTextRenderer.Render(mDeviceContext.Get(), Probe.mTextProbes, Camera, mAssetRegistry);
-        mBillboardRenderer.Render(mDeviceContext.Get(), Probe.mBillboardProbes, Camera, mAssetRegistry);
-    }
 }

@@ -1,34 +1,26 @@
-﻿#pragma once
+#pragma once
+
 #include <d3d11.h>
 #include <wrl/client.h>
 #include <array>
 #include <memory>
 
-#include "../Core/Base/FRenderProbe.h"
 #include "Asset/FAssetRegistry.h"
-
-#include "Asset/Pipeline/UPipeline.h"
-#include "Asset/UMaterial.h"
-#include "Asset/UMesh.h"
-
-#include "Render/Buffer/TGraphicsArray.h"
-#include "Render/Buffer/TGraphicsRootConstants.h"
-
+#include "FRenderView.h"
+#include "FRenderQueue.h"
+#include "FMeshRenderer.h"
 #include "FTextRenderer.h"
+#include "FBillboardRenderer.h"
+#include "FLineRenderer.h"
 #include "FSceneRenderSurface.h"
 
-#include "FBillboardRenderer.h"
-
 class FRenderer {
-    struct ModelContext { FMatrix mWorld{}; Uint32 mMaterialIndex{UINT32_MAX}; Uint32 mFlags{0x0000'0000}; };
-
 public:
     FRenderer() = default;
     ~FRenderer();
 
     FRenderer(const FRenderer&) = delete;
     FRenderer& operator=(const FRenderer&) = delete;
-
     FRenderer(FRenderer&&) = delete;
     FRenderer& operator=(FRenderer&&) = delete;
 
@@ -36,30 +28,28 @@ public:
     void Create(HWND WindowHandle, UINT Width, UINT Height);
     bool Initialize();
 
+    void BeginFrame(float DeltaTime);
+    void RenderView(const FRenderView& View, const FRenderProbe& Probe);
     void BeginUiRender();
-    void RenderScene(IRenderSurface& Target, FRenderProbe& Probe, const CameraProbe& Camera, const FRenderSettings& Settings);
-    void RenderGizmos(IRenderSurface& Target, FRenderProbe& Probe, const CameraProbe& Camera);
-    void RenderOutline(const TArray<FActorProbe>& ActorProbes, const CameraProbe& Camera, bool BRenderSky = true);
-    void RenderText(const FRenderProbe& Probe, const CameraProbe& Camera);
-    void RenderActorList(TArray<FActorProbe>& ActorProbes, const CameraProbe& Camera, bool BOutline = false, bool BRenderSky = true);
     void EndFrame();
 
     ID3D11Device* GetDevice() const;
     ID3D11DeviceContext* GetDeviceContext() const;
-
     void BindAssetRegistry(FAssetRegistry* InAssetRegistry);
 
     void ReSize(Uint32 Width, Uint32 Height);
-
     void Terminate();
     void ReportLiveObjects() const;
 
 private:
     void CreateDeviceAndSwapChain(HWND WindowHandle);
-
     bool CreateSamplerStates();
     void BindSamplerStates();
     bool UploadLightContext(const FRenderProbe& Probe);
+
+    void ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FRenderProbe& Probe);
+    void DrawSceneGuides(const FRenderView& View, const FRenderProbe& Probe);
+    void DrawOrientationAxis(const FRenderView& View);
 
 private:
 #ifdef _DEBUG
@@ -67,32 +57,22 @@ private:
 #endif
     Microsoft::WRL::ComPtr<ID3D11Device> mDevice{};
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> mDeviceContext{};
-
     Microsoft::WRL::ComPtr<IDXGISwapChain> mSwapChain{};
-
     std::unique_ptr<IRenderSurface> mBackBufferSurface{};
-
-    // s0: LinearWrap, s1: LinearClamp, s2: PointClamp, s3: PointWrap, s4: AnisotropicWrap, s5: ShadowCompare.
     std::array<Microsoft::WRL::ComPtr<ID3D11SamplerState>, 6> mSamplerStates{};
-
     FAssetRegistry* mAssetRegistry{nullptr};
 
-    TGraphicsArray<ModelContext, true, true> mModelContextArray{};
     TGraphicsArray<FLightProbe, true, true> mLightContextArray{};
-    TArray<ModelContext> mFrameContexts{};
-    TGraphicsRootConstants<64> mRootConstants{};
-
+    FRenderQueue mRenderQueue{};
+    FMeshRenderer mMeshRenderer{};
     FTextRenderer mTextRenderer{};
     FBillboardRenderer mBillboardRenderer{};
+    FLineRenderer mLineRenderer{};
 
-    const float UiClearColor[4]{0.2f, 0.2f, 0.7f, 1.0f};
-
-    std::size_t mRenderIndex{0};
-    Uint32 mFrameLightCount{0};
-    Uint32 mBackBufferWidth{0};
-    Uint32 mBackBufferHeight{0};
-
-    //VAT current time 계산용(임시)
-    float mCountTime{0.f};
-    Uint32 mCurrentFrame{0};
+    const float mUiClearColor[4]{0.2f, 0.2f, 0.7f, 1.0f};
+    Uint32 mFrameLightCount{};
+    Uint32 mBackBufferWidth{};
+    Uint32 mBackBufferHeight{};
+    float mAnimationTime{};
+    Uint32 mAnimationFrame{};
 };

@@ -45,7 +45,7 @@
                     "Guid": "355BE912-4043-FA13-7AEB-41A7F702A38C",
                     "TypeName": "UNameTagComponent",
                     "Name": "",
-                    "bActive": true,
+                    "bActive": false,
                     "Transform": {
                         "Position": [
                             0.0,
@@ -92,6 +92,241 @@
                 }
             ],
             "GuidRootComponent": "05584E92-427A-2633-F527-1884258E8D21"
+        },
+        {
+            "Guid": "220782A6-4195-74E9-F9BC-88AA2E849C0C",
+            "TypeName": "AActor",
+            "Name": "AActor_1",
+            "Components": [
+                {
+                    "Guid": "86FE924B-4B4C-E9D7-879B-8B82FE3475A4",
+                    "TypeName": "UStaticMeshComponent",
+                    "Name": "",
+                    "bActive": true,
+                    "Transform": {
+                        "Position": [
+                            2.494373321533203,
+                            -4.619108200073242,
+                            -1.0
+                        ],
+                        "Rotation": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
+                        ],
+                        "Scale": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "bAbsoluteLocation": false,
+                        "bAbsoluteRotation": false,
+                        "bAbsoluteScale": false
+                    },
+                    "Parent": "00000000-0000-0000-0000-000000000000",
+                    "bVisible": true,
+                    "MeshAssetGuid": "8BC836E9-4AED-234B-539E-EFB5DABF3EFD",
+                    "MeshAssetPath": "/Game/ModelingFiles/Monkey_Quad.bin",
+                    "MaterialAssetGuid": "26ACE055-9ED4-4644-ACFD-7985BCBFBF80",
+                    "MaterialAssetPath": "/Game/Models/Monkey/Monkey.mtl",
+                    "PipelineAssetGuid": "653C7285-C0DE-4239-808E-015A9EF47624",
+                    "PipelineAssetPath": "/Game/Pipeline/TexturedBase.json"
+                },
+                {
+                    "Guid": "39C38065-40BC-A95A-569D-D7A135C2EFBB",
+                    "TypeName": "UNameTagComponent",
+                    "Name": "",
+                    "bActive": false,
+                    "Transform": {
+                        "Position": [
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "Rotation": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
+                        ],
+                        "Scale": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "bAbsoluteLocation": false,
+                        "bAbsoluteRotation": false,
+                        "bAbsoluteScale": false
+                    },
+                    "Parent": "86FE924B-4B4C-E9D7-879B-8B82FE3475A4",
+                    "bVisible": true,
+                    "FontAssetGuid": "0C6D5C06-6626-4BCF-A653-83ED3FF5280F",
+                    "FontAssetPath": "/Game/Font/NotoSansKR-Medium.ttf",
+                    "PipelineAssetGuid": "E41C36DD-3CF1-4FC0-9C14-7F7C20714597",
+                    "PipelineAssetPath": "/Game/Pipeline/Text.json",
+                    "Text": "220782A6-4195-74E9-F9BC-88AA2E849C0C",
+                    "Color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "CharacterHeight": 1.0,
+                    "LetterSpacing": 0.0,
+                    "LineSpacing": 0.0,
+                    "TargetActorGuid": "00000000-0000-0000-0000-000000000000",
+                    "TargetLocalOffset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            ],
+            "GuidRootComponent": "86FE924B-4B4C-E9D7-879B-8B82FE3475A4"
+        },
+        {
+            "Guid": "B7F77E13-4493-28DE-346C-CFB9FD8DF72A",
+            "TypeName": "AActor",
+            "Name": "AActor_2",
+            "Components": [
+                {
+                    "Guid": "0ACD78AE-4213-D06D-A8F5-54909F1A7D10",
+                    "TypeName": "UBillboardComponent",
+                    "Name": "",
+                    "bActive": true,
+                    "Transform": {
+                        "Position": [
+                            -13.927277565002441,
+                            -3.732354164123535,
+                            5.888289451599121
+                        ],
+                        "Rotation": [
+                            0.600536048412323,
+                            0.7086287140846252,
+                            0.23947660624980927,
+                            -0.28258225321769714
+                        ],
+                        "Scale": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "bAbsoluteLocation": false,
+                        "bAbsoluteRotation": false,
+                        "bAbsoluteScale": false
+                    },
+                    "Parent": "00000000-0000-0000-0000-000000000000",
+                    "bVisible": true,
+                    "TextureAssetGuid": "03E576DC-4EB0-8A38-4D5D-44B7DF36E251",
+                    "TextureAssetPath": "/Game/System/Light.png",
+                    "PipelineAssetGuid": "08738909-AF2A-4BD3-81B5-3FDFE7C7FF42",
+                    "PipelineAssetPath": "/Game/Pipeline/Billboard.json",
+                    "Size": [
+                        1.0,
+                        1.0
+                    ],
+                    "UVMin": [
+                        0.0,
+                        0.0
+                    ],
+                    "UVMax": [
+                        1.0,
+                        1.0
+                    ],
+                    "Color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ]
+                },
+                {
+                    "Guid": "07AAB072-460C-4DA0-6415-41AAFA73C026",
+                    "TypeName": "UDirectionalLightComponent",
+                    "Name": "",
+                    "bActive": true,
+                    "Transform": {
+                        "Position": [
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "Rotation": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
+                        ],
+                        "Scale": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "bAbsoluteLocation": false,
+                        "bAbsoluteRotation": false,
+                        "bAbsoluteScale": false
+                    },
+                    "Parent": "0ACD78AE-4213-D06D-A8F5-54909F1A7D10",
+                    "LightColor": [
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "Intensity": 1.0,
+                    "bVisible": true
+                },
+                {
+                    "Guid": "55E2EF4C-4585-EB18-80C6-2B856716CBCD",
+                    "TypeName": "UNameTagComponent",
+                    "Name": "",
+                    "bActive": false,
+                    "Transform": {
+                        "Position": [
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "Rotation": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
+                        ],
+                        "Scale": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "bAbsoluteLocation": false,
+                        "bAbsoluteRotation": false,
+                        "bAbsoluteScale": false
+                    },
+                    "Parent": "00000000-0000-0000-0000-000000000000",
+                    "bVisible": true,
+                    "FontAssetGuid": "0C6D5C06-6626-4BCF-A653-83ED3FF5280F",
+                    "FontAssetPath": "/Game/Font/NotoSansKR-Medium.ttf",
+                    "PipelineAssetGuid": "E41C36DD-3CF1-4FC0-9C14-7F7C20714597",
+                    "PipelineAssetPath": "/Game/Pipeline/Text.json",
+                    "Text": "B7F77E13-4493-28DE-346C-CFB9FD8DF72A",
+                    "Color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "CharacterHeight": 1.0,
+                    "LetterSpacing": 0.0,
+                    "LineSpacing": 0.0,
+                    "TargetActorGuid": "00000000-0000-0000-0000-000000000000",
+                    "TargetLocalOffset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            ],
+            "GuidRootComponent": "0ACD78AE-4213-D06D-A8F5-54909F1A7D10"
         }
     ]
 }

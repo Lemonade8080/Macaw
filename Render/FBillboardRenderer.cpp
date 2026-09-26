@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FBillboardRenderer.h"
 
 #include "Asset/Pipeline/UPipeline.h"
@@ -20,7 +20,7 @@ bool FBillboardRenderer::Initialize(ID3D11Device* InDevice, std::uint32_t Initia
     return EnsureCapacity(InitialCapacity);
 }
 
-void FBillboardRenderer::Render(ID3D11DeviceContext* Context, const TArray<FBillboardProbe>& BillboardProbe, const CameraProbe& Camera, FAssetRegistry* AssetRegistry) {
+void FBillboardRenderer::Render(ID3D11DeviceContext* Context, const TArray<FBillboardProbe>& BillboardProbe, const CameraProbe& Camera, FAssetRegistry* AssetRegistry, ERenderMode Mode) {
     if (Context == nullptr || mDevice == nullptr || BillboardProbe.empty()) {
         return;
     }
@@ -37,14 +37,12 @@ void FBillboardRenderer::Render(ID3D11DeviceContext* Context, const TArray<FBill
     }
     mViewConstantBuffer.Bind(Context, 0, EGraphicsShaderStage::Geometry);
 
-    // Release Vertex buffer, Index buffer
     UINT Stride{0};
     UINT Offset{0};
     ID3D11Buffer* NullBuffer{nullptr};
     Context->IASetVertexBuffers(0, 1, &NullBuffer, &Stride, &Offset);
     Context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 
-    // Pipeline, Texture Batch
     struct FBatchKey {
         FAssetHandle mPipelineHandle{};
         FAssetHandle mTextureHandle{};
@@ -81,7 +79,7 @@ void FBillboardRenderer::Render(ID3D11DeviceContext* Context, const TArray<FBill
             continue;
         }
 
-        Pipeline->Bind(Context);
+        Pipeline->Bind(Context, Pipeline->ResolveRenderMode(Mode));
 
         ID3D11ShaderResourceView* BufferSRV{mInstanceBufferSrv.Get()};
         Context->GSSetShaderResources(0, 1, &BufferSRV);

@@ -186,6 +186,7 @@ void FApplication::RenderFrame() {
     const float DeltaTime{std::chrono::duration<float>(CurrentTickTime - mLastTickTime).count()};
     mLastTickTime = CurrentTickTime;
 
+    mContext.mRenderer.BeginFrame(DeltaTime);
     mContext.mThumbnailRenderer->Tick();
     mContext.mEditorUIManager->RenderOffscreen(mContext.mRenderer, *mContext.mAssetRegistry);
 

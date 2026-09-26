@@ -1,16 +1,26 @@
-﻿#pragma once
+#pragma once
 
 #include "ILineRenderer.h"
 
 class FBatchLineRenderer : public ILineRenderer {
 private:
-    struct FBatchLineInstance { FVector3 mPosition{}; FVector4 mColor{}; };
+    struct FBatchLineInstance {
+        FVector3 mPosition{};
+        FVector4 mColor{};
+    };
 
-    struct FLineFrameConstants { FMatrix mViewProjection{}; FVector4 mViewport{}; };
+    struct FLineFrameConstants {
+        FMatrix mViewProjection{};
+        FVector4 mViewport{};
+    };
 
     static_assert(sizeof(FLineFrameConstants) == sizeof(Uint32) * 20);
 
-    struct FLineBatch { TArray<FBatchLineInstance> mVertices{}; FGraphicsBuffer mVertexBuffer{}; Uint32 mCapacity{0}; };
+    struct FLineBatch {
+        TArray<FBatchLineInstance> mVertices{};
+        FGraphicsBuffer mVertexBuffer{};
+        Uint32 mCapacity{0};
+    };
 
 public:
     FBatchLineRenderer() = default;

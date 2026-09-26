@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FViewerPanel.h"
 
 #include "ImGui/imgui.h"
@@ -24,11 +24,11 @@ namespace {
 }
 
 FViewerPanel::FViewerPanel(FAssetRegistry& InRegistry, HWND InputWindowHandle, FMessageChannel::FSender InEditorToWorldSender, FWorldEditorContext& InEditorContext, FAssetThumbnailRenderer* InThumbnailRenderer)
-    : FEditorWindow("Viewer", ImGuiWindowFlags_MenuBar),
-      mRegistry(&InRegistry),
-      mEditorToWorldSender(std::move(InEditorToWorldSender)),
-      mWindowHandle(InputWindowHandle),
-      mEditorContext(InEditorContext) {
+	: FEditorWindow{"Viewer", ImGuiWindowFlags_MenuBar},
+	  mRegistry{&InRegistry},
+	  mEditorToWorldSender{std::move(InEditorToWorldSender)},
+	  mWindowHandle{InputWindowHandle},
+	  mEditorContext{InEditorContext} {
     mPropertyEditor.BindAssetRegistry(&InRegistry);
     mPropertyEditor.BindThumbnailRenderer(InThumbnailRenderer);
     SetMesh({});
@@ -228,7 +228,6 @@ FRenderProbe FViewerPanel::BuildPreviewProbe() {
     const FAssetHandle PipelineHandle{mRegistry->FindAsset(FAssetPath{HasTexture ? TexturedPipelinePath : DefaultPipelinePath})};
     UPipeline* Pipeline{mRegistry->ResolveAsset<UPipeline>(PipelineHandle)};
     if (mMeshHandle && mMaterialHandle && Pipeline != nullptr) {
-        Pipeline->SetRenderMode(ERenderMode::Lit);
         FActorProbe ActorProbe{};
         ActorProbe.mMeshHandle = mMeshHandle;
         ActorProbe.mMaterialHandle = mMaterialHandle;
@@ -288,22 +287,22 @@ void FViewerPanel::RenderOffscreen(FRenderer& InRenderer, FAssetRegistry&) {
         return;
     }
 
-    if (!mLineRendererInitialized) {
-        mLineRenderer->Initialize(InRenderer.GetDevice());
-        mLineRendererInitialized = true;
-    }
-
     FRenderProbe PreviewProbe{BuildPreviewProbe()};
     FRenderSettings PreviewSettings{};
     PreviewSettings.mClearColor = FVector4{0.12f, 0.13f, 0.15f, 1.0f};
-    InRenderer.RenderScene(mSurface, PreviewProbe, BuildPreviewCamera(), PreviewSettings);
-    RenderOrientationAxis(InRenderer.GetDeviceContext());
+    FRenderView View{};
+    View.mTarget = &mSurface;
+    View.mCamera = BuildPreviewCamera();
+    View.mSettings = PreviewSettings;
+    View.mOrientationAxisSize = 100.0f;
+    View.mPasses.reset();
+    View.SetPassEnabled(ERenderPass::SceneGeometry, true);
+    View.SetPassEnabled(ERenderPass::OrientationAxis, true);
+    InRenderer.RenderView(View, PreviewProbe);
 }
 
 void FViewerPanel::ReleaseRenderResources() {
     mSurface.Reset();
-    mLineRenderer->Reset();
-    mLineRendererInitialized = false;
 }
 
 void FViewerPanel::DrawPreview() {
@@ -350,25 +349,4 @@ FString FViewerPanel::OpenFileDialog(const FString& FilePath, const OPENFILENAME
     }
     OpenFileName.lpstrInitialDir = InitialDirectoryPath.c_str();
     return GetOpenFileNameA(&OpenFileName) ? FString{FileName} : FString{};
-}
-
-void FViewerPanel::RenderOrientationAxis(ID3D11DeviceContext* Context) {
-    if (Context == nullptr || !mLineRendererInitialized) {
-        return;
-    }
-
-    FMatrix View{BuildPreviewCamera().mView};
-    View.Translation(FVector3{0.0f, 0.0f, 3.0f});
-    const FMatrix Projection{FMatrix::CreateOrthographic(2.5f, 2.5f, 0.1f, 10.0f)};
-    constexpr float AxisSize{100.0f};
-    const D3D11_VIEWPORT AxisViewport{5.0f, 5.0f, AxisSize, AxisSize, 0.0f, 1.0f};
-    Context->RSSetViewports(1, &AxisViewport);
-
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{1.0f, 0.0f, 0.0f}, 1.0f, FVector4{1.0f, 0.0f, 0.0f, 1.0f}, 3.0f, ELineDepthMode::DepthTested);
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, 1.0f, 0.0f}, 1.0f, FVector4{0.0f, 1.0f, 0.0f, 1.0f}, 3.0f, ELineDepthMode::DepthTested);
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, 0.0f, 1.0f}, 1.0f, FVector4{0.0f, 0.0f, 1.0f, 1.0f}, 3.0f, ELineDepthMode::DepthTested);
-    mLineRenderer->Render(Context, FLineViewData{.mViewProjection = View * Projection, .mViewportSize = FVector2D{AxisSize, AxisSize}});
-
-    const D3D11_VIEWPORT FullViewport{0.0f, 0.0f, static_cast<float>(mSurfaceWidth), static_cast<float>(mSurfaceHeight), 0.0f, 1.0f};
-    Context->RSSetViewports(1, &FullViewport);
 }

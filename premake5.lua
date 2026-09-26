@@ -127,3 +127,8 @@ filter "files:Math/SimpleMath/SimpleMath.cpp"
 
 project "Macaw"
 filter {}
+
+ConfigureProject("RenderPassTests", "ConsoleApp")
+    files { "Tests/RenderPassTests.cpp" }
+    links { "ole32" }
+    ConfigureExecutableLinks()

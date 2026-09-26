@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <array>
 #include <cstdint>
@@ -20,15 +20,45 @@
 #include "World/Component/UPrimitiveComponent.h"
 
 class FTransformGizmo {
-    enum class EAxis : std::uint8_t { None, X, Y, Z };
+private:
+    enum class EAxis : std::uint8_t {
+        None,
+        X,
+        Y,
+        Z
+    };
 
-    enum class EModifyMode : Uint8 { Translate, Rotate, Scale, None };
+    enum class EModifyMode : Uint8 {
+        Translate,
+        Rotate,
+        Scale,
+        None
+    };
 
-    struct FAxisHitProxy { EAxis mAxis{EAxis::None}; FVector3 mCenter{}; FVector3 mExtent{}; };
+    struct FAxisHitProxy {
+        EAxis mAxis{EAxis::None};
+        FVector3 mCenter{};
+        FVector3 mExtent{};
+    };
 
-    struct FAxisHit { EAxis mAxis{EAxis::None}; float mDistance{0.0f}; };
+    struct FAxisHit {
+        EAxis mAxis{EAxis::None};
+        float mDistance{0.0f};
+    };
 
-    struct FDragSession { TObjectRef<USceneComponent> mTarget{}; FVector3 mAxisWorld{}; FVector3 mInteractionPivotWorld{}; FVector3 mDragPlaneNormal{}; float mPreviousAxisParameter{0.0f}; EAxis mDragAxis{EAxis::None}; EModifyMode mModifyMode{EModifyMode::None}; EGizmoCoordinateSpace mCoordinateSpace{EGizmoCoordinateSpace::World}; FVector3 mPreviousRotationDirection{}; float mWorkUnitsPerPixel{1.0f}; float mAccumulatedDelta{0.0f}; };
+    struct FDragSession {
+        TObjectRef<USceneComponent> mTarget{};
+        FVector3 mAxisWorld{};
+        FVector3 mInteractionPivotWorld{};
+        FVector3 mDragPlaneNormal{};
+        float mPreviousAxisParameter{0.0f};
+        EAxis mDragAxis{EAxis::None};
+        EModifyMode mModifyMode{EModifyMode::None};
+        EGizmoCoordinateSpace mCoordinateSpace{EGizmoCoordinateSpace::World};
+        FVector3 mPreviousRotationDirection{};
+        float mWorkUnitsPerPixel{1.0f};
+        float mAccumulatedDelta{0.0f};
+    };
 
 public:
     FTransformGizmo() = default;
@@ -45,7 +75,7 @@ public:
 
     void ProcessInput(FKeyboardInput& KeyboardInput, FMouseInput& MouseInput, bool BMouseCapturedByUi);
     void Update(const CameraProbe& Camera, const D3D11_VIEWPORT& Viewport);
-    void Render(FRenderProbe& Probe);
+    void BuildRenderProbes(FRenderProbe& Probe);
 
     FStateChannel<Uint8>::FReadWriter GetGizmoMode();
 

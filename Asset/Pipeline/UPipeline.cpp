@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "UPipeline.h"
 
 #include "Core/Base/ErrorHandler.h"
@@ -449,4 +449,9 @@ bool UPipeline::LoadPipelineDescription(const std::filesystem::path& Path, FPipe
 
 void UPipeline::Serialize(FArchive& Ar) {
     UAsset::Serialize(Ar);
+}
+
+ERenderMode UPipeline::ResolveRenderMode(ERenderMode Mode) const {
+    const std::size_t Index{static_cast<std::size_t>(Mode)};
+    return Index < mPipelines.size() && mPipelines[Index].mInitialized ? Mode : static_cast<ERenderMode>(mPrimaryIndex);
 }

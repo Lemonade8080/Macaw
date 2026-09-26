@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "UWorld.h"
 
 #include <algorithm>
@@ -214,13 +214,15 @@ FRenderProbe& UWorld::BuildRenderProbe() {
     mProbe.mTextProbes.clear();
     mProbe.mBillboardProbes.clear();
     mProbe.mLightProbes.clear();
-    mProbe.mBForceUnlit = mEditorContext != nullptr && (mEditorContext->GetRenderModeState() == static_cast<std::size_t>(ERenderMode::Unlit) || mEditorContext->GetRenderModeState() == static_cast<std::size_t>(ERenderMode::Wireframe));
+    mProbe.mSceneGuides.Clear();
+    mProbe.mGridFade = FVector4{};
+    mProbe.mBForceUnlit = false;
 
-    mRenderSubsystem->BuildRenderProbes(mAssetRegistryMutator, mProbe);
+    mRenderSubsystem->BuildRenderProbes(mProbe);
     mLightSubsystem->BuildLightProbes(mProbe);
     mTextSubsystem->BuildTextProbes(mProbe);
 
-    mBillboardSubsystem->BuildRenderProbes(mAssetRegistryMutator, mProbe);
+    mBillboardSubsystem->BuildRenderProbes(mProbe);
     return mProbe;
 }
 

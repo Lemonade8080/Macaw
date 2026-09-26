@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 
 #include "EditorViewport.h"
 
@@ -64,7 +64,6 @@ namespace {
 }
 
 void EditorViewport::Initialize(ID3D11Device* Device, FAssetRegistry& AssetRegistry, FWorldEditorContext& InEditorContext) {
-    mLineRenderer->Initialize(Device);
     mTransformGizmo.Initialize(Device, AssetRegistry, InEditorContext);
     mEditorContext = &InEditorContext;
 }
@@ -77,11 +76,6 @@ void EditorViewport::ProcessInput(FKeyboardInput& KeyboardInput, FMouseInput& Mo
     mTransformGizmo.ProcessInput(KeyboardInput, MouseInput, BMouseCapturedByUi);
 }
 
-void EditorViewport::RenderInProbe(FRenderProbe& Probe, const CameraProbe& Camera, const D3D11_VIEWPORT& Viewport) {
-    mTransformGizmo.Update(Camera, Viewport);
-    mTransformGizmo.Render(Probe);
-}
-
 FStateChannel<Uint8>::FReadWriter EditorViewport::GetGizmoMode() {
     return mTransformGizmo.GetGizmoMode();
 }
@@ -90,7 +84,7 @@ FStateChannel<Uint8>::FReadWriter EditorViewport::GetGizmoCoordinateSpace() {
     return mTransformGizmo.GetGizmoCoordinateSpace();
 }
 
-void EditorViewport::RenderGrid(const CameraProbe& Camera, const FVector3& CameraPosition, const D3D11_VIEWPORT& Viewport, FVector2D& FadeCenter, ELineDepthMode DepthMode) {
+void EditorViewport::BuildGrid(FLineRenderData& Lines, const CameraProbe& Camera, const FVector3& CameraPosition, const D3D11_VIEWPORT& Viewport, FVector2D& FadeCenter, ELineDepthMode DepthMode) {
     const float GridInterval{mEditorContext != nullptr ? mEditorContext->GetEditorSettings().mGridSize : 1.0f};
     const float ProjectionYScale{Camera.mProjection.m_[1][1]};
     if (!std::isfinite(GridInterval) || GridInterval <= 0.0f || ProjectionYScale <= 0.0f || Viewport.Width <= 0.0f || Viewport.Height <= 0.0f) {
@@ -140,7 +134,7 @@ void EditorViewport::RenderGrid(const CameraProbe& Camera, const FVector3& Camer
         const float Start{std::max(MinimumY, FadeCenter.mY - HalfLength)};
         const float End{std::min(MaximumY, FadeCenter.mY + HalfLength)};
         if (End > Start) {
-            mLineRenderer->AddGridLine(FVector3{Position, Start, 0.0f}, FVector3{Position, End, 0.0f}, FVector4{0.5f, 0.5f, 0.5f, 1.0f}, WidthPixels, TierSpacing, DepthMode);
+            Lines.AddGridLine(FVector3{Position, Start, 0.0f}, FVector3{Position, End, 0.0f}, FVector4{0.5f, 0.5f, 0.5f, 1.0f}, WidthPixels, TierSpacing, DepthMode);
         }
     }
     for (std::int64_t Index{FirstY}; Index <= LastY; ++Index) {
@@ -152,23 +146,23 @@ void EditorViewport::RenderGrid(const CameraProbe& Camera, const FVector3& Camer
         const float Start{std::max(MinimumX, FadeCenter.mX - HalfLength)};
         const float End{std::min(MaximumX, FadeCenter.mX + HalfLength)};
         if (End > Start) {
-            mLineRenderer->AddGridLine(FVector3{Start, Position, 0.0f}, FVector3{End, Position, 0.0f}, FVector4{0.5f, 0.5f, 0.5f, 1.0f}, WidthPixels, TierSpacing, DepthMode);
+            Lines.AddGridLine(FVector3{Start, Position, 0.0f}, FVector3{End, Position, 0.0f}, FVector4{0.5f, 0.5f, 0.5f, 1.0f}, WidthPixels, TierSpacing, DepthMode);
         }
     }
 }
 
-void EditorViewport::RenderAxis(ELineDepthMode DepthMode) {
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{1.0f, 0.0f, 0.0f}, 1000.0f, FVector4{1.0f, 0.0f, 0.0f, 1.0f}, 3.0f, DepthMode);
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{-1.0f, 0.0f, 0.0f}, 1000.0f, FVector4{1.0f, 0.0f, 0.0f, 1.0f}, 3.0f, DepthMode);
+void EditorViewport::BuildAxis(FLineRenderData& Lines, ELineDepthMode DepthMode) {
+    Lines.AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{1.0f, 0.0f, 0.0f}, 1000.0f, FVector4{1.0f, 0.0f, 0.0f, 1.0f}, 3.0f, DepthMode);
+    Lines.AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{-1.0f, 0.0f, 0.0f}, 1000.0f, FVector4{1.0f, 0.0f, 0.0f, 1.0f}, 3.0f, DepthMode);
 
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, 1.0f, 0.0f}, 1000.0f, FVector4{0.0f, 1.0f, 0.0f, 1.0f}, 3.0f, DepthMode);
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, -1.0f, 0.0f}, 1000.0f, FVector4{0.0f, 1.0f, 0.0f, 1.0f}, 3.0f, DepthMode);
+    Lines.AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, 1.0f, 0.0f}, 1000.0f, FVector4{0.0f, 1.0f, 0.0f, 1.0f}, 3.0f, DepthMode);
+    Lines.AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, -1.0f, 0.0f}, 1000.0f, FVector4{0.0f, 1.0f, 0.0f, 1.0f}, 3.0f, DepthMode);
 
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, 0.0f, 1.0f}, 1000.0f, FVector4{0.0f, 0.0f, 1.0f, 1.0f}, 3.0f, DepthMode);
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, 0.0f, -1.0f}, 1000.0f, FVector4{0.0f, 0.0f, 1.0f, 1.0f}, 3.0f, DepthMode);
+    Lines.AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, 0.0f, 1.0f}, 1000.0f, FVector4{0.0f, 0.0f, 1.0f, 1.0f}, 3.0f, DepthMode);
+    Lines.AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, 0.0f, -1.0f}, 1000.0f, FVector4{0.0f, 0.0f, 1.0f, 1.0f}, 3.0f, DepthMode);
 }
 
-void EditorViewport::RenderBounds(const CameraProbe& Camera, ELineDepthMode DepthMode) {
+void EditorViewport::BuildBounds(FLineRenderData& Lines, const CameraProbe& Camera, ELineDepthMode DepthMode) {
     if (mEditorContext == nullptr)
         return;
 
@@ -178,7 +172,7 @@ void EditorViewport::RenderBounds(const CameraProbe& Camera, ELineDepthMode Dept
 
     if (SelectedComponent->GetTypeInfo()->IsA<UCollisionComponent>()) {
         const auto* CollisionComponent{static_cast<const UCollisionComponent*>(SelectedComponent)};
-        CollisionComponent->DrawEditorBounds(*mLineRenderer, DepthMode);
+        CollisionComponent->DrawEditorBounds(Lines, DepthMode);
     } else if (SelectedComponent->GetTypeInfo()->IsA<UBillboardComponent>()) {
         FMatrix CameraWorld{};
         if (!Camera.mView.TryInverse(CameraWorld))
@@ -189,10 +183,10 @@ void EditorViewport::RenderBounds(const CameraProbe& Camera, ELineDepthMode Dept
             return;
 
         const FVector4 LineColor{0.0f, 0.0f, 1.0f, 1.0f};
-        mLineRenderer->AddLine(Corners[0], Corners[1], LineColor, 1.0f, DepthMode);
-        mLineRenderer->AddLine(Corners[1], Corners[3], LineColor, 1.0f, DepthMode);
-        mLineRenderer->AddLine(Corners[3], Corners[2], LineColor, 1.0f, DepthMode);
-        mLineRenderer->AddLine(Corners[2], Corners[0], LineColor, 1.0f, DepthMode);
+        Lines.AddLine(Corners[0], Corners[1], LineColor, 1.0f, DepthMode);
+        Lines.AddLine(Corners[1], Corners[3], LineColor, 1.0f, DepthMode);
+        Lines.AddLine(Corners[3], Corners[2], LineColor, 1.0f, DepthMode);
+        Lines.AddLine(Corners[2], Corners[0], LineColor, 1.0f, DepthMode);
 
         FVector3 Minimum{Corners[0]};
         FVector3 Maximum{Corners[0]};
@@ -204,7 +198,7 @@ void EditorViewport::RenderBounds(const CameraProbe& Camera, ELineDepthMode Dept
         const FVector4 BoxColor{1.0f, 0.0f, 0.0f, 1.0f};
         constexpr std::array<std::array<std::size_t, 2>, 12> BoxEdges{std::array<std::size_t, 2>{0, 1}, std::array<std::size_t, 2>{1, 2}, std::array<std::size_t, 2>{2, 3}, std::array<std::size_t, 2>{3, 0}, std::array<std::size_t, 2>{4, 5}, std::array<std::size_t, 2>{5, 6}, std::array<std::size_t, 2>{6, 7}, std::array<std::size_t, 2>{7, 4}, std::array<std::size_t, 2>{0, 4}, std::array<std::size_t, 2>{1, 5}, std::array<std::size_t, 2>{2, 6}, std::array<std::size_t, 2>{3, 7}};
         for (const std::array<std::size_t, 2>& Edge : BoxEdges) {
-            mLineRenderer->AddLine(BoxCorners[Edge[0]], BoxCorners[Edge[1]], BoxColor, 1.0f, DepthMode);
+            Lines.AddLine(BoxCorners[Edge[0]], BoxCorners[Edge[1]], BoxColor, 1.0f, DepthMode);
         }
     } else if (SelectedComponent->GetTypeInfo()->IsA<UMeshComponent>()) {
         const auto* MeshComponent{static_cast<const UMeshComponent*>(SelectedComponent)};
@@ -218,8 +212,8 @@ void EditorViewport::RenderBounds(const CameraProbe& Camera, ELineDepthMode Dept
 
         const FVector4 LineColor{FVector4{0.0f, 0.0f, 1.0f, 1.0f}};
         const float Thickness{1.0f};
-        const auto AddEdge{[this, &Corners, LineColor, Thickness, DepthMode](std::size_t Start, std::size_t End) {
-            mLineRenderer->AddLine(FVector3{Corners[Start]}, FVector3{Corners[End]}, LineColor, Thickness, DepthMode);
+        const auto AddEdge{[&Lines, &Corners, LineColor, Thickness, DepthMode](std::size_t Start, std::size_t End) {
+            Lines.AddLine(FVector3{Corners[Start]}, FVector3{Corners[End]}, LineColor, Thickness, DepthMode);
         }};
 
         AddEdge(0, 1);
@@ -252,8 +246,8 @@ void EditorViewport::RenderBounds(const CameraProbe& Camera, ELineDepthMode Dept
 
         const FVector4 AABBColor{FVector4{1.0f, 0.0f, 0.0f, 1.0f}};
 
-        const auto AddAABBEdge{[this, &AABBCorners, AABBColor, Thickness, DepthMode](std::size_t Start, std::size_t End) {
-            mLineRenderer->AddLine(FVector3{AABBCorners[Start]}, FVector3{AABBCorners[End]}, AABBColor, Thickness, DepthMode);
+        const auto AddAABBEdge{[&Lines, &AABBCorners, AABBColor, Thickness, DepthMode](std::size_t Start, std::size_t End) {
+            Lines.AddLine(FVector3{AABBCorners[Start]}, FVector3{AABBCorners[End]}, AABBColor, Thickness, DepthMode);
         }};
 
         AddAABBEdge(0, 1);
@@ -273,42 +267,19 @@ void EditorViewport::RenderBounds(const CameraProbe& Camera, ELineDepthMode Dept
     }
 }
 
-void EditorViewport::RenderOrientationAxis(ID3D11DeviceContext* Context, const CameraProbe& Probe, const D3D11_VIEWPORT& Viewport) {
-    constexpr float AxisScale{0.15f};
-    constexpr float MaximumAxisSize{160.0f};
-    constexpr float AxisMargin{5.0f};
-    if (Context == nullptr || Viewport.Width <= AxisMargin * 2.0f || Viewport.Height <= AxisMargin * 2.0f) {
-        return;
-    }
-
-    const float AxisSize{std::min(std::min(Viewport.Width, Viewport.Height) * AxisScale, MaximumAxisSize)};
-    const D3D11_VIEWPORT AxisViewport{Viewport.TopLeftX + AxisMargin, Viewport.TopLeftY + AxisMargin, AxisSize, AxisSize, Viewport.MinDepth, Viewport.MaxDepth};
-
-    FMatrix View{Probe.mView};
-    View.Translation(FVector3{0.0f, 0.0f, 3.0f});
-    const FMatrix Projection{FMatrix::CreateOrthographic(2.5f, 2.5f, 0.1f, 10.f)};
-
-    Context->RSSetViewports(1, &AxisViewport);
-
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{1.0f, 0.0f, 0.0f}, 1.0f, FVector4{1.0f, 0.0f, 0.0f, 1.0f}, 3.0f, ELineDepthMode::DepthTested);
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, 1.0f, 0.0f}, 1.0f, FVector4{0.0f, 1.0f, 0.0f, 1.0f}, 3.0f, ELineDepthMode::DepthTested);
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, 0.0f, 1.0f}, 1.0f, FVector4{0.0f, 0.0f, 1.0f, 1.0f}, 3.0f, ELineDepthMode::DepthTested);
-
-    mLineRenderer->Render(Context, FLineViewData{ .mViewProjection = View * Projection, .mViewportSize = FVector2D{AxisViewport.Width, AxisViewport.Height}});
-    Context->RSSetViewports(1, &Viewport);
-}
-
-void EditorViewport::RenderSceneGuides(ID3D11DeviceContext* Context, const CameraProbe& Camera, const FVector3& CameraPosition, const D3D11_VIEWPORT& Viewport) {
+void EditorViewport::BuildRenderProbes(FRenderProbe& Probe, const CameraProbe& Camera, const FVector3& CameraPosition, const D3D11_VIEWPORT& Viewport) {
+    mTransformGizmo.Update(Camera, Viewport);
+    mTransformGizmo.BuildRenderProbes(Probe);
+    Probe.mSceneGuides.Clear();
     const ELineDepthMode DepthMode{ELineDepthMode::DepthTested};
     const FEditorSettings Settings{mEditorContext != nullptr ? mEditorContext->GetEditorSettings() : FEditorSettings{}};
     FVector2D FadeCenter{CameraPosition.mX, CameraPosition.mY};
-
     if (Settings.mGridVisible) {
-        RenderGrid(Camera, CameraPosition, Viewport, FadeCenter, DepthMode);
+        BuildGrid(Probe.mSceneGuides, Camera, CameraPosition, Viewport, FadeCenter, DepthMode);
     }
     if (Settings.mAxisVisible) {
-        RenderAxis(DepthMode);
+        BuildAxis(Probe.mSceneGuides, DepthMode);
     }
-    RenderBounds(Camera, DepthMode);
-    mLineRenderer->Render(Context, FLineViewData{.mViewProjection = Camera.mViewProjection, .mViewportSize = FVector2D{ Viewport.Width, Viewport.Height}, .mGridFade = FVector4{FadeCenter.mX, FadeCenter.mY, 450.0f, 550.0f}});
+    BuildBounds(Probe.mSceneGuides, Camera, DepthMode);
+    Probe.mGridFade = FVector4{FadeCenter.mX, FadeCenter.mY, 450.0f, 550.0f};
 }

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <d3d11.h>
 #include <wrl/client.h>
 
@@ -20,7 +20,10 @@ struct FBillboardData {
 
 class FBillboardRenderer {
 private:
-    struct FBillboardViewConstans { FMatrix mViewProjection{}; FMatrix mCameraWorld{}; };
+    struct FBillboardViewConstans {
+        FMatrix mViewProjection{};
+        FMatrix mCameraWorld{};
+    };
 
     static_assert(sizeof(FBillboardViewConstans) == sizeof(Uint32) * 32);
 
@@ -28,8 +31,9 @@ public:
     FBillboardRenderer() = default;
     ~FBillboardRenderer() = default;
 
+public:
     bool Initialize(ID3D11Device* InDevice, std::uint32_t InitialCapacity = 256);
-    void Render(ID3D11DeviceContext* Context, const TArray<FBillboardProbe>& BillboardProbe, const CameraProbe& Camera, FAssetRegistry* AssetRegistry);
+    void Render(ID3D11DeviceContext* Context, const TArray<FBillboardProbe>& BillboardProbe, const CameraProbe& Camera, FAssetRegistry* AssetRegistry, ERenderMode Mode);
 
 private:
     bool EnsureCapacity(Uint32 RequiredCapacity);

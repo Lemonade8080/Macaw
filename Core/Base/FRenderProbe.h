@@ -1,22 +1,17 @@
-﻿#pragma once
+#pragma once
 #include "Core/Base/FAssetHandle.h"
+#include "Core/Render/FLineRenderData.h"
 
 struct FTextVertex {
-    // 텍스트 원점으로부터 글자의 상대 위치
     FVector2 mLocalPosition{};
-    // 글자 Quad의 월드 크기
     FVector2 mSize{};
-    // Atlas의 문자 UV 범위
     FVector2 mUvMin{};
     FVector2 mUvMax{};
 };
 
 struct FTextProbe {
-    // UBillBoardTextComponent의 렌더링 원점으로 사용할 World Transform
     FMatrix mWorld{};
-    // 사용할 UFont
     FAssetHandle mFontHandle{};
-    // Text Geometry Shader Pipeline
     FAssetHandle mPipelineHandle{};
     FVector4 mColor{1.0f, 1.0f, 1.0f, 1.0f};
     FVector3 mScreenBoundsExtent{};
@@ -26,10 +21,8 @@ struct FTextProbe {
 
 struct FBillboardProbe {
     FMatrix mWorld{};
-
     FAssetHandle mTextureHandle{};
     FAssetHandle mPipelineHandle{};
-
     FVector2 mSize{};
     FVector2 mUvMin{};
     FVector2 mUvMax{};
@@ -72,13 +65,10 @@ struct FRenderSettings {
 struct FLightProbe {
     FVector3 mColor{1.0f, 1.0f, 1.0f};
     float mIntensity{1.0f};
-
     FVector3 mPosition{};
     float mAttenuationRadius{};
-
     FVector3 mDirection{0.0f, 0.0f, 1.0f};
     float mInnerConeCos{1.0f};
-
     float mOuterConeCos{1.0f};
     ELightType mType{ELightType::Directional};
     FVector2 mPadding{};
@@ -92,6 +82,7 @@ struct FRenderProbe {
     TArray<FTextProbe> mTextProbes{};
     TArray<FBillboardProbe> mBillboardProbes{};
     TArray<FLightProbe> mLightProbes{};
-
+    FLineRenderData mSceneGuides{};
+    FVector4 mGridFade{};
     bool mBForceUnlit{false};
 };
