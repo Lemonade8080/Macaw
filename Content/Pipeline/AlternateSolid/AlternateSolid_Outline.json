@@ -1,13 +1,13 @@
 {
   "VertexShader": {
     "Source": "./Content/Shader/Outline.hlsl",
-    "EntryPoint": "mainVS",
+    "EntryPoint": "MainVS",
     "Profile": "vs_5_0"
   },
 
   "PixelShader": {
     "Source": "./Content/Shader/Outline.hlsl",
-    "EntryPoint": "mainPS",
+    "EntryPoint": "MainPS",
     "Profile": "ps_5_0"
   },
 
@@ -57,7 +57,7 @@
     "DepthFunc": "LessEqual",
 
     "StencilEnable": true,
-    "StencilReadMask": 255,
+    "StencilReadMask": 1,
     "StencilWriteMask": 0,
 
     "StencilFunc": "NotEqual",

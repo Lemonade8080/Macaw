@@ -7,6 +7,13 @@
 #include <stdexcept>
 
 namespace {
+    struct FPixelBounds {
+        int mMinX{};
+        int mMinY{};
+        int mMaxX{};
+        int mMaxY{};
+    };
+
     bool IsColored(Uint32 Pixel) {
         return (Pixel & 0x00ffffff) != 0;
     }
@@ -74,6 +81,96 @@ namespace {
                 throw std::runtime_error{Message->pDescription};
             }
         }
+    }
+
+    FPixelBounds FindColoredBounds(const std::vector<Uint32>& Pixels, int Width, int Height) {
+        FPixelBounds Bounds{Width, Height, -1, -1};
+        for (int Y{}; Y < Height; ++Y) {
+            for (int X{}; X < Width; ++X) {
+                if (IsColored(Pixels[static_cast<std::size_t>(Y) * Width + X])) {
+                    Bounds.mMinX = std::min(Bounds.mMinX, X);
+                    Bounds.mMinY = std::min(Bounds.mMinY, Y);
+                    Bounds.mMaxX = std::max(Bounds.mMaxX, X);
+                    Bounds.mMaxY = std::max(Bounds.mMaxY, Y);
+                }
+            }
+        }
+        Check(Bounds.mMaxX >= Bounds.mMinX && Bounds.mMaxY >= Bounds.mMinY, "Outline test mesh is not visible");
+        return Bounds;
+    }
+
+    void TestOutline(FRenderer& Renderer, FAssetRegistry& Registry) {
+        FGuid TexturedPipelineGuid{};
+        Check(TexturedPipelineGuid.Parse("653C7285-C0DE-4239-808E-015A9EF47624"), "Textured pipeline GUID parsing failed");
+        const FAssetHandle TexturedPipelineHandle{Registry.FindAsset(FAssetPath{"/Game/Pipeline/TexturedBase"})};
+        Check(TexturedPipelineHandle && Registry.FindAsset(TexturedPipelineGuid) == TexturedPipelineHandle, "Textured pipeline family did not preserve saved scene references");
+        FSceneRenderSurface Surface{};
+        FRenderView View{};
+        View.mTarget = &Surface;
+        View.mSettings.mClearColor = FVector4{0.0f, 0.0f, 0.0f, 1.0f};
+        View.mPasses.reset();
+        View.SetPassEnabled(ERenderPass::SceneGeometry, true);
+        FRenderProbe Probe{};
+        Probe.mBForceUnlit = true;
+        FActorProbe Actor{};
+        Actor.mMeshHandle = Registry.FindAsset(FAssetPath{"/Game/System/Mesh/Sphere.bin"});
+        Actor.mMaterialHandle = Registry.EnsureDefaultStaticMeshMaterial();
+        Actor.mFlags = static_cast<Uint32>(ERenderObjectFlags::Selected);
+        Probe.mActorProbes.push_back(Actor);
+        constexpr std::array PipelinePaths{"/Game/Pipeline/Base", "/Game/Pipeline/Alternate", "/Game/Pipeline/BaseSolid", "/Game/Pipeline/AlternateSolid", "/Game/Pipeline/TexturedBase"};
+        for (const char* PipelinePath : PipelinePaths) {
+            Probe.mActorProbes.front().mPipelineHandle = Registry.FindAsset(FAssetPath{PipelinePath});
+            Check(Registry.ResolveAsset<UPipeline>(Probe.mActorProbes.front().mPipelineHandle) != nullptr, "Outline test pipeline is missing");
+            for (int CaseIndex{}; CaseIndex < 6; ++CaseIndex) {
+                const int Width{CaseIndex % 2 == 0 ? 192 : 320};
+                const int Height{CaseIndex % 2 == 0 ? 256 : 160};
+                Surface.InitializeOffscreen(Renderer.GetDevice(), Width, Height);
+                Check(Surface.IsValid(), "Outline test surface creation failed");
+                const float Distance{CaseIndex < 2 ? 4.0f : 9.0f};
+                View.mCamera.mView = FMatrix::CreateTranslation(0.0f, 0.0f, Distance);
+                View.mCamera.mProjection = CaseIndex >= 4 ? FMatrix::CreateOrthographic(6.0f * Width / Height, 6.0f, 0.1f, 100.0f) : FMatrix::CreatePerspectiveFieldOfView(CaseIndex < 2 ? 1.0f : 0.65f, static_cast<float>(Width) / Height, 0.1f, 100.0f);
+                View.mCamera.mViewProjection = View.mCamera.mView * View.mCamera.mProjection;
+                Probe.mActorProbes.front().mWorld = CaseIndex % 2 == 0 ? FMatrix::Identity : FMatrix::CreateScale(1.4f, 0.7f, 1.1f) * FMatrix::CreateRotationY(0.6f) * FMatrix::CreateRotationZ(0.35f) * FMatrix::CreateTranslation(0.3f, 0.2f, 0.0f);
+                View.SetPassEnabled(ERenderPass::SelectionOutline, false);
+                Renderer.RenderView(View, Probe);
+                const std::vector<Uint32> Scene{ReadColor(Renderer, Surface)};
+                const std::vector<Uint32> Depth{ReadDepth(Renderer)};
+                const FPixelBounds SceneBounds{FindColoredBounds(Scene, Width, Height)};
+                View.SetPassEnabled(ERenderPass::SelectionOutline, true);
+                Renderer.RenderView(View, Probe);
+                const std::vector<Uint32> Outlined{ReadColor(Renderer, Surface)};
+                const FPixelBounds OutlineBounds{FindColoredBounds(Outlined, Width, Height)};
+                const std::array Extensions{SceneBounds.mMinX - OutlineBounds.mMinX, SceneBounds.mMinY - OutlineBounds.mMinY, OutlineBounds.mMaxX - SceneBounds.mMaxX, OutlineBounds.mMaxY - SceneBounds.mMaxY};
+                for (const int Extension : Extensions) {
+                    Check(Extension >= 1 && Extension <= 2, "Normal outline exceeded pixel rounding tolerance across views and model transforms");
+                }
+                Check(ReadDepth(Renderer) == Depth, "Outline changed scene depth or selection stencil");
+                for (std::size_t Index{}; Index < Scene.size(); ++Index) {
+                    if (IsColored(Scene[Index])) {
+                        Check(Outlined[Index] == Scene[Index], "Outline painted over the selected mesh interior");
+                    }
+                }
+            }
+        }
+
+        FActorProbe Occluder{Probe.mActorProbes.front()};
+        Occluder.mFlags = 0;
+        Occluder.mWorld = FMatrix::CreateScale(3.0f, 3.0f, 3.0f) * FMatrix::CreateTranslation(0.0f, 0.0f, -3.0f);
+        Probe.mActorProbes.push_back(Occluder);
+        View.SetPassEnabled(ERenderPass::SelectionOutline, false);
+        Renderer.RenderView(View, Probe);
+        const std::vector<Uint32> Occluded{ReadColor(Renderer, Surface)};
+        View.SetPassEnabled(ERenderPass::SelectionOutline, true);
+        Renderer.RenderView(View, Probe);
+        Check(ReadColor(Renderer, Surface) == Occluded, "Outline is visible through an unselected occluder");
+
+        Probe.mActorProbes.back().mWorld = FMatrix::CreateScale(3.0f, 3.0f, 3.0f) * FMatrix::CreateTranslation(0.0f, 0.0f, 4.0f);
+        View.SetPassEnabled(ERenderPass::SelectionOutline, false);
+        Renderer.RenderView(View, Probe);
+        const std::vector<Uint32> Background{ReadColor(Renderer, Surface)};
+        View.SetPassEnabled(ERenderPass::SelectionOutline, true);
+        Renderer.RenderView(View, Probe);
+        Check(ReadColor(Renderer, Surface) != Background, "Unselected geometry behind the selection suppressed its outline");
     }
 
     void TestPasses(FRenderer& Renderer, FAssetRegistry& Registry) {
@@ -220,6 +317,7 @@ int main() {
         Check(SUCCEEDED(Renderer.GetDevice()->QueryInterface(IID_PPV_ARGS(Queue.GetAddressOf()))), "Debug layer is required for render pass tests");
         Queue->ClearStoredMessages();
         TestPasses(Renderer, Registry);
+        TestOutline(Renderer, Registry);
         CheckDebugMessages(Queue.Get());
         Renderer.Terminate();
         Registry.Reset();

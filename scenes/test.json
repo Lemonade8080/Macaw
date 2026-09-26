@@ -45,7 +45,7 @@
                     "Guid": "355BE912-4043-FA13-7AEB-41A7F702A38C",
                     "TypeName": "UNameTagComponent",
                     "Name": "",
-                    "bActive": false,
+                    "bActive": true,
                     "Transform": {
                         "Position": [
                             0.0,
@@ -94,20 +94,20 @@
             "GuidRootComponent": "05584E92-427A-2633-F527-1884258E8D21"
         },
         {
-            "Guid": "220782A6-4195-74E9-F9BC-88AA2E849C0C",
+            "Guid": "0C74A593-4D88-51EC-0D43-58970FE408E3",
             "TypeName": "AActor",
             "Name": "AActor_1",
             "Components": [
                 {
-                    "Guid": "86FE924B-4B4C-E9D7-879B-8B82FE3475A4",
+                    "Guid": "45AE65B1-40A7-36BE-AE28-45AE15C7BBAF",
                     "TypeName": "UStaticMeshComponent",
                     "Name": "",
                     "bActive": true,
                     "Transform": {
                         "Position": [
-                            2.494373321533203,
-                            -4.619108200073242,
-                            -1.0
+                            7.122316837310791,
+                            -8.023340225219727,
+                            0.0
                         ],
                         "Rotation": [
                             0.0,
@@ -128,16 +128,16 @@
                     "bVisible": true,
                     "MeshAssetGuid": "8BC836E9-4AED-234B-539E-EFB5DABF3EFD",
                     "MeshAssetPath": "/Game/ModelingFiles/Monkey_Quad.bin",
-                    "MaterialAssetGuid": "26ACE055-9ED4-4644-ACFD-7985BCBFBF80",
-                    "MaterialAssetPath": "/Game/Models/Monkey/Monkey.mtl",
-                    "PipelineAssetGuid": "653C7285-C0DE-4239-808E-015A9EF47624",
-                    "PipelineAssetPath": "/Game/Pipeline/TexturedBase.json"
+                    "MaterialAssetGuid": "309729B8-08DE-4701-AB4B-034B10CCBC16",
+                    "MaterialAssetPath": "/Game/System/Material/Default.mtl",
+                    "PipelineAssetGuid": "DC8DBAC2-B368-4D74-81D7-4E09AD0BF8D5",
+                    "PipelineAssetPath": "/Game/Pipeline/Base"
                 },
                 {
-                    "Guid": "39C38065-40BC-A95A-569D-D7A135C2EFBB",
+                    "Guid": "483E2F1F-4A32-A72A-40C8-C298BA3B7305",
                     "TypeName": "UNameTagComponent",
                     "Name": "",
-                    "bActive": false,
+                    "bActive": true,
                     "Transform": {
                         "Position": [
                             0.0,
@@ -159,13 +159,13 @@
                         "bAbsoluteRotation": false,
                         "bAbsoluteScale": false
                     },
-                    "Parent": "86FE924B-4B4C-E9D7-879B-8B82FE3475A4",
+                    "Parent": "45AE65B1-40A7-36BE-AE28-45AE15C7BBAF",
                     "bVisible": true,
                     "FontAssetGuid": "0C6D5C06-6626-4BCF-A653-83ED3FF5280F",
                     "FontAssetPath": "/Game/Font/NotoSansKR-Medium.ttf",
                     "PipelineAssetGuid": "E41C36DD-3CF1-4FC0-9C14-7F7C20714597",
                     "PipelineAssetPath": "/Game/Pipeline/Text.json",
-                    "Text": "220782A6-4195-74E9-F9BC-88AA2E849C0C",
+                    "Text": "0C74A593-4D88-51EC-0D43-58970FE408E3",
                     "Color": [
                         1.0,
                         1.0,
@@ -183,29 +183,29 @@
                     ]
                 }
             ],
-            "GuidRootComponent": "86FE924B-4B4C-E9D7-879B-8B82FE3475A4"
+            "GuidRootComponent": "45AE65B1-40A7-36BE-AE28-45AE15C7BBAF"
         },
         {
-            "Guid": "B7F77E13-4493-28DE-346C-CFB9FD8DF72A",
+            "Guid": "A28C23EA-4C04-EE40-E172-CAB90D7A4DED",
             "TypeName": "AActor",
             "Name": "AActor_2",
             "Components": [
                 {
-                    "Guid": "0ACD78AE-4213-D06D-A8F5-54909F1A7D10",
-                    "TypeName": "UBillboardComponent",
+                    "Guid": "4675A04B-4B80-491F-7A32-6B80FE570B61",
+                    "TypeName": "UStaticMeshComponent",
                     "Name": "",
                     "bActive": true,
                     "Transform": {
                         "Position": [
-                            -13.927277565002441,
-                            -3.732354164123535,
-                            5.888289451599121
+                            6.010374069213867,
+                            6.445735454559326,
+                            0.0
                         ],
                         "Rotation": [
-                            0.600536048412323,
-                            0.7086287140846252,
-                            0.23947660624980927,
-                            -0.28258225321769714
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
                         ],
                         "Scale": [
                             1.0,
@@ -218,32 +218,16 @@
                     },
                     "Parent": "00000000-0000-0000-0000-000000000000",
                     "bVisible": true,
-                    "TextureAssetGuid": "03E576DC-4EB0-8A38-4D5D-44B7DF36E251",
-                    "TextureAssetPath": "/Game/System/Light.png",
-                    "PipelineAssetGuid": "08738909-AF2A-4BD3-81B5-3FDFE7C7FF42",
-                    "PipelineAssetPath": "/Game/Pipeline/Billboard.json",
-                    "Size": [
-                        1.0,
-                        1.0
-                    ],
-                    "UVMin": [
-                        0.0,
-                        0.0
-                    ],
-                    "UVMax": [
-                        1.0,
-                        1.0
-                    ],
-                    "Color": [
-                        1.0,
-                        1.0,
-                        1.0,
-                        1.0
-                    ]
+                    "MeshAssetGuid": "95933102-44D6-8DD5-B144-58B4E8D412C9",
+                    "MeshAssetPath": "/Game/Models/Mimikyu/Untitled.bin",
+                    "MaterialAssetGuid": "309729B8-08DE-4701-AB4B-034B10CCBC16",
+                    "MaterialAssetPath": "/Game/System/Material/Default.mtl",
+                    "PipelineAssetGuid": "DC8DBAC2-B368-4D74-81D7-4E09AD0BF8D5",
+                    "PipelineAssetPath": "/Game/Pipeline/Base"
                 },
                 {
-                    "Guid": "07AAB072-460C-4DA0-6415-41AAFA73C026",
-                    "TypeName": "UDirectionalLightComponent",
+                    "Guid": "BD41D719-466D-E75D-6E8A-10A1E1C48B32",
+                    "TypeName": "UNameTagComponent",
                     "Name": "",
                     "bActive": true,
                     "Transform": {
@@ -267,48 +251,13 @@
                         "bAbsoluteRotation": false,
                         "bAbsoluteScale": false
                     },
-                    "Parent": "0ACD78AE-4213-D06D-A8F5-54909F1A7D10",
-                    "LightColor": [
-                        1.0,
-                        1.0,
-                        1.0
-                    ],
-                    "Intensity": 1.0,
-                    "bVisible": true
-                },
-                {
-                    "Guid": "55E2EF4C-4585-EB18-80C6-2B856716CBCD",
-                    "TypeName": "UNameTagComponent",
-                    "Name": "",
-                    "bActive": false,
-                    "Transform": {
-                        "Position": [
-                            0.0,
-                            0.0,
-                            0.0
-                        ],
-                        "Rotation": [
-                            0.0,
-                            0.0,
-                            0.0,
-                            1.0
-                        ],
-                        "Scale": [
-                            1.0,
-                            1.0,
-                            1.0
-                        ],
-                        "bAbsoluteLocation": false,
-                        "bAbsoluteRotation": false,
-                        "bAbsoluteScale": false
-                    },
-                    "Parent": "00000000-0000-0000-0000-000000000000",
+                    "Parent": "4675A04B-4B80-491F-7A32-6B80FE570B61",
                     "bVisible": true,
                     "FontAssetGuid": "0C6D5C06-6626-4BCF-A653-83ED3FF5280F",
                     "FontAssetPath": "/Game/Font/NotoSansKR-Medium.ttf",
                     "PipelineAssetGuid": "E41C36DD-3CF1-4FC0-9C14-7F7C20714597",
                     "PipelineAssetPath": "/Game/Pipeline/Text.json",
-                    "Text": "B7F77E13-4493-28DE-346C-CFB9FD8DF72A",
+                    "Text": "A28C23EA-4C04-EE40-E172-CAB90D7A4DED",
                     "Color": [
                         1.0,
                         1.0,
@@ -326,7 +275,7 @@
                     ]
                 }
             ],
-            "GuidRootComponent": "0ACD78AE-4213-D06D-A8F5-54909F1A7D10"
+            "GuidRootComponent": "4675A04B-4B80-491F-7A32-6B80FE570B61"
         }
     ]
 }

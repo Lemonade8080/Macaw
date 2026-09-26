@@ -20,7 +20,7 @@ namespace {
     constexpr char DefaultMeshPath[]{"/Game/System/Mesh/Cube.bin"};
     constexpr char DefaultMaterialPath[]{"/Game/System/Material/Green.mtl"};
     constexpr char DefaultPipelinePath[]{"/Game/Pipeline/Base"};
-    constexpr char TexturedPipelinePath[]{"/Game/Pipeline/TexturedBase.json"};
+    constexpr char TexturedPipelinePath[]{"/Game/Pipeline/TexturedBase"};
 }
 
 FViewerPanel::FViewerPanel(FAssetRegistry& InRegistry, HWND InputWindowHandle, FMessageChannel::FSender InEditorToWorldSender, FWorldEditorContext& InEditorContext, FAssetThumbnailRenderer* InThumbnailRenderer)

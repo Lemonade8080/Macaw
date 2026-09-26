@@ -54,7 +54,7 @@ public:
     bool Initialize(ID3D11Device* Device, const std::filesystem::path& PipelinePath);
 
     void Bind(ID3D11DeviceContext* Context) const;
-    void Bind(ID3D11DeviceContext* Context, ERenderMode Mode) const;
+    void Bind(ID3D11DeviceContext* Context, ERenderMode Mode, UINT StencilReference = 1) const;
     void Reset();
 
     void SetRenderMode(ERenderMode Mode);

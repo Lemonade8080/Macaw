@@ -13,7 +13,7 @@
 
 namespace {
     constexpr char BasePipelinePath[]{"/Game/Pipeline/Base"};
-    constexpr char TextureBasePipelinePath[]{"/Game/Pipeline/TexturedBase.json"};
+    constexpr char TextureBasePipelinePath[]{"/Game/Pipeline/TexturedBase"};
 }
 
 FAssetHandle UStaticMeshComponent::GetMaterialHandle() const {

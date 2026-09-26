@@ -131,7 +131,7 @@
                     "MaterialAssetGuid": "D53C1D45-4FAD-7E8A-231A-A88CAA197CF1",
                     "MaterialAssetPath": "/Game/Models/Jungle Biome/b1.mtl",
                     "PipelineAssetGuid": "653C7285-C0DE-4239-808E-015A9EF47624",
-                    "PipelineAssetPath": "/Game/Pipeline/TexturedBase.json"
+                    "PipelineAssetPath": "/Game/Pipeline/TexturedBase"
                 },
                 {
                     "Guid": "5FDBC941-4489-60EA-0926-EDA250F97F6A",
@@ -223,7 +223,7 @@
                     "MaterialAssetGuid": "B7F52B71-45B5-8006-9EA8-F98957119BF6",
                     "MaterialAssetPath": "/Game/Models/lowpolymacaw/lowpolymacaw.mtl",
                     "PipelineAssetGuid": "653C7285-C0DE-4239-808E-015A9EF47624",
-                    "PipelineAssetPath": "/Game/Pipeline/TexturedBase.json"
+                    "PipelineAssetPath": "/Game/Pipeline/TexturedBase"
                 },
                 {
                     "Guid": "239EF7DF-48BC-3C54-9444-D08C82D8FD71",
@@ -315,7 +315,7 @@
                     "MaterialAssetGuid": "DD9BDB32-4B7B-2EA3-ADB3-E4889C4651BE",
                     "MaterialAssetPath": "/Game/Models/EnderD/Untitled.mtl",
                     "PipelineAssetGuid": "653C7285-C0DE-4239-808E-015A9EF47624",
-                    "PipelineAssetPath": "/Game/Pipeline/TexturedBase.json"
+                    "PipelineAssetPath": "/Game/Pipeline/TexturedBase"
                 },
                 {
                     "Guid": "50BEBA23-43ED-F7F6-7A67-B78605F6A5D3",

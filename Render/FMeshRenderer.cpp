@@ -38,12 +38,17 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
     mRootConstants.SetGraphicsRoot32BitConstants(FCameraData{Camera.mView, Camera.mProjection, Camera.mViewProjection}, 0);
     mRootConstants.SetGraphicsRoot32BitConstant(Context.mLightCount, 49);
     mRootConstants.SetGraphicsRoot32BitConstant(Context.mAnimationFrame, 50);
+    UINT ViewportCount{1};
+    D3D11_VIEWPORT Viewport{};
+    DeviceContext->RSGetViewports(&ViewportCount, &Viewport);
+    const FVector4 ViewportConstants{Viewport.Width, Viewport.Height, Viewport.Width > 0.0f ? 1.0f / Viewport.Width : 0.0f, Viewport.Height > 0.0f ? 1.0f / Viewport.Height : 0.0f};
+    mRootConstants.SetGraphicsRoot32BitConstants(ViewportConstants, 52);
     mRootConstants.Bind(DeviceContext, 0, EGraphicsShaderStage::Graphics);
 
     for (std::size_t Begin{}; Begin < Items.size();) {
         const FMeshDrawItem& First{Items[Begin]};
         std::size_t End{Begin + 1};
-        while (End < Items.size() && First.HasSameBatch(Items[End])) {
+        while (End < Items.size() && First.HasSameBatch(Items[End]) && ((First.mProbe.mFlags ^ Items[End].mProbe.mFlags) & static_cast<Uint32>(ERenderObjectFlags::Selected)) == 0) {
             ++End;
         }
         UPipeline* Pipeline{Context.mAssetRegistry->ResolveAsset<UPipeline>(First.mProbe.mPipelineHandle)};
@@ -51,7 +56,8 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
         if (Pipeline != nullptr && Mesh != nullptr && (Mode != ERenderMode::Outline || Pipeline->RenderModeSettable(Mode))) {
             const ERenderMode ResolvedMode{Pipeline->ResolveRenderMode(Mode)};
             const bool LitWireframe{ResolvedMode == ERenderMode::LitWireframe && Pipeline->RenderModeSettable(ERenderMode::Lit)};
-            Pipeline->Bind(DeviceContext, LitWireframe ? ERenderMode::Lit : ResolvedMode);
+            const UINT StencilReference{ResolvedMode == ERenderMode::Outline || (First.mProbe.mFlags & static_cast<Uint32>(ERenderObjectFlags::Selected)) != 0 ? 1u : 0u};
+            Pipeline->Bind(DeviceContext, LitWireframe ? ERenderMode::Lit : ResolvedMode, StencilReference);
             std::array<ID3D11ShaderResourceView*, MaxMaterialTextureFields> TextureResources{};
             for (Uint8 Index{}; Index < First.mTextureSignature.mTextureFieldCount; ++Index) {
                 const UTexture* Texture{Context.mAssetRegistry->ResolveAsset<UTexture>(First.mTextureSignature.GetTextureHandle(Index))};
@@ -69,7 +75,7 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
             mRootConstants.Commit(DeviceContext);
             DeviceContext->DrawIndexedInstanced(First.mIndexCount, static_cast<Uint32>(End - Begin), First.mFirstIndex, 0, 0);
             if (LitWireframe) {
-                Pipeline->Bind(DeviceContext, ERenderMode::LitWireframe);
+                Pipeline->Bind(DeviceContext, ERenderMode::LitWireframe, StencilReference);
                 DeviceContext->DrawIndexedInstanced(First.mIndexCount, static_cast<Uint32>(End - Begin), First.mFirstIndex, 0, 0);
             }
         }

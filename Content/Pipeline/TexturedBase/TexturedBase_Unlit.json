@@ -1,13 +1,13 @@
 {
   "VertexShader": {
-    "Source": "./Content/Shader/Outline.hlsl",
-    "EntryPoint": "MainVS",
+    "Source": "./Content/Shader/TexturedBase.hlsl",
+    "EntryPoint": "mainVS",
     "Profile": "vs_5_0"
   },
 
   "PixelShader": {
-    "Source": "./Content/Shader/Outline.hlsl",
-    "EntryPoint": "MainPS",
+    "Source": "./Content/Shader/TexturedBase.hlsl",
+    "EntryPoint": "mainPS",
     "Profile": "ps_5_0"
   },
 
@@ -17,15 +17,6 @@
       "SemanticIndex": 0,
       "Format": "Float3",
       "InputSlot": 0,
-      "AlignedByteOffset": 0,
-      "InputClassification": "PerVertex",
-      "InstanceDataStepRate": 0
-    },
-    {
-      "SemanticName": "NORMAL",
-      "SemanticIndex": 0,
-      "Format": "Float3",
-      "InputSlot": 1,
       "AlignedByteOffset": 0,
       "InputClassification": "PerVertex",
       "InstanceDataStepRate": 0
@@ -45,7 +36,7 @@
 
   "Rasterizer": {
     "FillMode": "Solid",
-    "CullMode": "Front",
+    "CullMode": "Back",
     "FrontCounterClockwise": false,
     "DepthClipEnable": true,
     "ScissorEnable": false
@@ -53,15 +44,15 @@
 
   "DepthStencil": {
     "DepthEnable": true,
-    "DepthWriteEnable": false,
+    "DepthWriteEnable": true,
     "DepthFunc": "LessEqual",
 
     "StencilEnable": true,
-    "StencilReadMask": 1,
-    "StencilWriteMask": 0,
+    "StencilReadMask": 255,
+    "StencilWriteMask": 255,
 
-    "StencilFunc": "NotEqual",
-    "StencilPassOp": "Keep",
+    "StencilFunc": "Always",
+    "StencilPassOp": "Replace",
     "StencilFailOp": "Keep",
     "StencilDepthFailOp": "Keep",
 
