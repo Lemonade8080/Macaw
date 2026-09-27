@@ -126,10 +126,10 @@ void UStaticMeshComponent::Serialize(FArchive& Archive) {
     }
 }
 
-void UStaticMeshComponent::DrawPanels(IPropertyEditorContext& Context) {
+void UStaticMeshComponent::DrawPanels(IPropertyEditorContext* Context) {
     UMeshComponent::DrawPanels(Context);
 
-    Context.DrawAssetPicker("Material", *UMaterial::StaticTypeInfo(), GetMaterialHandle(), [this](FAssetHandle Handle) {
+    Context->DrawAssetPicker("Material", *UMaterial::StaticTypeInfo(), GetMaterialHandle(), [this](FAssetHandle Handle) {
         SetMaterialHandle(Handle);
 
         AActor* Owner{GetOwner()};
@@ -158,7 +158,7 @@ void UStaticMeshComponent::DrawPanels(IPropertyEditorContext& Context) {
             SetPipelineHandle(DesiredPipelineHandle);
         }
     });
-    Context.DrawAssetPicker("Pipeline", *UPipeline::StaticTypeInfo(), GetPipelineHandle(), [this](FAssetHandle Handle) {
+    Context->DrawAssetPicker("Pipeline", *UPipeline::StaticTypeInfo(), GetPipelineHandle(), [this](FAssetHandle Handle) {
         SetPipelineHandle(Handle);
     });
 }

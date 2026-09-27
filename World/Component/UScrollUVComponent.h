@@ -27,15 +27,15 @@ public:
     void SetScrollSpeed(FVector2 InScrollSpeed);
 
     void Tick(float DeltaTime) override;
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
     void UpdateUVFromCurrentFrame();
 
 protected:
     void Serialize(FArchive& Archive) override;
 
 private:
-    FVector2 mScrollSpeed{0.1f, 0.1f};   // 초당 UV 이동량
-    FVector2 mCurrentOffset{0.0f, 0.0f}; // 누적값
+    FVector2 mScrollSpeed{0.1f, 0.1f};
+    FVector2 mCurrentOffset{0.0f, 0.0f};
     bool mBPlaying{true};
     bool mBLooping{true};
 };

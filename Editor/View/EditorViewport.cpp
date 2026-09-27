@@ -172,7 +172,7 @@ void EditorViewport::BuildBounds(FLineRenderData& Lines, const CameraProbe& Came
 
     if (SelectedComponent->GetTypeInfo()->IsA<UCollisionComponent>()) {
         const auto* CollisionComponent{static_cast<const UCollisionComponent*>(SelectedComponent)};
-        CollisionComponent->DrawEditorBounds(Lines, DepthMode);
+        CollisionComponent->DrawEditorBounds(&Lines, DepthMode);
     } else if (SelectedComponent->GetTypeInfo()->IsA<UBillboardComponent>()) {
         FMatrix CameraWorld{};
         if (!Camera.mView.TryInverse(CameraWorld))

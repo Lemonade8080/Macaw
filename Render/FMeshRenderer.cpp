@@ -1,6 +1,6 @@
 #include "pch.h"
 #include "FMeshRenderer.h"
-#include "Asset/FAssetRegistry.h"
+#include "Core/Asset/IAssetRegistry.h"
 #include "Asset/UMesh.h"
 #include "Asset/UTexture.h"
 
@@ -26,8 +26,8 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
     }
     DeviceContext->VSSetShaderResources(0, 1, mModelContextArray.GetSRV());
     DeviceContext->PSSetShaderResources(0, 1, mModelContextArray.GetSRV());
-    DeviceContext->VSSetShaderResources(1, 1, Context.mAssetRegistry->GetMaterialBuffer().GetSRV());
-    DeviceContext->PSSetShaderResources(1, 1, Context.mAssetRegistry->GetMaterialBuffer().GetSRV());
+    DeviceContext->VSSetShaderResources(1, 1, &Context.mMaterialResource);
+    DeviceContext->PSSetShaderResources(1, 1, &Context.mMaterialResource);
     DeviceContext->PSSetShaderResources(2, 1, &Context.mLightResource);
 
     struct FCameraData {
@@ -51,8 +51,8 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
         while (End < Items.size() && First.HasSameBatch(Items[End]) && ((First.mProbe.mFlags ^ Items[End].mProbe.mFlags) & static_cast<Uint32>(ERenderObjectFlags::Selected)) == 0) {
             ++End;
         }
-        UPipeline* Pipeline{Context.mAssetRegistry->ResolveAsset<UPipeline>(First.mProbe.mPipelineHandle)};
-        UMesh* Mesh{Context.mAssetRegistry->ResolveAsset<UMesh>(First.mProbe.mMeshHandle)};
+        const UPipeline* Pipeline{Context.mAssetRegistry->ResolveAsset<UPipeline>(First.mProbe.mPipelineHandle)};
+        const UMesh* Mesh{Context.mAssetRegistry->ResolveAsset<UMesh>(First.mProbe.mMeshHandle)};
         if (Pipeline != nullptr && Mesh != nullptr && (Mode != ERenderMode::Outline || Pipeline->RenderModeSettable(Mode))) {
             const ERenderMode ResolvedMode{Pipeline->ResolveRenderMode(Mode)};
             const bool LitWireframe{ResolvedMode == ERenderMode::LitWireframe && Pipeline->RenderModeSettable(ERenderMode::Lit)};

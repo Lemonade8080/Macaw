@@ -57,7 +57,7 @@ ID3D11DeviceContext* FRenderer::GetDeviceContext() const {
     return mDeviceContext.Get();
 }
 
-void FRenderer::BindAssetRegistry(FAssetRegistry* InAssetRegistry) {
+void FRenderer::BindAssetRegistry(IRenderAssetRegistry* InAssetRegistry) {
     mAssetRegistry = InAssetRegistry;
 }
 
@@ -80,9 +80,9 @@ void FRenderer::RenderView(const FRenderView& View, const FRenderProbe& Probe) {
     if (mAssetRegistry == nullptr || !UploadLightContext(Probe)) {
         return;
     }
-    mAssetRegistry->GetMaterialBuffer().Flush(mDeviceContext.Get());
-    mRenderQueue.Build(*mAssetRegistry, View, Probe);
-    const FRenderContext Context{mDevice.Get(), mDeviceContext.Get(), mAssetRegistry, *mLightContextArray.GetSRV(), mFrameLightCount, mAnimationFrame};
+    mAssetRegistry->FlushMaterialBuffer(mDeviceContext.Get());
+    mRenderQueue.Build(mAssetRegistry, View, Probe);
+    const FRenderContext Context{mDevice.Get(), mDeviceContext.Get(), mAssetRegistry, mAssetRegistry->GetMaterialBufferSRV(), *mLightContextArray.GetSRV(), mFrameLightCount, mAnimationFrame};
     constexpr std::array Passes{ERenderPass::SceneGeometry, ERenderPass::SelectionOutline, ERenderPass::SceneGuides, ERenderPass::Gizmo, ERenderPass::Text, ERenderPass::Billboard, ERenderPass::OrientationAxis};
     for (const ERenderPass Pass : Passes) {
         if (View.IsPassEnabled(Pass)) {

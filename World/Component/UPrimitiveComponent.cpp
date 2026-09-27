@@ -49,9 +49,9 @@ const DirectX::BoundingOrientedBox& UPrimitiveComponent::GetPickingBox() const {
     return mPickingBox;
 }
 
-void UPrimitiveComponent::DrawPanels(IPropertyEditorContext& Context) {
+void UPrimitiveComponent::DrawPanels(IPropertyEditorContext* Context) {
     USceneComponent::DrawPanels(Context);
-    Context.DrawBool("Visible", IsVisible(), [this](bool BVisible) {
+    Context->DrawBool("Visible", IsVisible(), [this](bool BVisible) {
         SetVisible(BVisible);
     });
 }

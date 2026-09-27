@@ -3,12 +3,13 @@
 #include <d3d11.h>
 #include "Core/Common.h"
 
-class FAssetRegistry;
+class IAssetRegistry;
 
 struct FRenderContext {
     ID3D11Device* mDevice{nullptr};
     ID3D11DeviceContext* mDeviceContext{nullptr};
-    FAssetRegistry* mAssetRegistry{nullptr};
+    const IAssetRegistry* mAssetRegistry{nullptr};
+    ID3D11ShaderResourceView* mMaterialResource{nullptr};
     ID3D11ShaderResourceView* mLightResource{nullptr};
     Uint32 mLightCount{};
     Uint32 mAnimationFrame{};

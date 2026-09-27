@@ -13,7 +13,7 @@ class UBillboardTextComponent : public UPrimitiveComponent {
 public:
     UBillboardTextComponent() = default;
     ~UBillboardTextComponent() override = default;
-    // UNameTagComponent가 상속해야 하므로 final을 붙이지 않는다.
+
     JG_DECLARE_DERIVED_TYPEINFO(UBillboardTextComponent, UPrimitiveComponent);
 
     void SetFontHandle(FAssetHandle InFontHandle);
@@ -39,16 +39,15 @@ public:
     const TArray<FTextVertex>& GetVertices() const;
     virtual bool MakeTextRender(FTextProbe& OutProbe) const;
 
-    // 기존 FTextProbe를 직접 생성한다.
     void OnRegister() override;
     void OnUnregister() override;
 
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
 
 protected:
     virtual bool TryGetTextWorld(FMatrix& OutWorld) const;
     void Serialize(FArchive& Archive) override;
-    // Dynamic Font에서 글리프를 요청하고 FTextVertex 배열을 다시 생성한다.
+
     void RebuildTextGeometry();
 
 protected:

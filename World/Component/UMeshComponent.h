@@ -15,7 +15,7 @@ public:
 
     FAssetHandle GetMeshHandle() const;
     void SetMeshHandle(FAssetHandle InHandle);
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
     void OnRegister() override;
 
     virtual const UMesh* ResolveMesh() const;

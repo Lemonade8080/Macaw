@@ -16,7 +16,7 @@ public:
     bool IsVisible() const;
     void SetVisible(bool BInVisible);
 
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
 
 protected:
     void Serialize(FArchive& Archive) override;

@@ -14,7 +14,6 @@ public:
 
     JG_DECLARE_DERIVED_TYPEINFO(USubUVComponent, UBillboardComponent);
 
-    // SubUV
     void SetSubImage(Int32 InHorizontal, Int32 InVertical, Int32 InTotalFrame, float InFrameRate, bool BInLooping);
     void SetFrameRate(float InFrameRate);
     void SetCurrentFrame(Int32 InFrame);
@@ -31,7 +30,7 @@ public:
 
     void Tick(float DeltaTime) override;
 
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
 
 protected:
     void Serialize(FArchive& Archive) override;

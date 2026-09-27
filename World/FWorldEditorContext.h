@@ -21,7 +21,7 @@ struct FWorldEditorSharedState {
 class FWorldEditorContext {
 public:
     void SetWorld(UWorld* InWorld);
-    void InitializeChannels(const IAssetRegistry& AssetRegistry);
+    void InitializeChannels(const IAssetRegistry* AssetRegistry);
     void Dispatch();
 
     FMessageChannel::FSender GetEditorToWorldSender();
@@ -49,11 +49,11 @@ public:
 
     UWorld* GetWorld() const;
 
-    // 프리뷰 대상을 바꾸면 Viewer 창을 띄워달라는 요청도 같이 세운다.
+
     void SetPreviewMesh(const FAssetHandle& Handle);
     FAssetHandle GetPreviewMesh() const noexcept;
     FAssetHandle ConsumePreviewMesh() noexcept;
-    // 요청을 한 번만 처리하도록 읽으면서 내린다.
+
     bool ConsumePreviewOpenRequest() noexcept;
 
 private:

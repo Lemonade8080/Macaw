@@ -9,17 +9,17 @@ public:
 
     ~FUndoTransaction();
 
-    // move 만 사용
-    FUndoTransaction(FUndoTransaction&&) noexcept = default;
-    FUndoTransaction& operator=(FUndoTransaction&&) noexcept = default;
-
     FUndoTransaction(const FUndoTransaction&) = delete;
     FUndoTransaction& operator=(const FUndoTransaction&) = delete;
 
+    FUndoTransaction(FUndoTransaction&&) noexcept = default;
+    FUndoTransaction& operator=(FUndoTransaction&&) noexcept = default;
+
+public:
     void AddRecord(std::unique_ptr<IUndoRecord> Record);
 
-    void Undo(IUndoContext& Context);
-    void Redo(IUndoContext& Context);
+    void Undo(IUndoContext* Context);
+    void Redo(IUndoContext* Context);
 
 private:
     FString mTransactionName{};

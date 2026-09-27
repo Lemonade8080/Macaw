@@ -570,7 +570,7 @@ AActor* UWorld::AddActor(std::unique_ptr<AActor> InActor) {
     return Actor;
 }
 
-void UWorld::HandleSpawnComponent(const FMessageSpawnComponent& Message, const IAssetRegistry& AssetRegistry) {
+void UWorld::HandleSpawnComponent(const FMessageSpawnComponent& Message, const IAssetRegistry* AssetRegistry) {
     static std::mt19937 RandomEngine{std::random_device{}()};
     const FTypeInfo* ComponentType{TypeRegistry::Find(Message.mComponentType)};
     if (ComponentType == nullptr || ComponentType->mCreator == nullptr ||
@@ -579,17 +579,17 @@ void UWorld::HandleSpawnComponent(const FMessageSpawnComponent& Message, const I
     }
 
     const bool BIsStaticMesh{ComponentType->IsA(UStaticMeshComponent::StaticTypeInfo())};
-    const FAssetHandle MeshHandle{BIsStaticMesh ? AssetRegistry.FindAsset(FAssetPath{Message.mMeshType}) : FAssetHandle{}};
-    if (BIsStaticMesh && AssetRegistry.ResolveAsset<UMesh>(MeshHandle) == nullptr) {
+    const FAssetHandle MeshHandle{BIsStaticMesh ? AssetRegistry->FindAsset(FAssetPath{Message.mMeshType}) : FAssetHandle{}};
+    if (BIsStaticMesh && AssetRegistry->ResolveAsset<UMesh>(MeshHandle) == nullptr) {
         return;
     }
-    const FAssetHandle PipelineHandle{BIsStaticMesh ? AssetRegistry.FindAsset(FAssetPath{"/Game/Pipeline/Base"}) : FAssetHandle{}};
-    const FAssetHandle Materials[]{ AssetRegistry.FindAsset(FAssetPath{"/Game/System/Material/Default.mtl"}), AssetRegistry.FindAsset(FAssetPath{"/Game/System/Material/Red.mtl"}), AssetRegistry.FindAsset(FAssetPath{"/Game/System/Material/Green.mtl"}), AssetRegistry.FindAsset(FAssetPath{"/Game/System/Material/Blue.mtl"})};
+    const FAssetHandle PipelineHandle{BIsStaticMesh ? AssetRegistry->FindAsset(FAssetPath{"/Game/Pipeline/Base"}) : FAssetHandle{}};
+    const FAssetHandle Materials[]{ AssetRegistry->FindAsset(FAssetPath{"/Game/System/Material/Default.mtl"}), AssetRegistry->FindAsset(FAssetPath{"/Game/System/Material/Red.mtl"}), AssetRegistry->FindAsset(FAssetPath{"/Game/System/Material/Green.mtl"}), AssetRegistry->FindAsset(FAssetPath{"/Game/System/Material/Blue.mtl"})};
     const bool IsBillboard{ComponentType->IsA(UBillboardComponent::StaticTypeInfo())};
     const bool IsLight{ComponentType->IsA(ULightComponent::StaticTypeInfo())};
-    const FAssetHandle BillboardPipeline{IsBillboard || IsLight ? AssetRegistry.FindAsset(FAssetPath{"/Game/Pipeline/Billboard.json"}) : FAssetHandle{}};
-    const FAssetHandle BillboardTexture{IsBillboard ? AssetRegistry.FindAsset(FAssetPath{"/Game/Texture/Fire+Sparks-Sheet.png"}) : FAssetHandle{}};
-    const FAssetHandle LightProxyTexture{IsLight ? AssetRegistry.FindAsset(FAssetPath{"/Game/System/Light.png"}) : FAssetHandle{}};
+    const FAssetHandle BillboardPipeline{IsBillboard || IsLight ? AssetRegistry->FindAsset(FAssetPath{"/Game/Pipeline/Billboard.json"}) : FAssetHandle{}};
+    const FAssetHandle BillboardTexture{IsBillboard ? AssetRegistry->FindAsset(FAssetPath{"/Game/Texture/Fire+Sparks-Sheet.png"}) : FAssetHandle{}};
+    const FAssetHandle LightProxyTexture{IsLight ? AssetRegistry->FindAsset(FAssetPath{"/Game/System/Light.png"}) : FAssetHandle{}};
 
     std::uniform_int_distribution<std::size_t> MaterialIndex{0, std::size(Materials) - 1};
     const FAssetHandle MaterialHandle{BIsStaticMesh ? Materials[MaterialIndex(RandomEngine)] : FAssetHandle{}};

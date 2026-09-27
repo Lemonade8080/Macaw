@@ -26,7 +26,7 @@ public:
     void SetAspectRatio(float InAspectRatio);
     void SetNearPlane(float InNearPlane);
     void SetFarPlane(float InFarPlane);
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
 
     void OnRegister() override;
     void OnUnregister() override;
@@ -41,7 +41,7 @@ protected:
     void Serialize(FArchive& Archive) override;
 
 private:
-    float mFov{1.0472f}; // 약 60도, 라디안
+    float mFov{1.0472f};
     float mAspectRatio{16.0f / 9.0f};
     float mNearPlane{0.1f};
     float mFarPlane{1000.0f};

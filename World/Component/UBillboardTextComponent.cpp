@@ -34,7 +34,7 @@ namespace {
         if (ConvertedLength != WideLength) {
             return false;
         }
-        // 현대 한글 U+AC00~U+D7A3은 UTF-16 한 칸에 들어간다.
+
         for (wchar_t Character : WideText) {
             OutCodePoints.push_back(static_cast<char32_t>(Character));
         }
@@ -142,7 +142,6 @@ bool UBillboardTextComponent::MakeTextRender(FTextProbe& OutProbe) const {
         return false;
     }
 
-    // UBillBoardComponent가 World Transform을 계산한다.
     if (!TryGetTextWorld(OutProbe.mWorld)) {
         return false;
     }
@@ -193,7 +192,6 @@ void UBillboardTextComponent::RebuildTextGeometry() {
         return;
     }
 
-    // FreeType 픽셀 좌표를 World 좌표로 변환하는 비율.
     const float PixelToWorld{mCharacterHeight / Metrics.mLineHeight};
 
     float PenX{0.0f};
@@ -221,10 +219,9 @@ void UBillboardTextComponent::RebuildTextGeometry() {
             continue;
         }
 
-        // 공백은 Bitmap이 없으므로 Vertex를 만들지 않는다.하지만 아래에서 AdvanceX는 적용한다.
         if (Glyph->mBitmapWidth > 0 && Glyph->mBitmapHeight > 0) {
             FTextVertex Vertex{};
-            // Shader가 LocalPosition을 Glyph Quad의 왼쪽 위 좌표로 사용한다.
+
             Vertex.mLocalPosition.mX = PenX + static_cast<float>(Glyph->mBearingX) * PixelToWorld;
             Vertex.mLocalPosition.mY = BaselineY + static_cast<float>(Glyph->mBearingY) * PixelToWorld;
             Vertex.mSize.mX = static_cast<float>(Glyph->mBitmapWidth) * PixelToWorld;
@@ -239,8 +236,7 @@ void UBillboardTextComponent::RebuildTextGeometry() {
     if (mVertices.empty()) {
         return;
     }
-    // 셰이더가 사용하는 실제 Glyph Quad들의 경계로 텍스트 중심을 계산한다.
-    // FreeType의 Bearing 때문에 첫 글자의 Left/Top이 0이라는 보장이 없다.
+
     const FTextVertex& FirstVertex{mVertices.front()};
     float MinLeft{FirstVertex.mLocalPosition.mX};
     float MaxRight{FirstVertex.mLocalPosition.mX + FirstVertex.mSize.mX};
@@ -338,33 +334,33 @@ bool UBillboardTextComponent::TryGetTextWorld(FMatrix& OutWorld) const {
     return true;
 }
 
-void UBillboardTextComponent::DrawPanels(IPropertyEditorContext& Context) {
+void UBillboardTextComponent::DrawPanels(IPropertyEditorContext* Context) {
     UPrimitiveComponent::DrawPanels(Context);
 
-    if (!Context.BeginCategory("Billboard Text")) {
+    if (!Context->BeginCategory("Billboard Text")) {
         return;
     }
 
-    Context.DrawText("Text", GetText(), [this](const FString& NewText) {
+    Context->DrawText("Text", GetText(), [this](const FString& NewText) {
         SetText(NewText);
     });
-    Context.DrawColor("Color", GetColor(), [this](const FVector4& NewColor) {
+    Context->DrawColor("Color", GetColor(), [this](const FVector4& NewColor) {
         SetColor(NewColor);
     });
-    Context.DrawFloat("Character Height", GetCharacterHeight(), 0.01f, 0.001f, 1000.0f, [this](float NewHeight) {
+    Context->DrawFloat("Character Height", GetCharacterHeight(), 0.01f, 0.001f, 1000.0f, [this](float NewHeight) {
         SetCharacterHeight(NewHeight);
     });
-    Context.DrawFloat("Letter Spacing", GetLetterSpacing(), 0.01f, -100.0f, 100.0f, [this](float NewSpacing) {
+    Context->DrawFloat("Letter Spacing", GetLetterSpacing(), 0.01f, -100.0f, 100.0f, [this](float NewSpacing) {
         SetLetterSpacing(NewSpacing);
     });
-    Context.DrawFloat("Line Spacing", GetLineSpacing(), 0.01f, -100.0f, 100.0f, [this](float NewSpacing) {
+    Context->DrawFloat("Line Spacing", GetLineSpacing(), 0.01f, -100.0f, 100.0f, [this](float NewSpacing) {
         SetLineSpacing(NewSpacing);
     });
 
-    Context.DrawAssetPicker("Font", *UFont::StaticTypeInfo(), GetFontHandle(), [this](FAssetHandle NewHandle) {
+    Context->DrawAssetPicker("Font", *UFont::StaticTypeInfo(), GetFontHandle(), [this](FAssetHandle NewHandle) {
         SetFontHandle(NewHandle);
     });
-    Context.DrawAssetPicker("Pipeline", *UPipeline::StaticTypeInfo(), GetPipelineHandle(), [this](FAssetHandle NewHandle) {
+    Context->DrawAssetPicker("Pipeline", *UPipeline::StaticTypeInfo(), GetPipelineHandle(), [this](FAssetHandle NewHandle) {
         SetPipelineHandle(NewHandle);
     });
 }

@@ -7,7 +7,9 @@
 #include "Core/Base/FRenderProbe.h"
 #include "Render/Buffer/FGraphicsBuffer.h"
 #include "Render/Buffer/TGraphicsRootConstants.h"
-#include "Asset/FAssetRegistry.h"
+#include "Core/Asset/IAssetRegistry.h"
+
+enum class ERenderMode : std::size_t;
 
 struct FBillboardData {
     FMatrix mWorld{};
@@ -33,7 +35,7 @@ public:
 
 public:
     bool Initialize(ID3D11Device* InDevice, std::uint32_t InitialCapacity = 256);
-    void Render(ID3D11DeviceContext* Context, const TArray<FBillboardProbe>& BillboardProbe, const CameraProbe& Camera, FAssetRegistry* AssetRegistry, ERenderMode Mode);
+    void Render(ID3D11DeviceContext* Context, const TArray<FBillboardProbe>& BillboardProbe, const CameraProbe& Camera, const IAssetRegistry* AssetRegistry, ERenderMode Mode);
 
 private:
     bool EnsureCapacity(Uint32 RequiredCapacity);

@@ -3,7 +3,7 @@
 
 #include "Asset/Pipeline/UPipeline.h"
 
-#include "Asset/FAssetRegistry.h"
+#include "Asset/IRenderAssetRegistry.h"
 #include "Asset/UFont.h"
 
 #include <algorithm>
@@ -46,8 +46,8 @@ bool FTextRenderer::EnsureCapacity(std::uint32_t RequiredCapacity) {
     return true;
 }
 
-void FTextRenderer::Render(ID3D11DeviceContext* Context, const TArray<FTextProbe>& TextProbes, const CameraProbe& Camera, FAssetRegistry* AssetRegistry) {
-    if (Context == nullptr || mDevice == nullptr || TextProbes.empty()) {
+void FTextRenderer::Render(ID3D11DeviceContext* Context, const TArray<FTextProbe>& TextProbes, const CameraProbe& Camera, IRenderAssetRegistry* AssetRegistry) {
+    if (Context == nullptr || mDevice == nullptr || AssetRegistry == nullptr || TextProbes.empty()) {
         return;
     }
     FMatrix CameraWorld{};
@@ -58,18 +58,18 @@ void FTextRenderer::Render(ID3D11DeviceContext* Context, const TArray<FTextProbe
         if (Probe.mVertices.empty()) {
             continue;
         }
-        UFont* Font{AssetRegistry->ResolveAsset<UFont>(Probe.mFontHandle)};
+        const UFont* Font{AssetRegistry->ResolveAsset<UFont>(Probe.mFontHandle)};
         if (Font == nullptr) {
             continue;
         }
-        Font->FlushAtlas(Context);
+        AssetRegistry->FlushFontAtlas(Probe.mFontHandle, Context);
         ID3D11ShaderResourceView* AtlasSRV{Font->GetAtlasSRV()};
         if (AtlasSRV == nullptr) {
             if (AtlasSRV == nullptr) {
                 continue;
             }
         }
-        UPipeline* PipeLine{AssetRegistry->ResolveAsset<UPipeline>(Probe.mPipelineHandle)};
+        const UPipeline* PipeLine{AssetRegistry->ResolveAsset<UPipeline>(Probe.mPipelineHandle)};
         if (PipeLine == nullptr) {
             continue;
         }

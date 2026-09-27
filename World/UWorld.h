@@ -77,7 +77,7 @@ public:
     JG_DECLARE_DERIVED_TYPEINFO(UWorld, UObject);
 
     void HandleMousePickRequest(const FMousePickRequestMessage& Message);
-    void HandleSpawnComponent(const FMessageSpawnComponent& Message, const IAssetRegistry& AssetRegistry);
+    void HandleSpawnComponent(const FMessageSpawnComponent& Message, const IAssetRegistry* AssetRegistry);
 #ifdef OBJ_VIEWER
     void HandleMouseCameraRotateRequest(const FMouseCameraRotateRequestMessage& Message);
     void HandleKeyboardCameraMoveRequest(const FKeyboardCameraMoveRequestMessage& Message);

@@ -5,7 +5,7 @@
 #include <array>
 #include <memory>
 
-#include "Asset/FAssetRegistry.h"
+#include "Asset/IRenderAssetRegistry.h"
 #include "FRenderView.h"
 #include "FRenderQueue.h"
 #include "FMeshRenderer.h"
@@ -35,7 +35,7 @@ public:
 
     ID3D11Device* GetDevice() const;
     ID3D11DeviceContext* GetDeviceContext() const;
-    void BindAssetRegistry(FAssetRegistry* InAssetRegistry);
+    void BindAssetRegistry(IRenderAssetRegistry* InAssetRegistry);
 
     void ReSize(Uint32 Width, Uint32 Height);
     void Terminate();
@@ -60,7 +60,7 @@ private:
     Microsoft::WRL::ComPtr<IDXGISwapChain> mSwapChain{};
     std::unique_ptr<IRenderSurface> mBackBufferSurface{};
     std::array<Microsoft::WRL::ComPtr<ID3D11SamplerState>, 6> mSamplerStates{};
-    FAssetRegistry* mAssetRegistry{nullptr};
+    IRenderAssetRegistry* mAssetRegistry{nullptr};
 
     TGraphicsArray<FLightProbe, true, true> mLightContextArray{};
     FRenderQueue mRenderQueue{};

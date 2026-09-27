@@ -58,7 +58,7 @@ public:
     void Reset();
 
     void SetRenderMode(ERenderMode Mode);
-    bool RenderModeSettable(ERenderMode Mode);
+    bool RenderModeSettable(ERenderMode Mode) const;
     ERenderMode GetRenderMode() const;
     ERenderMode ResolveRenderMode(ERenderMode Mode) const;
 

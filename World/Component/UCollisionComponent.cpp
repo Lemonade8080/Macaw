@@ -53,9 +53,9 @@ class UMeshComponent* UCollisionComponent::GetMeshComponent() const {
     return nullptr;
 }
 
-void UCollisionComponent::DrawPanels(IPropertyEditorContext& Context) {
+void UCollisionComponent::DrawPanels(IPropertyEditorContext* Context) {
     UPrimitiveComponent::DrawPanels(Context);
-    Context.DrawBool("Collision Enabled", IsCollisionEnabled(), [this](bool BEnabled) {
+    Context->DrawBool("Collision Enabled", IsCollisionEnabled(), [this](bool BEnabled) {
         SetCollisionEnabled(BEnabled);
     });
 }

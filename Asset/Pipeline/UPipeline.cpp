@@ -298,7 +298,7 @@ void UPipeline::SetRenderMode(ERenderMode Mode) {
     }
 }
 
-bool UPipeline::RenderModeSettable(ERenderMode Mode) {
+bool UPipeline::RenderModeSettable(ERenderMode Mode) const {
     const std::size_t RequestedIndex{static_cast<std::size_t>(Mode)};
     return RequestedIndex < mPipelines.size() && mPipelines[RequestedIndex].mInitialized;
 }

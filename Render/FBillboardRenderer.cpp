@@ -2,7 +2,7 @@
 #include "FBillboardRenderer.h"
 
 #include "Asset/Pipeline/UPipeline.h"
-#include "Asset/FAssetRegistry.h"
+#include "Core/Asset/IAssetRegistry.h"
 #include "Asset/UTexture.h"
 #include <algorithm>
 #include <unordered_map>
@@ -20,8 +20,8 @@ bool FBillboardRenderer::Initialize(ID3D11Device* InDevice, std::uint32_t Initia
     return EnsureCapacity(InitialCapacity);
 }
 
-void FBillboardRenderer::Render(ID3D11DeviceContext* Context, const TArray<FBillboardProbe>& BillboardProbe, const CameraProbe& Camera, FAssetRegistry* AssetRegistry, ERenderMode Mode) {
-    if (Context == nullptr || mDevice == nullptr || BillboardProbe.empty()) {
+void FBillboardRenderer::Render(ID3D11DeviceContext* Context, const TArray<FBillboardProbe>& BillboardProbe, const CameraProbe& Camera, const IAssetRegistry* AssetRegistry, ERenderMode Mode) {
+    if (Context == nullptr || mDevice == nullptr || AssetRegistry == nullptr || BillboardProbe.empty()) {
         return;
     }
 
@@ -64,8 +64,8 @@ void FBillboardRenderer::Render(ID3D11DeviceContext* Context, const TArray<FBill
     }
 
     for (auto& [Key, InstanceArray] : Batches) {
-        UPipeline* Pipeline{AssetRegistry->ResolveAsset<UPipeline>(Key.mPipelineHandle)};
-        UTexture* Texture{AssetRegistry->ResolveAsset<UTexture>(Key.mTextureHandle)};
+        const UPipeline* Pipeline{AssetRegistry->ResolveAsset<UPipeline>(Key.mPipelineHandle)};
+        const UTexture* Texture{AssetRegistry->ResolveAsset<UTexture>(Key.mTextureHandle)};
         if (Pipeline == nullptr || Texture == nullptr || InstanceArray.empty()) {
             continue;
         }

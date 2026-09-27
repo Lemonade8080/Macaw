@@ -17,10 +17,10 @@ public:
 
     bool IsCollisionEnabled() const;
     void SetCollisionEnabled(bool BEnabled);
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
 
     bool Raycast(const FRay& Ray, float& OutDistance) const;
-    virtual void DrawEditorBounds(ILineDrawContext& LineContext, ELineDepthMode DepthMode) const = 0;
+    virtual void DrawEditorBounds(ILineDrawContext* LineContext, ELineDepthMode DepthMode) const = 0;
 
     void MakeRender(FActorProbe& OutProbe) const override;
 

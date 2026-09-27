@@ -120,9 +120,9 @@ void UMeshComponent::Serialize(FArchive& Archive) {
     }
 }
 
-void UMeshComponent::DrawPanels(IPropertyEditorContext& Context) {
+void UMeshComponent::DrawPanels(IPropertyEditorContext* Context) {
     UPrimitiveComponent::DrawPanels(Context);
-    Context.DrawAssetPicker("Mesh", *UMesh::StaticTypeInfo(), GetMeshHandle(), [this](FAssetHandle Handle) {
+    Context->DrawAssetPicker("Mesh", *UMesh::StaticTypeInfo(), GetMeshHandle(), [this](FAssetHandle Handle) {
         SetMeshHandle(Handle);
     });
 }

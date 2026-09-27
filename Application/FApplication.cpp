@@ -136,7 +136,7 @@ bool FApplication::InitializeApplication(FLoadingProgress& Progress, HWND Window
     mContext.mWorld->SetAssetRegistry(mContext.mAssetRegistry.get(), mContext.mAssetRegistry.get());
 
     Progress.SetProgress(0.73f, "Initializing editor channels");
-    mContext.mEditorContext->InitializeChannels(*mContext.mAssetRegistry);
+    mContext.mEditorContext->InitializeChannels(mContext.mAssetRegistry.get());
     mContext.mMouseInput.InitializeWorldCommandSender(mContext.mWorldCommandChannel->GetSender());
     mContext.mKeyboardInput.InitializeWorldCommandSender(mContext.mWorldCommandChannel->GetSender());
     mContext.mWorldCommandChannel->TryBind<FMousePickRequestMessage>([this](const FMousePickRequestMessage& Message) {

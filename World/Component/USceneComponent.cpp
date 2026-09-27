@@ -8,8 +8,6 @@ namespace {
     bool DecomposeWorldTransform(const FMatrix& WorldMatrix, FVector3& OutScale, FQuat& OutRotation, FVector3& OutTranslation) {
         FMatrix TransformMatrix{WorldMatrix};
 
-        // Undo FTransform's mesh-source basis before extracting the Z-up
-        // transform quaternion and scale.  The basis is its own inverse.
         const float Row0[3]{TransformMatrix.m_[0][0], TransformMatrix.m_[0][1], TransformMatrix.m_[0][2]};
         const float Row1[3]{TransformMatrix.m_[1][0], TransformMatrix.m_[1][1], TransformMatrix.m_[1][2]};
         const float Row2[3]{TransformMatrix.m_[2][0], TransformMatrix.m_[2][1], TransformMatrix.m_[2][2]};
@@ -270,21 +268,21 @@ bool USceneComponent::ResolveLoadedReferences() {
     return true;
 }
 
-void USceneComponent::DrawPanels(IPropertyEditorContext& Context) {
+void USceneComponent::DrawPanels(IPropertyEditorContext* Context) {
     UActorComponent::DrawPanels(Context);
 
-    if (Context.BeginCategory("Transform")) {
-        Context.DrawTransform("Relative Transform", GetRelativeTransform(), [this](const FTransform& Transform) {
+    if (Context->BeginCategory("Transform")) {
+        Context->DrawTransform("Relative Transform", GetRelativeTransform(), [this](const FTransform& Transform) {
             SetRelativeTransform(Transform);
         });
     }
 
     AActor* Actor{GetOwner()};
-    if (Actor == nullptr || !Context.BeginCategory("Attachment")) {
+    if (Actor == nullptr || !Context->BeginCategory("Attachment")) {
         return;
     }
     if (Actor->GetRootComponent() == this) {
-        Context.DrawDisabledText("Root Component");
+        Context->DrawDisabledText("Root Component");
         return;
     }
 
@@ -305,10 +303,10 @@ void USceneComponent::DrawPanels(IPropertyEditorContext& Context) {
                                   AttachToComponent(Parent, EAttachmentTransformRule::KeepWorldTransform);
                               }});
     }
-    Context.DrawReferencePicker("Parent", Preview, CurrentParent == nullptr, [this] {
+    Context->DrawReferencePicker("Parent", Preview, CurrentParent == nullptr, [this] {
         DetachFromComponent(EAttachmentTransformRule::KeepWorldTransform);
     }, Candidates);
-    Context.DrawButton("Make Root Component", [this, Actor] {
+    Context->DrawButton("Make Root Component", [this, Actor] {
         DetachFromComponent(EAttachmentTransformRule::KeepWorldTransform);
         Actor->SetRootComponent(this);
     });

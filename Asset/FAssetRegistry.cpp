@@ -796,6 +796,21 @@ const FMaterialBuffer& FAssetRegistry::GetMaterialBuffer() const {
     return mMaterialBuffer;
 }
 
+void FAssetRegistry::FlushMaterialBuffer(ID3D11DeviceContext* Context) {
+    mMaterialBuffer.Flush(Context);
+}
+
+ID3D11ShaderResourceView* FAssetRegistry::GetMaterialBufferSRV() const {
+    return *mMaterialBuffer.GetSRV();
+}
+
+void FAssetRegistry::FlushFontAtlas(FAssetHandle Handle, ID3D11DeviceContext* Context) {
+    UFont* Font{ResolveAsset<UFont>(Handle)};
+    if (Font != nullptr) {
+        Font->FlushAtlas(Context);
+    }
+}
+
 auto FAssetRegistry::GetAssetList() const {
     return mAssets | std::ranges::views::filter([](const FAssetEntry& Entry) {
                return Entry.mAsset != nullptr;

@@ -3,7 +3,7 @@
 #include "FRenderView.h"
 #include "Asset/FMaterialChunkSignature.h"
 
-class FAssetRegistry;
+class IAssetRegistry;
 
 struct FMeshDrawItem {
     FActorProbe mProbe{};
@@ -18,12 +18,12 @@ struct FMeshDrawItem {
 
 class FRenderQueue {
 public:
-    void Build(FAssetRegistry& Registry, const FRenderView& View, const FRenderProbe& Probe);
+    void Build(const IAssetRegistry* Registry, const FRenderView& View, const FRenderProbe& Probe);
     const TArray<FMeshDrawItem>& GetItems(ERenderPass Pass) const;
 
 private:
-    void BuildItems(FAssetRegistry& Registry, const TArray<FActorProbe>& Probes, TArray<FMeshDrawItem>& Items, bool RenderSky, bool ForceUnlit);
-    void AddItem(FAssetRegistry& Registry, const FActorProbe& Probe, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, TArray<FMeshDrawItem>& Items);
+    void BuildItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, TArray<FMeshDrawItem>& Items, bool RenderSky, bool ForceUnlit);
+    void AddItem(const IAssetRegistry* Registry, const FActorProbe& Probe, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, TArray<FMeshDrawItem>& Items);
 
 private:
     TArray<FMeshDrawItem> mSceneItems{};
