@@ -10,6 +10,8 @@
 #include "World/FWorldEditorContext.h"
 #include "ImGui/imgui.h"
 
+class FStatPanel;
+
 class FEditorViewport {
 public:
     FEditorViewport(FViewportId InViewportId, ID3D11Device* InDevice, FWorldEditorContext& InEditorContext);
@@ -22,7 +24,7 @@ public:
     FViewportId GetViewportId() const;
 
     void BeginFrame();
-    bool Draw(const FRect& Rect, const ImVec2& MainViewportPosition, bool BInputBlocked);
+    bool Draw(const FRect& Rect, const ImVec2& MainViewportPosition, bool BInputBlocked, FStatPanel* StatOverlay = nullptr);
     void SetFocused(bool BInFocused);
     void ProcessInput(EditorViewport& SharedEditorViewport, FKeyboardInput& KeyboardInput, FMouseInput& MouseInput, float DeltaTime, bool BInputBlocked);
     bool PrepareForRender();

@@ -1,6 +1,7 @@
 ﻿#include "pch.h"
 
 #include "FEditorViewport.h"
+#include "Editor/Panel/FStatPanel.h"
 
 #include "EditorViewport.h"
 #include "Editor/Input/FKeyboardInput.h"
@@ -96,7 +97,7 @@ void FEditorViewport::BeginFrame() {
     mBFocused = false;
 }
 
-bool FEditorViewport::Draw(const FRect& Rect, const ImVec2& MainViewportPosition, bool BInputBlocked) {
+bool FEditorViewport::Draw(const FRect& Rect, const ImVec2& MainViewportPosition, bool BInputBlocked, FStatPanel* StatOverlay) {
     if (Rect.IsEmpty()) {
         return false;
     }
@@ -139,6 +140,10 @@ bool FEditorViewport::Draw(const FRect& Rect, const ImVec2& MainViewportPosition
                     BActivated = SpawnDroppedStaticMesh(MeshHandle, ImGui::GetMousePos()) || BActivated;
                 }
                 ImGui::EndDragDropTarget();
+            }
+
+            if (StatOverlay != nullptr) {
+                StatOverlay->Draw(ImagePosition, ImVec2{ImagePosition.x + ImageSize.x, ImagePosition.y + ImageSize.y});
             }
 
             mBHovered = !BInputBlocked && ImGui::IsItemHovered();

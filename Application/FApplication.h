@@ -1,13 +1,13 @@
 #pragma once
 
 #include <atomic>
-#include <chrono>
 #include <filesystem>
 #include <vector>
 #include <shellapi.h>
 
 #include "IApplication.h"
 #include "FApplicationContext.h"
+#include "Core/Time/FFrameTimer.h"
 
 class FLoadingProgress;
 
@@ -69,7 +69,7 @@ private:
     FApplicationContext mContext{};
     FWindowState mWindowState{};
     std::atomic<bool> mAcceptGameInput{};
-    std::chrono::steady_clock::time_point mLastTickTime{};
+    FFrameTimer mFrameTimer{};
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mEditorLogo{};
     std::vector<FPendingExternalFileDrop> mPendingExternalFileDrops{};
 };

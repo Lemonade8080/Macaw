@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "FApplication.h"
+#include "Core/Stat/Stat.h"
 
 #include <cstdio>
 
@@ -160,7 +161,7 @@ void FApplication::DrawTitleBar() {
             mWindowState.mMenuHitRight = static_cast<int>(ImGui::GetCursorPosX()) + 10;
             if (static_cast<float>(mWindowState.mMenuHitRight) + 112.0f < FpsX - Position.x) {
                 char FpsText[32]{};
-                std::snprintf(FpsText, sizeof(FpsText), "FPS: %.1f", ImGui::GetIO().Framerate);
+                std::snprintf(FpsText, sizeof(FpsText), "FPS: %.1f", Stat::GetFrameStats().mFramesPerSecond);
                 DrawList->AddText(ImVec2{FpsX, Position.y + 7.0f}, IM_COL32(152, 156, 163, 255), FpsText);
             }
             DrawCaptionButton("##MinimizeWindow", 0, SC_MINIMIZE);

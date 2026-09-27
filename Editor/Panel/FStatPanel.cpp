@@ -1,17 +1,12 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FStatPanel.h"
+#include "Editor/Panel/Stats/StatWindow.h"
 
-FStatPanel::FStatPanel(UWorld& InWorld, FStateChannel<FStatDisplayFlags>::FReader InReader)
-    : FEditorWindow("Stats"),
-      mWorld(&InWorld),
-      mModeReader(std::move(InReader)) {
+FStatPanel::FStatPanel(FStateChannel<FStatDisplayFlags>::FReader InReader)
+    : mModeReader{std::move(InReader)} {
     //bVisible = false;
 }
 
-bool FStatPanel::CheckVisible() {
-    return !(mModeReader.Peek().mBShowFps || mModeReader.Peek().mBShowMemory || mModeReader.Peek().mBObjectSystem);
-}
-
-void FStatPanel::DrawContents() {
-    DrawStatContents(*mWorld, mModeReader.Peek());
+void FStatPanel::Draw(const ImVec2& Min, const ImVec2& Max) {
+    DrawStatOverlay(Min, Max, mModeReader.Peek());
 }

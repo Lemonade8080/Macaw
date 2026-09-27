@@ -25,6 +25,7 @@ namespace {
         rapidjson::Document Document{};
         Document.ParseStream<rapidjson::kParseCommentsFlag | rapidjson::kParseTrailingCommasFlag>(InStreamWrapper);
 
+        //읽기 닫기
         InputStream.close();
 
         if (Document.HasParseError() || !Document.IsObject())

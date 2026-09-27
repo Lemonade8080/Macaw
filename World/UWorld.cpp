@@ -239,11 +239,23 @@ FWorldEditorContext* UWorld::GetEditorContext() const noexcept {
 }
 
 void UWorld::Tick(float DeltaTime) {
-    for (const std::unique_ptr<AActor>& Actor : mActors) {
-        Actor->Tick(DeltaTime);
+    mTime.Tick(static_cast<double>(DeltaTime));
+    const float WorldDeltaTime{static_cast<float>(mTime.GetDeltaSeconds())};
+    if (WorldDeltaTime > 0.0f) {
+        for (const std::unique_ptr<AActor>& Actor : mActors) {
+            Actor->Tick(WorldDeltaTime);
+        }
     }
 
     FlushPendingDestroyActors();
+}
+
+FWorldTime& UWorld::GetTime() {
+    return mTime;
+}
+
+const FWorldTime& UWorld::GetTime() const {
+    return mTime;
 }
 
 URenderSubsystem& UWorld::GetRenderSubsystem() {

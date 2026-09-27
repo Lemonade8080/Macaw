@@ -42,6 +42,8 @@ public:
     void RegisterComponent(UWorld* World);
     void UnregisterComponent();
 
+    /// <summary>Component를 등록 해제하고 소유 Actor에서 제거합니다.</summary>
+    /// <param name="bPromoteChildren">SceneComponent 자식을 부모에게 승격할지 여부입니다.</param>
     virtual void DestroyComponent(bool BPromoteChildren = false);
 
     virtual bool ResolveLoadedReferences();

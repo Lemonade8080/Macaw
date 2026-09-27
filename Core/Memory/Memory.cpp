@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "Memory.h"
 #include <algorithm>
 #include <cstddef>
@@ -15,33 +15,11 @@ namespace {
         Memory::EMemoryTag mTag{Memory::EMemoryTag::Unknown};
     };
 
-    struct FMemoryState {
-        Memory::FMemoryStats mStats{};
-    };
-
-    FMemoryState& GetMemoryState() {
-        static FMemoryState State{};
-        return State;
-    }
-
     FString Str{};
 }
 
 const char* Memory::GetMemoryTagName(EMemoryTag Tag) {
-    switch (Tag) {
-        case EMemoryTag::Unknown:
-            return "Unknown";
-        case EMemoryTag::UObject:
-            return "UObject";
-        case EMemoryTag::Container:
-            return "Container";
-        case EMemoryTag::String:
-            return "String";
-        case EMemoryTag::Message:
-            return "Message";
-        default:
-            return "Invalid";
-    }
+    return Stat::GetMemoryTagName(Tag);
 }
 
 void* Memory::Allocate(std::size_t Size, std::size_t Alignment, EMemoryTag Tag) {
@@ -78,21 +56,7 @@ void* Memory::Allocate(std::size_t Size, std::size_t Alignment, EMemoryTag Tag) 
 
     ::new (HeaderAddress) FAllocationHeader{ RawPointer, Size, Alignment, Tag};
 
-    FMemoryState& State{GetMemoryState()};
-
-    // 전체 메모리 통계 갱신
-    State.mStats.mAllocatedBytes += Size;
-    ++State.mStats.mActiveAllocationCount;
-    ++State.mStats.mTotalAllocationCount;
-
-    State.mStats.mPeakAllocatedBytes = (std::max)(State.mStats.mPeakAllocatedBytes, State.mStats.mAllocatedBytes);
-
-    // 태그별 메모리 통계 갱신
-    const std::size_t TagIndex{static_cast<std::size_t>(Tag)};
-    if (TagIndex < static_cast<std::size_t>(EMemoryTag::Count)) {
-        State.mStats.mTagStats[TagIndex].mAllocatedBytes += Size;
-        ++State.mStats.mTagStats[TagIndex].mActiveAllocationCount;
-    }
+    Stat::RecordAllocation(Size, Tag);
 
     return UserPointer;
 }
@@ -108,24 +72,12 @@ void Memory::Free(void* Ptr) noexcept {
     const std::size_t Size{Header->mSize};
     const EMemoryTag Tag{Header->mTag};
 
-    FMemoryState& State{GetMemoryState()};
-
-    // 전체 메모리 통계 감소
-    State.mStats.mAllocatedBytes -= Size;
-    --State.mStats.mActiveAllocationCount;
-    ++State.mStats.mTotalDeallocationCount;
-
-    // 태그별 메모리 통계 감소
-    const std::size_t TagIndex{static_cast<std::size_t>(Tag)};
-    if (TagIndex < static_cast<std::size_t>(EMemoryTag::Count)) {
-        State.mStats.mTagStats[TagIndex].mAllocatedBytes -= Size;
-        --State.mStats.mTagStats[TagIndex].mActiveAllocationCount;
-    }
+    Stat::RecordDeallocation(Size, Tag);
 
     Header->~FAllocationHeader();
     ::operator delete(RawPointer);
 }
 
 Memory::FMemoryStats Memory::GetStats() {
-    return GetMemoryState().mStats;
+    return Stat::GetMemoryStats();
 }

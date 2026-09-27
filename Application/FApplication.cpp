@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "FApplication.h"
+#include "Core/Stat/Stat.h"
 
 #include "Resource.h"
 #include "Render/FLoadingScreen.h"
@@ -60,7 +61,8 @@ int FApplication::Run(HINSTANCE Instance, int ShowCommand) {
     RestoreGameWindow();
     mAcceptGameInput.store(true, std::memory_order_release);
     Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "Macaw Engine Initialized.");
-    mLastTickTime = std::chrono::steady_clock::now();
+    mFrameTimer.Reset();
+    Stat::ResetFrameStats();
     mWindowState.mFrameEnabled = true;
     const int ExitCode{RunMessageLoop(AcceleratorTable)};
     mWindowState.mFrameEnabled = false;
@@ -182,40 +184,56 @@ void FApplication::RenderFrame() {
         return;
     }
     mWindowState.mRenderingFrame = true;
-    const auto CurrentTickTime{std::chrono::steady_clock::now()};
-    const float DeltaTime{std::chrono::duration<float>(CurrentTickTime - mLastTickTime).count()};
-    mLastTickTime = CurrentTickTime;
+    mFrameTimer.Tick();
+    const float DeltaTime{static_cast<float>(mFrameTimer.GetUpdateDeltaSeconds())};
+    Stat::BeginFrame(mFrameTimer.GetDeltaSeconds());
+    {
+        const Stat::FScopedSystemStatTimer FrameStat{Stat::ESystemStatStage::Frame};
+        Stat::RecordObjectCounts(UObjectSystem::GetObjectCount(), mContext.mWorld->GetActors().size());
+        mContext.mRenderer.BeginFrame(DeltaTime);
+        {
+            const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::Thumbnails};
+            mContext.mThumbnailRenderer->Tick();
+        }
+        {
+            const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::Offscreen};
+            mContext.mEditorUIManager->RenderOffscreen(mContext.mRenderer, *mContext.mAssetRegistry);
+        }
+        {
+            const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::EditorUi};
+            ImGui_ImplDX11_NewFrame();
+            ImGui_ImplWin32_NewFrame();
+            ImGui::NewFrame();
+            DrawTitleBar();
+            mContext.mEditorUIManager->Tick();
 
-    mContext.mRenderer.BeginFrame(DeltaTime);
-    mContext.mThumbnailRenderer->Tick();
-    mContext.mEditorUIManager->RenderOffscreen(mContext.mRenderer, *mContext.mAssetRegistry);
+            for (const FPendingExternalFileDrop& Drop : mPendingExternalFileDrops) {
+                mContext.mEditorUIManager->HandleExternalFileDrop(Drop.mFilePath, ImVec2{static_cast<float>(Drop.mScreenPosition.x), static_cast<float>(Drop.mScreenPosition.y)});
+            }
+            mPendingExternalFileDrops.clear();
+        }
 
-    ImGui_ImplDX11_NewFrame();
-    ImGui_ImplWin32_NewFrame();
-    ImGui::NewFrame();
-    DrawTitleBar();
-    mContext.mEditorUIManager->Tick();
+        TickMode(mContext, DeltaTime);
 
-    for (const FPendingExternalFileDrop& Drop : mPendingExternalFileDrops) {
-        mContext.mEditorUIManager->HandleExternalFileDrop(Drop.mFilePath, ImVec2{static_cast<float>(Drop.mScreenPosition.x), static_cast<float>(Drop.mScreenPosition.y)});
+        {
+            const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::UiRender};
+            ImGui::Render();
+            mContext.mRenderer.BeginUiRender();
+            ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
+
+            if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+                ImGui::UpdatePlatformWindows();
+                EnableExternalDropsForImGuiViewports();
+                ImGui::RenderPlatformWindowsDefault();
+            }
+        }
+        {
+            const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::Present};
+            mContext.mRenderer.EndFrame();
+        }
+        mContext.mMouseInput.EndFrame();
     }
-
-    mPendingExternalFileDrops.clear();
-
-    TickMode(mContext, DeltaTime);
-
-    ImGui::Render();
-    mContext.mRenderer.BeginUiRender();
-    ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-
-    if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-        ImGui::UpdatePlatformWindows();
-        EnableExternalDropsForImGuiViewports();
-        ImGui::RenderPlatformWindowsDefault();
-    }
-
-    mContext.mRenderer.EndFrame();
-    mContext.mMouseInput.EndFrame();
+    Stat::EndFrame();
     mWindowState.mRenderingFrame = false;
 }
 

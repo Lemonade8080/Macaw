@@ -27,7 +27,7 @@ void UActorComponent::EndPlay() {
     mBHasBegunPlay = false;
 }
 
-void UActorComponent::Tick(float  ) {
+void UActorComponent::Tick(float /*DeltaTime*/  ) {
 }
 
 void UActorComponent::OnUnregister() {
@@ -85,7 +85,7 @@ void UActorComponent::UnregisterComponent() {
     mParentWorld = nullptr;
 }
 
-void UActorComponent::DestroyComponent(bool  ) {
+void UActorComponent::DestroyComponent(bool /*bPromoteChildren*/  ) {
     if (mBIsBeingDestroyed) {
         return;
     }

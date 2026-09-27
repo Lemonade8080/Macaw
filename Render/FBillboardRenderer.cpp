@@ -37,12 +37,14 @@ void FBillboardRenderer::Render(ID3D11DeviceContext* Context, const TArray<FBill
     }
     mViewConstantBuffer.Bind(Context, 0, EGraphicsShaderStage::Geometry);
 
+    // Release Vertex buffer, Index buffer
     UINT Stride{0};
     UINT Offset{0};
     ID3D11Buffer* NullBuffer{nullptr};
     Context->IASetVertexBuffers(0, 1, &NullBuffer, &Stride, &Offset);
     Context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
 
+    // Pipeline, Texture Batch
     struct FBatchKey {
         FAssetHandle mPipelineHandle{};
         FAssetHandle mTextureHandle{};

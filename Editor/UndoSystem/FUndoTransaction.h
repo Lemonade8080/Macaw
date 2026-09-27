@@ -9,6 +9,7 @@ public:
 
     ~FUndoTransaction();
 
+    // move 만 사용
     FUndoTransaction(const FUndoTransaction&) = delete;
     FUndoTransaction& operator=(const FUndoTransaction&) = delete;
 

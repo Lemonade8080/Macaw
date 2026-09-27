@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FEditorUIManager.h"
 
 #include "FPropertyPanel.h"
@@ -26,8 +26,8 @@ void FEditorUIManager::Initialize(UWorld& World, FRenderer& Renderer, FAssetRegi
     if (Settings.mConsolePanelEnabled) {
         AddWindow(std::make_unique<FConsolePanel>(Console::STDOutHandle, mStatDisplayChannel.GetWriter()));
     }
-    if (Settings.mStatPanelEnabled) {
-        AddStatWindow(std::make_unique<FStatPanel>(World, mStatDisplayChannel.GetReader()));
+    if (Settings.mStatPanelEnabled && mViewportHostWindow != nullptr) {
+        mViewportHostWindow->SetStatOverlay(std::make_unique<FStatPanel>(mStatDisplayChannel.GetReader()));
     }
     std::unique_ptr<FMaterialEditorPanel> MaterialWindow{};
     if (Settings.mMaterialEditorPanelEnabled && ThumbnailRenderer != nullptr) {
@@ -65,9 +65,6 @@ void FEditorUIManager::Tick() {
     }
     if (mViewportHostWindow != nullptr) {
         mViewportHostWindow->PrepareFrame(mDockSpaceId);
-    }
-    if (mStatWindow != nullptr) {
-        mStatWindow->SetVisible(!mStatWindow->CheckVisible());
     }
     if (mMaterialEditorPanel != nullptr && !mMaterialEditorPanel->IsVisible()) {
         mMaterialEditorPanel->ReleaseRenderResources();
@@ -143,10 +140,4 @@ void FEditorUIManager::AddViewportHostWindow(ID3D11Device* Device, FWorldEditorC
     std::unique_ptr<FViewportHostWindow> Window{std::make_unique<FViewportHostWindow>(Device, EditorContext)};
     mViewportHostWindow = Window.get();
     AddWindow(std::move(Window));
-}
-
-void FEditorUIManager::AddStatWindow(std::unique_ptr<FStatPanel> Window) {
-    mStatWindow = Window.get();
-    mWindows.emplace_back(Window.get());
-    mElements.emplace_back(std::move(Window));
 }

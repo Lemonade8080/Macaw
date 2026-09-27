@@ -5,6 +5,7 @@
 #include "Core/Base/FRenderProbe.h"
 #include "World/Component/UStaticMeshComponent.h"
 
+/// <summary>Builds render probes from registered StaticMeshComponents.</summary>
 class URenderSubsystem : public UWorldSubsystem {
 public:
     URenderSubsystem() = default;

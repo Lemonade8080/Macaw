@@ -125,11 +125,17 @@ namespace {
 
 namespace FUndoSystem {
 
+    // =================================================================
+    // Message Sender 관리 API
+    // =================================================================
     void InitializeSenderToWorldChannel(FMessageChannel::FSender&& SenderToWorldChannel) {
         FUndoSystemState& State{GetState()};
         State.mMessageSender.emplace(std::move(SenderToWorldChannel));
     }
 
+    // =================================================================
+    // Undo/Redo API
+    // =================================================================
     void BeginTransaction(const FString& TransactionName) {
         FUndoSystemState& State{GetState()};
         if (State.mCurrentTransaction != nullptr)

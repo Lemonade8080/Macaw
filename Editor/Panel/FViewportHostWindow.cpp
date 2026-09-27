@@ -1,6 +1,7 @@
 ﻿#include "pch.h"
 
 #include "FViewportHostWindow.h"
+#include "FStatPanel.h"
 
 #include "Editor/Input/FKeyboardInput.h"
 #include "Editor/Input/FMouseInput.h"
@@ -18,6 +19,10 @@ FViewportHostWindow::FViewportHostWindow(ID3D11Device* Device, FWorldEditorConte
 }
 
 FViewportHostWindow::~FViewportHostWindow() = default;
+
+void FViewportHostWindow::SetStatOverlay(std::unique_ptr<FStatPanel> Overlay) {
+    mStatOverlay = std::move(Overlay);
+}
 
 void FViewportHostWindow::PrepareFrame(ImGuiID InDockSpaceId) {
     mDockSpaceId = InDockSpaceId;
@@ -127,7 +132,7 @@ void FViewportHostWindow::DrawContents() {
 
     for (FViewportId Id{0}; Id < GetViewportCount(); ++Id) {
         FEditorViewport* Viewport{GetViewport(Id)};
-        if (Viewport != nullptr && Viewport->Draw(mLayout.GetViewportRect(Id), MainViewportPosition, mBSplitterActive)) {
+        if (Viewport != nullptr && Viewport->Draw(mLayout.GetViewportRect(Id), MainViewportPosition, mBSplitterActive, Id == 0 ? mStatOverlay.get() : nullptr)) {
             mActiveViewportId = Viewport->GetViewportId();
         }
     }

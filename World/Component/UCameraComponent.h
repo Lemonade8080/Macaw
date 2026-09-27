@@ -41,7 +41,7 @@ protected:
     void Serialize(FArchive& Archive) override;
 
 private:
-    float mFov{1.0472f};
+    float mFov{1.0472f}; // 약 60도, 라디안
     float mAspectRatio{16.0f / 9.0f};
     float mNearPlane{0.1f};
     float mFarPlane{1000.0f};

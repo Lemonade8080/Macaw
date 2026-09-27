@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "FEditorApplication.h"
+#include "Core/Stat/Stat.h"
 
 #include "Editor/Panel/FControlPanel.h"
 #include "Editor/View/FEditorViewport.h"
@@ -18,11 +19,21 @@ void FEditorApplication::InitializeMode(FApplicationContext& Context, HWND Windo
 void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime) {
     FViewportHostWindow* ViewportHostWindow{Context.mEditorUIManager->GetViewportHostWindow()};
     if (ViewportHostWindow != nullptr) {
+        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::Input};
         ViewportHostWindow->ProcessInput(*Context.mEditorView, Context.mKeyboardInput, Context.mMouseInput, DeltaTime);
     }
-    Context.mWorldCommandChannel->Dispatch();
-    Context.mWorld->Tick(DeltaTime);
-    Context.mEditorContext->Dispatch();
+    {
+        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::WorldCommands};
+        Context.mWorldCommandChannel->Dispatch();
+    }
+    {
+        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::WorldTick};
+        Context.mWorld->Tick(DeltaTime);
+    }
+    {
+        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::EditorDispatch};
+        Context.mEditorContext->Dispatch();
+    }
 
     if (ViewportHostWindow == nullptr) {
         return;
@@ -34,6 +45,7 @@ void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime)
             continue;
         }
 
+        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::SceneRender};
         CameraProbe Camera{};
         if (!Viewport->BuildCameraProbe(Camera)) {
             continue;

@@ -102,6 +102,8 @@ void FTransformGizmo::Update(const CameraProbe& Camera, const D3D11_VIEWPORT& Vi
     const EGizmoCoordinateSpace CoordinateSpace{mGizmoCoordinateSpace.HasValue() ? static_cast<EGizmoCoordinateSpace>(mGizmoCoordinateSpace.Peek()) : EGizmoCoordinateSpace::World};
     const EModifyMode CurrentMode{mGizmoMode.HasValue() ? static_cast<EModifyMode>(mGizmoMode.Peek()) : EModifyMode::None};
 
+    // Gizmo는 scale 없이 회전 축과 위치만 사용한다. World 모드에서는
+    // 축을 월드 그리드에 고정하고, Local 모드에서만 대상 회전을 따른다.
     mGizmoWorldTransform = FMatrix::Identity;
     if (CoordinateSpace == EGizmoCoordinateSpace::Local && CurrentMode == EModifyMode::Rotate) {
         const FMatrix TargetRotation{Target->GetComponentTransform().ToMatrixNoScale()};
@@ -313,18 +315,18 @@ std::optional<FTransformGizmo::FAxisHit> FTransformGizmo::HitTest(const FRay& Wo
         for (int I{0}; I < 3; I++) {
             FVector3 PlaneNormal{PlaneNormals[I]};
             float Denominator{LocalDirection.Dot(PlaneNormal)};
-            if (std::abs(Denominator) <= 0.000001f) {
+            if (std::abs(Denominator) <= 0.000001f) { // 레이와 평면이 거의 평행한 경우 패스
                 continue;
             }
             float Distance{(mBoundsCenterInGizmoSpace - LocalOrigin).Dot(PlaneNormal) / Denominator};
-            if (Distance < 0.0f) {
+            if (Distance < 0.0f) { // 교차점이 카메라 밖에 있는 경우
                 continue;
             }
             FVector3 HitPosition{LocalOrigin + LocalDirection * Distance};
-            float DistanceFromPivot{(HitPosition - mBoundsCenterInGizmoSpace).Length()};
-            float DistanceFromRadius{std::abs(DistanceFromPivot - mCurrentRingRadius)};
-            if (DistanceFromRadius <= mCurrentRingPickHalfWidth) {
-                if (!NearestHit.has_value() || Distance < NearestHit->mDistance) {
+            float DistanceFromPivot{(HitPosition - mBoundsCenterInGizmoSpace).Length()}; // 중심과 마우스를 클릭한 사이의 거리
+            float DistanceFromRadius{std::abs(DistanceFromPivot - mCurrentRingRadius)}; // 그 거리 - 현재 링 반지름 => 해당값이 허용 오차 사이에 있어야 인정
+            if (DistanceFromRadius <= mCurrentRingPickHalfWidth) { // CurrentRingPickHalfWidth = 허용 오차
+                if (!NearestHit.has_value() || Distance < NearestHit->mDistance) { // t가 가장 작은걸 선택
                     NearestHit = FAxisHit{ .mAxis = Axis[I], .mDistance = Distance};
                 }
             }
@@ -345,16 +347,20 @@ std::optional<FTransformGizmo::FAxisHit> FTransformGizmo::HitTest(const FRay& Wo
 
 bool FTransformGizmo::BeginDrag(EAxis Axis, const FRay& WorldRay) {
 
+    // 선택 대상이나 유효한 축이 없으면 드래그를 시작하지 않는다.
     if (mEditorContext == nullptr || Axis == EAxis::None) {
         return false;
     }
 
+    //드래그를 시작한 순간의 모드를 고정한다.
     const EModifyMode CurrentMode{mGizmoMode.HasValue() ? static_cast<EModifyMode>(mGizmoMode.Peek()) : EModifyMode::None};
 
     if (CurrentMode == EModifyMode::None) {
         return false;
     }
 
+    // 선택한 기즈모 축을 월드 공간 방향으로 변환한다.
+    // The editor is Z-up: Forward is local Y and Up is local Z.
     FVector3 AxisWorld{GetWorldAxis(Axis)};
 
     if (AxisWorld.LengthSquared() <= std::numeric_limits<float>::epsilon()) {
@@ -363,8 +369,10 @@ bool FTransformGizmo::BeginDrag(EAxis Axis, const FRay& WorldRay) {
 
     AxisWorld.Normalize();
 
+    // 기즈모가 표시된 위치를 월드 공간 Pivot으로 변환한다.
     const FVector3 InteractionPivotWorld{FVector3::Transform(mBoundsCenterInGizmoSpace, mGizmoWorldTransform)};
 
+    // 우선 모든 모드에서 공통으로 사용하는 세션 정보를 저장한다.
     FDragSession NewSession{};
 
     USceneComponent* Target{mEditorContext->GetSelectedTransformTarget()};
@@ -381,8 +389,10 @@ bool FTransformGizmo::BeginDrag(EAxis Axis, const FRay& WorldRay) {
     NewSession.mWorkUnitsPerPixel = mCurrentWorkUnitsPerPixel;
     NewSession.mAccumulatedDelta = 0.0f;
 
+    // Rotation은 링 평면을 사용한다.
     if (CurrentMode == EModifyMode::Rotate) {
 
+        // 회전 링 평면은 회전축에 수직이므로 평면 법선은 회전축과 같다.
         NewSession.mDragPlaneNormal = AxisWorld;
 
         const FPlane RotationPlane{ InteractionPivotWorld.ToSimpleMath(), AxisWorld.ToSimpleMath()};
@@ -395,8 +405,10 @@ bool FTransformGizmo::BeginDrag(EAxis Axis, const FRay& WorldRay) {
 
         const FVector3 HitPosition{ WorldRay.position + WorldRay.direction * Distance};
 
+        //Pivot에서 클릭점으로 향하는 방향이 회전 시작 방향이다.
         FVector3 InitialDirection{HitPosition - InteractionPivotWorld};
 
+        // 부동소수점 오차로 남을 수 있는 회전축 방향 성분을 제거한다.
         InitialDirection = InitialDirection - AxisWorld * InitialDirection.Dot(AxisWorld);
 
         if (InitialDirection.LengthSquared() <= 0.000001f) {
@@ -408,6 +420,7 @@ bool FTransformGizmo::BeginDrag(EAxis Axis, const FRay& WorldRay) {
         NewSession.mPreviousRotationDirection = InitialDirection;
     }
 
+    //Translate와 Scale은 기존 축 드래그 평면을 사용한다.
     else {
         FVector3 ViewDirection{WorldRay.direction};
         if (ViewDirection.LengthSquared() <= std::numeric_limits<float>::epsilon()) {
@@ -415,8 +428,11 @@ bool FTransformGizmo::BeginDrag(EAxis Axis, const FRay& WorldRay) {
         }
         ViewDirection.Normalize();
 
+        // 선택 축을 포함하면서 카메라를 향하는 드래그 평면의 법선을 계산한다.
         FVector3 PlaneNormal{ViewDirection - AxisWorld * ViewDirection.Dot(AxisWorld)};
 
+        // 화면에서 거의 점으로 보이는 축은 안정적인 드래그 평면을 만들 수 없다.
+        // 임의의 대체 평면을 사용하면 레이와 평면이 거의 평행해져 교차점이 폭주한다.
         constexpr float MinimumViewSeparation{0.05f};
         if (PlaneNormal.LengthSquared() <= MinimumViewSeparation * MinimumViewSeparation) {
             return false;
@@ -426,11 +442,13 @@ bool FTransformGizmo::BeginDrag(EAxis Axis, const FRay& WorldRay) {
 
         NewSession.mDragPlaneNormal = PlaneNormal;
 
+        // Translate/Scale은 다음 프레임과의 증분을 계산할 축 위치를 저장한다.
         if (!GetAxisParameterOnDragPlane(WorldRay, NewSession, NewSession.mPreviousAxisParameter)) {
             return false;
         }
     }
 
+    // 모든 초기화가 성공한 뒤에만 실제 드래그 세션으로 확정한다.
     mDragSession = NewSession;
 
     return true;
@@ -448,28 +466,39 @@ void FTransformGizmo::UpdateDrag(const FRay& WorldRay) {
         return;
     }
 
+    // Rotation은 방향 벡터 사이의 각도로 계산한다.
     if (Session.mModifyMode == EModifyMode::Rotate) {
 
+        // BeginDrag에서 사용한 것과 동일한 회전 평면.
+        // 평면 중심 = 기즈모 Pivot
+        // 평면 법선 = 선택한 회전축
         const FPlane RotationPlane{ Session.mInteractionPivotWorld.ToSimpleMath(), Session.mAxisWorld.ToSimpleMath()};
 
         float Distance{0.0f};
 
+        // 현재 마우스 레이와 회전 평면의 교차점을 구한다.
         if (!WorldRay.Intersects(RotationPlane, Distance) || Distance < 0.0f) {
             return;
         }
 
         const FVector3 HitPosition{ WorldRay.position + WorldRay.direction * Distance};
 
+        // Pivot에서 현재 마우스 위치로 향하는 방향.
         FVector3 CurrentDirection{HitPosition - Session.mInteractionPivotWorld};
 
+        // 부동소수점 오차로 남을 수 있는 회전축 방향 성분을 제거한다.
         CurrentDirection = CurrentDirection - Session.mAxisWorld * CurrentDirection.Dot(Session.mAxisWorld);
 
+        // 마우스가 Pivot과 너무 가까우면 유효한 방향을 만들 수 없다.
         if (CurrentDirection.LengthSquared() <= 0.000001f) {
             return;
         }
 
         CurrentDirection.Normalize();
 
+        // 이전 프레임 방향에서 현재 방향까지의 증분 회전을 계산한다.
+        // Cross → 회전 방향
+        // Dot   → 회전 각도
         const float SinAngle{Session.mAxisWorld.Dot(Session.mPreviousRotationDirection.Cross(CurrentDirection))};
         const float CosAngle{std::clamp(Session.mPreviousRotationDirection.Dot(CurrentDirection), -1.0f, 1.0f)};
         const float AngleDelta{std::atan2(SinAngle, CosAngle)};
@@ -496,6 +525,7 @@ void FTransformGizmo::UpdateDrag(const FRay& WorldRay) {
             return;
         }
 
+        // Transform과 gizmo는 동일한 Z-up 축을 사용한다.
         const FVector3 TransformSpaceAxis{Session.mAxisWorld};
         FTransform DesiredWorldTransform{Target->GetComponentTransform()};
         if (Session.mCoordinateSpace == EGizmoCoordinateSpace::Local) {
@@ -510,6 +540,7 @@ void FTransformGizmo::UpdateDrag(const FRay& WorldRay) {
         return;
     }
 
+    // Translate와 Scale은 축 위의 이동량으로 계산한다.
     else {
         float CurrentAxisParameter{0.0f};
 
@@ -664,7 +695,7 @@ void FTransformGizmo::BuildRenderProbes(FRenderProbe& Probe) {
             Submit(mCylinderYAxisTransform, mCylinderMesh, mGreenMaterial);
             Submit(mCylinderZAxisTransform, mCylinderMesh, mBlueMaterial);
 
-            Submit(mConeXAxisTransform, mConeMesh, mRedMaterial);
+            Submit(mConeXAxisTransform, mConeMesh, mRedMaterial); // 해당 위치에 Cone 메쉬 사용
             Submit(mConeYAxisTransform, mConeMesh, mGreenMaterial);
             Submit(mConeZAxisTransform, mConeMesh, mBlueMaterial);
             break;
@@ -674,7 +705,7 @@ void FTransformGizmo::BuildRenderProbes(FRenderProbe& Probe) {
             Submit(mCylinderYAxisTransform, mCylinderMesh, mGreenMaterial);
             Submit(mCylinderZAxisTransform, mCylinderMesh, mBlueMaterial);
 
-            Submit(mCubeXAxisTransform, mCubeMesh, mRedMaterial);
+            Submit(mCubeXAxisTransform, mCubeMesh, mRedMaterial); // 해당 위치에 Cube 메쉬 사용
             Submit(mCubeYAxisTransform, mCubeMesh, mGreenMaterial);
             Submit(mCubeZAxisTransform, mCubeMesh, mBlueMaterial);
             break;

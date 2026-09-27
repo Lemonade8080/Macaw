@@ -18,6 +18,8 @@ class ILineRenderer : public ILineDrawContext {
 public:
     ILineRenderer() = default;
 
+    // unique_ptr<ILineRenderer> 로 파생 객체를 들고 있으므로 반드시 virtual 이어야 한다.
+    // 아니면 파생 소멸자가 불리지 않아 D3D 리소스가 누수되고 종료 시 크래시한다.
     ~ILineRenderer() override = default;
 
     ILineRenderer(const ILineRenderer&) = delete;

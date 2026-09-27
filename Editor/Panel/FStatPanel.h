@@ -1,22 +1,17 @@
-﻿#pragma once
+#pragma once
 
-#include "Editor/Panel/FEditorWindow.h"
-#include "Editor/Panel/Stats/StatWindow.h"
 #include "Core/Channel/FEditorInfo.h"
-#include "../../Core/Console/Console.h"
-#include "../../Core/Channel/FStateChannel.h"
+#include "Core/Channel/FStateChannel.h"
 
-class FStatPanel : public FEditorWindow {
+struct ImVec2;
+
+class FStatPanel {
 public:
-    explicit FStatPanel(UWorld& InWorld, FStateChannel<FStatDisplayFlags>::FReader InReader);
+    explicit FStatPanel(FStateChannel<FStatDisplayFlags>::FReader InReader);
 
-    bool CheckVisible();
+public:
+    void Draw(const ImVec2& Min, const ImVec2& Max);
 
 private:
-    void DrawContents() override;
-
-    UWorld* mWorld{nullptr};
-
     FStateChannel<FStatDisplayFlags>::FReader mModeReader{};
-    FStatDisplayFlags mStatFlags{};
 };

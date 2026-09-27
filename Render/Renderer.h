@@ -59,6 +59,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> mDeviceContext{};
     Microsoft::WRL::ComPtr<IDXGISwapChain> mSwapChain{};
     std::unique_ptr<IRenderSurface> mBackBufferSurface{};
+    // s0: LinearWrap, s1: LinearClamp, s2: PointClamp, s3: PointWrap, s4: AnisotropicWrap, s5: ShadowCompare.
     std::array<Microsoft::WRL::ComPtr<ID3D11SamplerState>, 6> mSamplerStates{};
     IRenderAssetRegistry* mAssetRegistry{nullptr};
 
@@ -73,6 +74,7 @@ private:
     Uint32 mFrameLightCount{};
     Uint32 mBackBufferWidth{};
     Uint32 mBackBufferHeight{};
+    //VAT current time 계산용(임시)
     float mAnimationTime{};
     Uint32 mAnimationFrame{};
 };

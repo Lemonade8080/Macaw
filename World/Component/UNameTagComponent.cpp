@@ -108,8 +108,11 @@ bool UNameTagComponent::MakeTextRender(FTextProbe& OutProbe) const {
 
     const FVector3 Center{HasMeshBounds ? (Minimum + Maximum) * 0.5f : TargetOrigin};
 
+    // TargetLocalOffset이 Target의 로컬 공간 Offset이므로 Target의 회전과 scale까지 적용한다.
     const FVector3 Offset{TargetWorld.TransformPosition(mTargetLocalOffset) - TargetOrigin};
 
+    // NameTag 컴포넌트 자신의 scale 등은 유지하고, 렌더링 원점만 Target 위치로 교체한다.
+    // 현재 Text Shader는 World에서 translation만 사용하므로 실질적으로 AnchorWorld가 Billboard 원점이 된다.
     OutProbe.mWorld.Translation(Center + Offset);
     OutProbe.mScreenBoundsExtent = HasMeshBounds ? (Maximum - Minimum) * 0.5f : FVector3{};
     OutProbe.mScreenUpPadding = GetCharacterHeight() * 0.5f + 0.2f;
