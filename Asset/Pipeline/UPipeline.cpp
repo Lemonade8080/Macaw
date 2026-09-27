@@ -37,7 +37,7 @@ bool UPipeline::InitializeFamily(ID3D11Device* Device, const std::filesystem::pa
         return false;
     }
 
-    constexpr std::array<const char*, static_cast<std::size_t>(ERenderMode::Max)> ModeNames{"Lit", "Outline", "Unlit", "Wireframe", "LitWireframe"};
+    constexpr std::array<const char*, static_cast<std::size_t>(ERenderMode::Max)> ModeNames{"Lit", "Outline", "Unlit", "Wireframe"};
     std::array<std::filesystem::path, static_cast<std::size_t>(ERenderMode::Max)> ModePaths{};
     const std::string FamilyName{FamilyDirectory.filename().generic_string()};
     for (std::size_t Index{0}; Index < ModeNames.size(); ++Index) {
@@ -99,13 +99,8 @@ bool UPipeline::InitializeModes(ID3D11Device* Device, const std::array<std::file
             Descriptions[Index].mDepthStencil.mStencilPassOp = EStencillOp::Keep;
             Descriptions[Index].mDepthStencil.mStencilFailOp = EStencillOp::Keep;
             Descriptions[Index].mDepthStencil.mStencilDepthFailOp = EStencillOp::Keep;
-        } else if (Index == static_cast<std::size_t>(ERenderMode::Wireframe) || Index == static_cast<std::size_t>(ERenderMode::LitWireframe)) {
+        } else if (Index == static_cast<std::size_t>(ERenderMode::Wireframe)) {
             Descriptions[Index].mRasterizer.mFillMode = EFillMode::Wireframe;
-            if (Index == static_cast<std::size_t>(ERenderMode::LitWireframe)) {
-                Descriptions[Index].mPixelShader.mSource = "./Content/Shader/OutlineFill.hlsl";
-                Descriptions[Index].mPixelShader.mEntryPoint = "MainPS";
-                Descriptions[Index].mDepthStencil.mDepthWriteEnable = false;
-            }
         }
     }
 

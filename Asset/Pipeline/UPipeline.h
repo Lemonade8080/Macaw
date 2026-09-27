@@ -33,7 +33,6 @@ enum class ERenderMode : std::size_t {
     Outline,
     Unlit,
     Wireframe,
-    LitWireframe,
     Max
 };
 

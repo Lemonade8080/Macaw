@@ -55,9 +55,8 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
         const UMesh* Mesh{Context.mAssetRegistry->ResolveAsset<UMesh>(First.mProbe.mMeshHandle)};
         if (Pipeline != nullptr && Mesh != nullptr && (Mode != ERenderMode::Outline || Pipeline->RenderModeSettable(Mode))) {
             const ERenderMode ResolvedMode{Pipeline->ResolveRenderMode(Mode)};
-            const bool LitWireframe{ResolvedMode == ERenderMode::LitWireframe && Pipeline->RenderModeSettable(ERenderMode::Lit)};
             const UINT StencilReference{ResolvedMode == ERenderMode::Outline || (First.mProbe.mFlags & static_cast<Uint32>(ERenderObjectFlags::Selected)) != 0 ? 1u : 0u};
-            Pipeline->Bind(DeviceContext, LitWireframe ? ERenderMode::Lit : ResolvedMode, StencilReference);
+            Pipeline->Bind(DeviceContext, ResolvedMode, StencilReference);
             std::array<ID3D11ShaderResourceView*, MaxMaterialTextureFields> TextureResources{};
             for (Uint8 Index{}; Index < First.mTextureSignature.mTextureFieldCount; ++Index) {
                 const UTexture* Texture{Context.mAssetRegistry->ResolveAsset<UTexture>(First.mTextureSignature.GetTextureHandle(Index))};
@@ -71,13 +70,17 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
             const Uint32 Offsets[]{0, 0, 0, 0};
             DeviceContext->IASetVertexBuffers(0, _countof(VertexBuffers), VertexBuffers, Strides, Offsets);
             DeviceContext->IASetIndexBuffer(Mesh->GetIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
+#ifdef ENABLE_INSTANCE
             mRootConstants.SetGraphicsRoot32BitConstant(static_cast<Uint32>(Begin), 48);
             mRootConstants.Commit(DeviceContext);
             DeviceContext->DrawIndexedInstanced(First.mIndexCount, static_cast<Uint32>(End - Begin), First.mFirstIndex, 0, 0);
-            if (LitWireframe) {
-                Pipeline->Bind(DeviceContext, ERenderMode::LitWireframe, StencilReference);
-                DeviceContext->DrawIndexedInstanced(First.mIndexCount, static_cast<Uint32>(End - Begin), First.mFirstIndex, 0, 0);
+#else
+            for (std::size_t Index{Begin}; Index < End; ++Index) {
+                mRootConstants.SetGraphicsRoot32BitConstant(static_cast<Uint32>(Index), 48);
+                mRootConstants.Commit(DeviceContext);
+                DeviceContext->DrawIndexed(First.mIndexCount, First.mFirstIndex, 0);
             }
+#endif
         }
         Begin = End;
     }

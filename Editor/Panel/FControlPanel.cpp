@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FControlPanel.h"
 
 #include "Editor/FileDialog.h"
@@ -19,10 +19,8 @@
 #include "Core/Base/TObjectIterator.h"
 
 void FControlPanel::DrawPanel() {
-    // 전역 메뉴 바는 뷰포트의 상단에 고정되며 도킹 레이아웃의 일부가 아니다.
     const char* PrimitiveMeshTypes[]{ "/Game/System/Mesh/Cube.bin", "/Game/System/Mesh/Sphere.bin", "/Game/System/Mesh/Plane.bin", "/Game/System/Mesh/Cylinder.bin", "/Game/System/Mesh/Capsule.bin", "/Game/System/Mesh/Cone.bin", "/Game/System/Mesh/Torus.bin", "/Game/System/Mesh/Pyramid.bin"};
 
-    // Create: 기존의 Primitive 생성/삭제 기능을 한 그룹으로 유지한다.
     if (ImGui::BeginMenu("Create")) {
         std::vector<const FTypeInfo*> SpawnableComponentTypes{};
         for (const FTypeInfo* Type : TypeRegistry::GetRegisteredTypes()) {
@@ -81,7 +79,6 @@ void FControlPanel::DrawPanel() {
         ImGui::EndMenu();
     }
 
-    // Scene: 저장과 불러오기, 씬 이름 편집을 기존과 같은 흐름으로 제공한다.
     if (ImGui::BeginMenu("Scene")) {
         ImGui::SetNextItemWidth(220.0f);
         ImGui::InputText("Scene Name", mSceneNameBuffer, IM_ARRAYSIZE(mSceneNameBuffer));
@@ -116,7 +113,6 @@ void FControlPanel::DrawPanel() {
         ImGui::EndMenu();
     }
 
-    // Components: Scene 전체 Component를 타입별로 묶어 Active 상태를 관리한다.
     if (ImGui::BeginMenu("Components")) {
         UWorld* World{mEditorContext != nullptr ? mEditorContext->GetWorld() : nullptr};
         if (World == nullptr) {
@@ -255,7 +251,7 @@ void FControlPanel::DrawPanel() {
     }
 
     ImGui::Separator();
-    const ERenderMode RenderModeValues[]{ ERenderMode::Lit, ERenderMode::Unlit, ERenderMode::Wireframe, ERenderMode::LitWireframe};
+    const ERenderMode RenderModeValues[]{ERenderMode::Lit, ERenderMode::Unlit, ERenderMode::Wireframe};
     int RenderIndex{0};
     for (int Index{0}; Index < IM_ARRAYSIZE(RenderModeValues); ++Index) {
         if (mEditorContext->GetRenderModeState() == static_cast<std::size_t>(RenderModeValues[Index])) {
@@ -263,7 +259,7 @@ void FControlPanel::DrawPanel() {
             break;
         }
     }
-    const char* RenderModes[]{"Lit", "Unlit", "Wireframe", "Lit Wireframe"};
+    const char* RenderModes[]{"Lit", "Unlit", "Wireframe"};
     ImGui::SetNextItemWidth(110.0f);
     if (ImGui::Combo("Render Mode", &RenderIndex, RenderModes, IM_ARRAYSIZE(RenderModes))) {
         mEditorContext->SetRenderModeState(static_cast<std::size_t>(RenderModeValues[RenderIndex]));
@@ -277,7 +273,6 @@ void FControlPanel::DrawPanel() {
         mEditorToWorldSender.TryEmplace<FMessageImportMesh>(FString{"ObjImport"}, FString{FilePath}, FString{"./Content/Metadata/MonkeyMesh.meta"});
     }
 
-    // 남은 공간의 오른쪽 끝에 성능 정보를 고정한다.
 }
 
 FControlPanel::FControlPanel(FWorldEditorContext& InEditorContext, HWND InputWindowHandle, FMessageChannel::FSender InEditorToWorldSender)
