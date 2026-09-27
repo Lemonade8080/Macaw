@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "FViewerPanel.h"
+#include "Editor/FileDialog.h"
 
 #include "ImGui/imgui.h"
 #include "Render/Renderer.h"
@@ -122,19 +123,11 @@ void FViewerPanel::DrawMenuBar() {
 #else
         if (ImGui::MenuItem("Import OBJ...")) {
 #endif
-            OPENFILENAMEA OpenFileName{};
-            OpenFileName.lStructSize = sizeof(OpenFileName);
-            OpenFileName.hwndOwner = mWindowHandle;
 #ifdef OBJ_VIEWER
-            OpenFileName.lpstrFilter = "Model and Material Files\0*.bin;*.obj;*.mtl\0All Files\0*.*\0";
+            FString FilePath{OpenFileDialog(mWindowHandle, "./Content/ModelingFiles", "Model and Material Files\0*.bin;*.obj;*.mtl\0All Files\0*.*\0")};
 #else
-            OpenFileName.lpstrFilter = "OBJ Files(*.obj)\0*.obj\0All Files(*.*)\0*.*\0";
-            OpenFileName.lpstrDefExt = "obj";
+            FString FilePath{OpenFileDialog(mWindowHandle, "./Content/ModelingFiles", "OBJ Files(*.obj)\0*.obj\0All Files(*.*)\0*.*\0", "obj")};
 #endif
-            OpenFileName.nMaxFile = MAX_PATH;
-            OpenFileName.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_NOCHANGEDIR;
-
-            FString FilePath{OpenFileDialog(FString{"./Content/ModelingFiles"}, OpenFileName)};
             if (!FilePath.empty()) {
 #ifdef OBJ_VIEWER
                 OpenViewerFile(std::filesystem::path{FilePath.c_str()});
@@ -337,16 +330,4 @@ void FViewerPanel::DrawPreview() {
         ImGui::Text("Triangles: %zu", TriangleCount);
     }
     ImGui::End();
-}
-
-FString FViewerPanel::OpenFileDialog(const FString& FilePath, const OPENFILENAMEA& OFN) const {
-    char FileName[MAX_PATH]{};
-    OPENFILENAMEA OpenFileName{OFN};
-    OpenFileName.lpstrFile = FileName;
-    const std::string InitialDirectoryPath{std::filesystem::absolute(FilePath.c_str()).string()};
-    if (!std::filesystem::exists(InitialDirectoryPath)) {
-        std::filesystem::create_directories(InitialDirectoryPath);
-    }
-    OpenFileName.lpstrInitialDir = InitialDirectoryPath.c_str();
-    return GetOpenFileNameA(&OpenFileName) ? FString{FileName} : FString{};
 }

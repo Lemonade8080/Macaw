@@ -1,8 +1,9 @@
 ﻿#include "pch.h"
 #include "FControlPanel.h"
 
+#include "Editor/FileDialog.h"
+
 #include <windows.h>
-#include <commdlg.h>
 #include <filesystem>
 #include <map>
 
@@ -91,7 +92,7 @@ void FControlPanel::DrawPanel() {
 
         ImGui::SameLine();
         if (ImGui::Button("Load Scene")) {
-            const FString FilePath{OpenFileDialog()};
+            const FString FilePath{OpenFileDialog(mWindowHandle, "./scenes", "JSON Files (*.json)\0*.json\0All Files (*.*)\0*.*\0", "json")};
 
             if (!FilePath.empty()) {
                 mEditorToWorldSender.TryEmplace<FMessageLoadScene>(FString{FilePath});
@@ -271,19 +272,7 @@ void FControlPanel::DrawPanel() {
     if (ImGui::Button("Import")) {
         Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "Import Button Click");
 
-        OPENFILENAMEA OpenFileName{0};
-
-        OpenFileName.lStructSize = sizeof(OpenFileName);
-        OpenFileName.hwndOwner = mWindowHandle;
-
-        OpenFileName.lpstrFilter = "OBJ Files(*.obj)\0*.obj\0All Files(*.*)\0*.*\0";
-
-        OpenFileName.nMaxFile = MAX_PATH;
-
-        OpenFileName.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_NOCHANGEDIR;
-        OpenFileName.lpstrDefExt = "obj";
-
-        FString FilePath{OpenFileDialog(FString{"./Content/ModelingFiles"}, OpenFileName)};
+        const FString FilePath{OpenFileDialog(mWindowHandle, "./Content/ModelingFiles", "OBJ Files(*.obj)\0*.obj\0All Files(*.*)\0*.*\0", "obj")};
 
         mEditorToWorldSender.TryEmplace<FMessageImportMesh>(FString{"ObjImport"}, FString{FilePath}, FString{"./Content/Metadata/MonkeyMesh.meta"});
     }
@@ -291,59 +280,8 @@ void FControlPanel::DrawPanel() {
     // 남은 공간의 오른쪽 끝에 성능 정보를 고정한다.
 }
 
-FString FControlPanel::OpenFileDialog() {
-    char FileName[MAX_PATH]{0};
-    OPENFILENAMEA OpenFileName{0};
-
-    OpenFileName.lStructSize = sizeof(OpenFileName);
-    OpenFileName.hwndOwner = mWindowHandle;
-
-    OpenFileName.lpstrFilter = "JSON Files (*.json)\0*.json\0All Files (*.*)\0*.*\0";
-    OpenFileName.lpstrFile = FileName;
-    OpenFileName.nMaxFile = MAX_PATH;
-
-    OpenFileName.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_NOCHANGEDIR;
-    OpenFileName.lpstrDefExt = "json";
-
-    std::string InitialDirectoryPath{std::filesystem::absolute("./scenes").string()};
-
-    if (!std::filesystem::exists(InitialDirectoryPath)) {
-        std::filesystem::create_directories(InitialDirectoryPath);
-    }
-
-    OpenFileName.lpstrInitialDir = InitialDirectoryPath.c_str();
-
-    if (GetOpenFileNameA(&OpenFileName)) {
-        return FString{FileName};
-    }
-
-    return "";
-}
-
-FString FControlPanel::OpenFileDialog(const FString& FilePath, const OPENFILENAMEA& OFN) {
-    char FileName[MAX_PATH]{0};
-
-    OPENFILENAMEA OpenFileName{OFN};
-
-    OpenFileName.lpstrFile = FileName;
-
-    std::string InitialDirectoryPath{std::filesystem::absolute(FilePath.c_str()).string()};
-
-    if (!std::filesystem::exists(InitialDirectoryPath)) {
-        std::filesystem::create_directories(InitialDirectoryPath);
-    }
-
-    OpenFileName.lpstrInitialDir = InitialDirectoryPath.c_str();
-
-    if (GetOpenFileNameA(&OpenFileName)) {
-        return FString{FileName};
-    }
-
-    return "";
-}
-
 FControlPanel::FControlPanel(FWorldEditorContext& InEditorContext, HWND InputWindowHandle, FMessageChannel::FSender InEditorToWorldSender)
-    : mEditorContext(&InEditorContext),
-      mWindowHandle(InputWindowHandle),
-      mEditorToWorldSender(std::move(InEditorToWorldSender)) {
+	: mEditorContext{&InEditorContext},
+	  mEditorToWorldSender{std::move(InEditorToWorldSender)},
+	  mWindowHandle{InputWindowHandle} {
 }

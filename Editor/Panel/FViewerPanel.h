@@ -39,7 +39,6 @@ private:
     CameraProbe BuildPreviewCamera() const;
     void ProcessInput();
     FMatrix MakeCameraWorldMatrix(const FVector3& Eye) const;
-    FString OpenFileDialog(const FString& FilePath, const OPENFILENAMEA& OFN) const;
     bool OpenViewerFile(const std::filesystem::path& FilePath);
 
 private:
