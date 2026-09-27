@@ -13,7 +13,6 @@ struct FMeshDrawItem {
     Uint32 mFirstIndex{};
     Uint32 mIndexCount{};
     bool HasSameBatch(const FMeshDrawItem& Other) const;
-    bool operator<(const FMeshDrawItem& Other) const;
 };
 
 class FRenderQueue {
@@ -23,7 +22,7 @@ public:
 
 private:
     void BuildItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, TArray<FMeshDrawItem>& Items, bool RenderSky, bool ForceUnlit);
-    void AddItem(const IAssetRegistry* Registry, const FActorProbe& Probe, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, TArray<FMeshDrawItem>& Items);
+    void AddItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, std::size_t Begin, std::size_t End, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, TArray<FMeshDrawItem>& Items, bool ForceUnlit);
 
 private:
     TArray<FMeshDrawItem> mSceneItems{};

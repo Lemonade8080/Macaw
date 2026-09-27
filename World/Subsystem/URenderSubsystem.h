@@ -15,12 +15,15 @@ public:
 
     void RegisterComponent(UStaticMeshComponent* Component);
     void UnregisterComponent(UStaticMeshComponent* Component);
+    void UpdateComponentRenderState(UStaticMeshComponent* Component);
     void BuildRenderProbes(FRenderProbe& Probe) const;
 
     bool ContainsComponent(const UStaticMeshComponent* Component) const;
     const TArray<UStaticMeshComponent*>& GetRegisteredComponents() const;
 
 private:
+    static bool IsComponentLess(const UStaticMeshComponent* Left, const UStaticMeshComponent* Right);
+
     void OnDeinitialize() override;
 
 private:

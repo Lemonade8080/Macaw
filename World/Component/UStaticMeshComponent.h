@@ -8,11 +8,13 @@ public:
     UStaticMeshComponent() = default;
     ~UStaticMeshComponent() override = default;
 
+public:
     JG_DECLARE_DERIVED_TYPEINFO(UStaticMeshComponent, UMeshComponent)
 
     FAssetHandle GetMaterialHandle() const;
     FAssetHandle GetPipelineHandle() const;
 
+    void SetMeshHandle(FAssetHandle InHandle) override;
     void SetMaterialHandle(FAssetHandle InHandle);
     void SetPipelineHandle(FAssetHandle InHandle);
     void DrawPanels(IPropertyEditorContext* Context) override;
@@ -21,12 +23,12 @@ public:
     void OnUnregister() override;
     virtual void MakeRender(FActorProbe& OutProbe) const override;
 
-protected:
+private:
     void Serialize(FArchive& Archive) override;
+    void EnsureDefaultRenderAssets();
+    void NotifyRenderStateChanged();
 
 private:
-    void EnsureDefaultRenderAssets();
-
     FAssetHandle mMaterialHandle{};
     FAssetHandle mPipelineHandle{};
     FAssetPath mMaterialAssetPath{};

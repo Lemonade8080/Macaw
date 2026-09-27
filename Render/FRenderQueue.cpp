@@ -5,11 +5,7 @@
 #include "Asset/UMesh.h"
 
 bool FMeshDrawItem::HasSameBatch(const FMeshDrawItem& Other) const {
-    return !(*this < Other) && !(Other < *this);
-}
-
-bool FMeshDrawItem::operator<(const FMeshDrawItem& Other) const {
-    return std::tie(mProbe.mPipelineHandle.mId, mProbe.mPipelineHandle.mGeneration, mTextureSignature.mTextureFieldCount, mTextureSignature.mTextureHandles, mProbe.mMeshHandle.mId, mProbe.mMeshHandle.mGeneration, mProbe.mMaterialHandle.mId, mProbe.mMaterialHandle.mGeneration, mMaterialGroupIndex, mFirstIndex, mIndexCount) < std::tie(Other.mProbe.mPipelineHandle.mId, Other.mProbe.mPipelineHandle.mGeneration, Other.mTextureSignature.mTextureFieldCount, Other.mTextureSignature.mTextureHandles, Other.mProbe.mMeshHandle.mId, Other.mProbe.mMeshHandle.mGeneration, Other.mProbe.mMaterialHandle.mId, Other.mProbe.mMaterialHandle.mGeneration, Other.mMaterialGroupIndex, Other.mFirstIndex, Other.mIndexCount);
+    return mProbe.mPipelineHandle == Other.mProbe.mPipelineHandle && mProbe.mMaterialHandle == Other.mProbe.mMaterialHandle && mProbe.mMeshHandle == Other.mProbe.mMeshHandle && mTextureSignature == Other.mTextureSignature && mMaterialGroupIndex == Other.mMaterialGroupIndex && mFirstIndex == Other.mFirstIndex && mIndexCount == Other.mIndexCount;
 }
 
 void FRenderQueue::Build(const IAssetRegistry* Registry, const FRenderView& View, const FRenderProbe& Probe) {
@@ -45,39 +41,50 @@ const TArray<FMeshDrawItem>& FRenderQueue::GetItems(ERenderPass Pass) const {
 }
 
 void FRenderQueue::BuildItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, TArray<FMeshDrawItem>& Items, bool RenderSky, bool ForceUnlit) {
+    if (Registry == nullptr) {
+        return;
+    }
+
     const FAssetHandle SkyPipelineHandle{Registry->FindAsset(FAssetPath{"/Game/Pipeline/SkyDome.json"})};
-    for (const FActorProbe& Source : Probes) {
-        if (!RenderSky && Source.mPipelineHandle == SkyPipelineHandle) {
-            continue;
+    for (std::size_t Begin{}; Begin < Probes.size();) {
+        const FActorProbe& Source{Probes[Begin]};
+        std::size_t End{Begin + 1};
+        while (End < Probes.size() && Source.mPipelineHandle == Probes[End].mPipelineHandle && Source.mMaterialHandle == Probes[End].mMaterialHandle && Source.mMeshHandle == Probes[End].mMeshHandle) {
+            ++End;
         }
+
         const UMesh* Mesh{Registry->ResolveAsset<UMesh>(Source.mMeshHandle)};
-        if (Mesh == nullptr || Registry->ResolveAsset<UPipeline>(Source.mPipelineHandle) == nullptr) {
-            continue;
-        }
-        FActorProbe Probe{Source};
-        if (ForceUnlit) {
-            Probe.mFlags |= static_cast<Uint32>(ERenderObjectFlags::Unlit);
-        }
-        const TArray<UMesh::FSubMesh>& SubMeshes{Mesh->GetSubMeshes()};
-        if (SubMeshes.empty()) {
-            AddItem(Registry, Probe, 0, 0, static_cast<Uint32>(Mesh->GetIndices().size()), Items);
-        } else {
-            for (const UMesh::FSubMesh& SubMesh : SubMeshes) {
-                AddItem(Registry, Probe, SubMesh.mMaterialGroupIndex, SubMesh.mFirstIndex, SubMesh.mIndexCount, Items);
+        if ((RenderSky || Source.mPipelineHandle != SkyPipelineHandle) && Mesh != nullptr && Registry->ResolveAsset<UPipeline>(Source.mPipelineHandle) != nullptr) {
+            const TArray<UMesh::FSubMesh>& SubMeshes{Mesh->GetSubMeshes()};
+            if (SubMeshes.empty()) {
+                AddItems(Registry, Probes, Begin, End, 0, 0, static_cast<Uint32>(Mesh->GetIndices().size()), Items, ForceUnlit);
+            } else {
+                for (const UMesh::FSubMesh& SubMesh : SubMeshes) {
+                    AddItems(Registry, Probes, Begin, End, SubMesh.mMaterialGroupIndex, SubMesh.mFirstIndex, SubMesh.mIndexCount, Items, ForceUnlit);
+                }
             }
         }
+        Begin = End;
     }
-    std::sort(Items.begin(), Items.end());
 }
 
-void FRenderQueue::AddItem(const IAssetRegistry* Registry, const FActorProbe& Probe, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, TArray<FMeshDrawItem>& Items) {
-    const UMaterial* Material{Registry->ResolveAsset<UMaterial>(Probe.mMaterialHandle)};
+void FRenderQueue::AddItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, std::size_t Begin, std::size_t End, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, TArray<FMeshDrawItem>& Items, bool ForceUnlit) {
+    const UMaterial* Material{Registry->ResolveAsset<UMaterial>(Probes[Begin].mMaterialHandle)};
     if (Material == nullptr || IndexCount == 0) {
         return;
     }
     const Uint32 GroupIndex{Material->GetGPUIndex(MaterialGroupIndex) != UINT32_MAX ? MaterialGroupIndex : 0u};
     const Uint32 MaterialIndex{Material->GetGPUIndex(GroupIndex)};
-    if (MaterialIndex != UINT32_MAX) {
-        Items.push_back(FMeshDrawItem{Probe, Material->BuildChunkSignature(GroupIndex), MaterialIndex, GroupIndex, FirstIndex, IndexCount});
+    if (MaterialIndex == UINT32_MAX) {
+        return;
+    }
+
+    const FMaterialChunkSignature TextureSignature{Material->BuildChunkSignature(GroupIndex)};
+    for (std::size_t Index{Begin}; Index < End; ++Index) {
+        FActorProbe Probe{Probes[Index]};
+        if (ForceUnlit) {
+            Probe.mFlags |= static_cast<Uint32>(ERenderObjectFlags::Unlit);
+        }
+        Items.push_back(FMeshDrawItem{Probe, TextureSignature, MaterialIndex, GroupIndex, FirstIndex, IndexCount});
     }
 }

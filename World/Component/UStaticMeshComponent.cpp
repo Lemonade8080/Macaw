@@ -24,7 +24,17 @@ FAssetHandle UStaticMeshComponent::GetPipelineHandle() const {
     return mPipelineHandle;
 }
 
+void UStaticMeshComponent::SetMeshHandle(FAssetHandle InHandle) {
+    const FAssetHandle PreviousHandle{GetMeshHandle()};
+    UMeshComponent::SetMeshHandle(InHandle);
+    if (PreviousHandle != GetMeshHandle()) {
+        NotifyRenderStateChanged();
+    }
+}
+
 void UStaticMeshComponent::SetMaterialHandle(FAssetHandle InHandle) {
+    const FAssetHandle PreviousMaterialHandle{mMaterialHandle};
+    const FAssetHandle PreviousPipelineHandle{mPipelineHandle};
     mMaterialHandle = InHandle;
     AActor* Owner{GetOwner()};
     UWorld* World{Owner != nullptr ? Owner->GetWorld() : nullptr};
@@ -32,9 +42,14 @@ void UStaticMeshComponent::SetMaterialHandle(FAssetHandle InHandle) {
     mMaterialAssetPath = Registry != nullptr && Registry->GetAssetPath(mMaterialHandle) != nullptr ? *Registry->GetAssetPath(mMaterialHandle) : FAssetPath{};
     mMaterialAssetGuid = Registry != nullptr && Registry->GetAssetGuid(mMaterialHandle) != nullptr ? *Registry->GetAssetGuid(mMaterialHandle) : FGuid{};
     EnsureDefaultRenderAssets();
+    if (PreviousMaterialHandle != mMaterialHandle || PreviousPipelineHandle != mPipelineHandle) {
+        NotifyRenderStateChanged();
+    }
 }
 
 void UStaticMeshComponent::SetPipelineHandle(FAssetHandle InHandle) {
+    const FAssetHandle PreviousMaterialHandle{mMaterialHandle};
+    const FAssetHandle PreviousPipelineHandle{mPipelineHandle};
     mPipelineHandle = InHandle;
     AActor* Owner{GetOwner()};
     UWorld* World{Owner != nullptr ? Owner->GetWorld() : nullptr};
@@ -42,6 +57,17 @@ void UStaticMeshComponent::SetPipelineHandle(FAssetHandle InHandle) {
     mPipelineAssetPath = Registry != nullptr && Registry->GetAssetPath(mPipelineHandle) != nullptr ? *Registry->GetAssetPath(mPipelineHandle) : FAssetPath{};
     mPipelineAssetGuid = Registry != nullptr && Registry->GetAssetGuid(mPipelineHandle) != nullptr ? *Registry->GetAssetGuid(mPipelineHandle) : FGuid{};
     EnsureDefaultRenderAssets();
+    if (PreviousMaterialHandle != mMaterialHandle || PreviousPipelineHandle != mPipelineHandle) {
+        NotifyRenderStateChanged();
+    }
+}
+
+void UStaticMeshComponent::NotifyRenderStateChanged() {
+    AActor* Owner{GetOwner()};
+    UWorld* World{Owner != nullptr ? Owner->GetWorld() : nullptr};
+    if (World != nullptr) {
+        World->GetRenderSubsystem().UpdateComponentRenderState(this);
+    }
 }
 
 void UStaticMeshComponent::OnRegister() {
@@ -123,6 +149,7 @@ void UStaticMeshComponent::Serialize(FArchive& Archive) {
         if (!mPipelineHandle && Registry != nullptr) {
             mPipelineHandle = Registry->FindAsset(mPipelineAssetPath);
         }
+        NotifyRenderStateChanged();
     }
 }
 
