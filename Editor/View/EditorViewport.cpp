@@ -267,19 +267,19 @@ void EditorViewport::BuildBounds(FLineRenderData& Lines, const CameraProbe& Came
     }
 }
 
-void EditorViewport::BuildRenderProbes(FRenderProbe& Probe, const CameraProbe& Camera, const FVector3& CameraPosition, const D3D11_VIEWPORT& Viewport) {
+void EditorViewport::BuildViewRenderData(FRenderView& View, const CameraProbe& Camera, const FVector3& CameraPosition, const D3D11_VIEWPORT& Viewport) {
     mTransformGizmo.Update(Camera, Viewport);
-    mTransformGizmo.BuildRenderProbes(Probe);
-    Probe.mSceneGuides.Clear();
+    mTransformGizmo.BuildGizmoProbes(View.mGizmoProbes);
+    View.mSceneGuides.Clear();
     const ELineDepthMode DepthMode{ELineDepthMode::DepthTested};
     const FEditorSettings Settings{mEditorContext != nullptr ? mEditorContext->GetEditorSettings() : FEditorSettings{}};
     FVector2D FadeCenter{CameraPosition.mX, CameraPosition.mY};
     if (Settings.mGridVisible) {
-        BuildGrid(Probe.mSceneGuides, Camera, CameraPosition, Viewport, FadeCenter, DepthMode);
+        BuildGrid(View.mSceneGuides, Camera, CameraPosition, Viewport, FadeCenter, DepthMode);
     }
     if (Settings.mAxisVisible) {
-        BuildAxis(Probe.mSceneGuides, DepthMode);
+        BuildAxis(View.mSceneGuides, DepthMode);
     }
-    BuildBounds(Probe.mSceneGuides, Camera, DepthMode);
-    Probe.mGridFade = FVector4{FadeCenter.mX, FadeCenter.mY, 450.0f, 550.0f};
+    BuildBounds(View.mSceneGuides, Camera, DepthMode);
+    View.mGridFade = FVector4{FadeCenter.mX, FadeCenter.mY, 450.0f, 550.0f};
 }

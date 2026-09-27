@@ -20,8 +20,8 @@ void UBillboardSubsystem::UnregisterComponent(UBillboardComponent* Component) {
     std::erase(mComponents, Component);
 }
 
-void UBillboardSubsystem::BuildRenderProbes(FRenderProbe& Probe) const {
-    Probe.mBillboardProbes.clear();
+void UBillboardSubsystem::BuildRenderProbes(FSceneRenderData& Scene) const {
+    Scene.mBillboardProbes.clear();
 
     for (const UBillboardComponent* Component : mComponents) {
         FBillboardProbe BillboardProbe{};
@@ -31,7 +31,7 @@ void UBillboardSubsystem::BuildRenderProbes(FRenderProbe& Probe) const {
         if (not Component->IsActive() or not Component->IsVisible())
             continue;
 
-        Probe.mBillboardProbes.push_back(BillboardProbe);
+        Scene.mBillboardProbes.push_back(BillboardProbe);
     }
 }
 

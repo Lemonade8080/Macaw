@@ -75,7 +75,7 @@ public:
 
     void ProcessInput(FKeyboardInput& KeyboardInput, FMouseInput& MouseInput, bool BMouseCapturedByUi);
     void Update(const CameraProbe& Camera, const D3D11_VIEWPORT& Viewport);
-    void BuildRenderProbes(FRenderProbe& Probe);
+    void BuildGizmoProbes(TArray<FActorProbe>& GizmoProbes);
 
     FStateChannel<Uint8>::FReadWriter GetGizmoMode();
 

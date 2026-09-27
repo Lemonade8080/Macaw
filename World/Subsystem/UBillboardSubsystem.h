@@ -14,7 +14,7 @@ public:
 
     void RegisterComponent(UBillboardComponent* Component);
     void UnregisterComponent(UBillboardComponent* Component);
-    void BuildRenderProbes(FRenderProbe& Probe) const;
+    void BuildRenderProbes(FSceneRenderData& Scene) const;
 
     bool ContainsComponent(const UBillboardComponent* Component);
     const TArray<UBillboardComponent*>& GetRegisteredComponents() const;

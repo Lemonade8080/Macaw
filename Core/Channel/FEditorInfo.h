@@ -75,4 +75,5 @@ struct FStatDisplayFlags {
     bool mBShowFps{false};
     bool mBShowMemory{false};
     bool mBObjectSystem{false};
+    bool mBShowPicking{false};
 };

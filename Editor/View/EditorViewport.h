@@ -3,7 +3,7 @@
 #include <d3d11.h>
 
 #include "Asset/FAssetRegistry.h"
-#include "../../Core/Base/FRenderProbe.h"
+#include "Render/FRenderView.h"
 #include "../../Core/Channel/FStateChannel.h"
 #include "World/FWorldEditorContext.h"
 #include "Editor/Input/FMouseInput.h"
@@ -27,7 +27,7 @@ public:
 
     void PrepareInput(const CameraProbe& Camera, const D3D11_VIEWPORT& Viewport);
     void ProcessInput(FKeyboardInput& KeyboardInput, FMouseInput& MouseInput, bool BMouseCapturedByUi);
-    void BuildRenderProbes(FRenderProbe& Probe, const CameraProbe& Camera, const FVector3& CameraPosition, const D3D11_VIEWPORT& Viewport);
+    void BuildViewRenderData(FRenderView& View, const CameraProbe& Camera, const FVector3& CameraPosition, const D3D11_VIEWPORT& Viewport);
 
     FStateChannel<Uint8>::FReadWriter GetGizmoMode();
     FStateChannel<Uint8>::FReadWriter GetGizmoCoordinateSpace();

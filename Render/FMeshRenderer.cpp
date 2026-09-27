@@ -58,16 +58,19 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
             const UINT StencilReference{ResolvedMode == ERenderMode::Outline || (First.mProbe.mFlags & static_cast<Uint32>(ERenderObjectFlags::Selected)) != 0 ? 1u : 0u};
             Pipeline->Bind(DeviceContext, ResolvedMode, StencilReference);
             std::array<ID3D11ShaderResourceView*, MaxMaterialTextureFields> TextureResources{};
+
             for (Uint8 Index{}; Index < First.mTextureSignature.mTextureFieldCount; ++Index) {
                 const UTexture* Texture{Context.mAssetRegistry->ResolveAsset<UTexture>(First.mTextureSignature.GetTextureHandle(Index))};
                 TextureResources[Index] = Texture != nullptr ? Texture->GetSRV() : nullptr;
             }
+
             DeviceContext->VSSetShaderResources(3, static_cast<UINT>(TextureResources.size()), TextureResources.data());
             DeviceContext->PSSetShaderResources(3, static_cast<UINT>(TextureResources.size()), TextureResources.data());
 
             ID3D11Buffer* VertexBuffers[]{Mesh->GetVertexBuffer(EVertexAttribute::Position), Mesh->GetVertexBuffer(EVertexAttribute::Normal), Mesh->GetVertexBuffer(EVertexAttribute::UV), Mesh->GetVertexBuffer(EVertexAttribute::Color)};
             const Uint32 Strides[]{Mesh->GetVertexStride(EVertexAttribute::Position), Mesh->GetVertexStride(EVertexAttribute::Normal), Mesh->GetVertexStride(EVertexAttribute::UV), Mesh->GetVertexStride(EVertexAttribute::Color)};
             const Uint32 Offsets[]{0, 0, 0, 0};
+
             DeviceContext->IASetVertexBuffers(0, _countof(VertexBuffers), VertexBuffers, Strides, Offsets);
             DeviceContext->IASetIndexBuffer(Mesh->GetIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
 #ifdef ENABLE_INSTANCE

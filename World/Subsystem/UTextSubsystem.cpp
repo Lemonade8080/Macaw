@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 
 #include "UTextSubsystem.h"
 #include "World/Component/UBillboardTextComponent.h"
@@ -15,8 +15,8 @@ void UTextSubsystem::UnregisterComponent(UBillboardTextComponent* Component) {
     std::erase(mComponents, Component);
 }
 
-void UTextSubsystem::BuildTextProbes(FRenderProbe& Probe) const {
-    Probe.mTextProbes.clear();
+void UTextSubsystem::BuildTextProbes(FSceneRenderData& Scene) const {
+    Scene.mTextProbes.clear();
 
     for (UBillboardTextComponent* Component : mComponents) {
         if (Component == nullptr) {
@@ -26,7 +26,7 @@ void UTextSubsystem::BuildTextProbes(FRenderProbe& Probe) const {
         FTextProbe TextProbe{};
 
         if (Component->MakeTextRender(TextProbe)) {
-            Probe.mTextProbes.push_back(std::move(TextProbe));
+            Scene.mTextProbes.push_back(std::move(TextProbe));
         }
     }
 }

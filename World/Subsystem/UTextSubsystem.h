@@ -15,7 +15,7 @@ public:
 
     void RegisterComponent(UBillboardTextComponent* Component);
     void UnregisterComponent(UBillboardTextComponent* Component);
-    void BuildTextProbes(FRenderProbe& Probe) const;
+    void BuildTextProbes(FSceneRenderData& Scene) const;
 
     bool ContainsComponent(const UBillboardTextComponent* Component) const;
     const TArray<UBillboardTextComponent*>& GetRegisteredComponents() const;

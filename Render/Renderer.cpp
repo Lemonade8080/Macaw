@@ -68,7 +68,7 @@ void FRenderer::BeginFrame(float DeltaTime) {
     }
 }
 
-void FRenderer::RenderView(const FRenderView& View, const FRenderProbe& Probe) {
+void FRenderer::RenderView(const FRenderView& View, const FSceneRenderData& Scene) {
     if (View.mTarget == nullptr || !View.mTarget->IsValid() || mDeviceContext == nullptr) {
         return;
     }
@@ -77,32 +77,32 @@ void FRenderer::RenderView(const FRenderView& View, const FRenderProbe& Probe) {
     View.mTarget->Bind(mDeviceContext.Get());
     const float ClearColor[]{View.mSettings.mClearColor.mX, View.mSettings.mClearColor.mY, View.mSettings.mClearColor.mZ, View.mSettings.mClearColor.mW};
     View.mTarget->Clear(mDeviceContext.Get(), ClearColor);
-    if (mAssetRegistry == nullptr || !UploadLightContext(Probe)) {
+    if (mAssetRegistry == nullptr || !UploadLightContext(Scene)) {
         return;
     }
     mAssetRegistry->FlushMaterialBuffer(mDeviceContext.Get());
-    mRenderQueue.Build(mAssetRegistry, View, Probe);
+    mRenderQueue.Build(mAssetRegistry, Scene, View);
     const FRenderContext Context{mDevice.Get(), mDeviceContext.Get(), mAssetRegistry, mAssetRegistry->GetMaterialBufferSRV(), *mLightContextArray.GetSRV(), mFrameLightCount, mAnimationFrame};
     constexpr std::array Passes{ERenderPass::SceneGeometry, ERenderPass::SelectionOutline, ERenderPass::SceneGuides, ERenderPass::Gizmo, ERenderPass::Text, ERenderPass::Billboard, ERenderPass::OrientationAxis};
     for (const ERenderPass Pass : Passes) {
         if (View.IsPassEnabled(Pass)) {
-            ExecutePass(Pass, Context, View, Probe);
+            ExecutePass(Pass, Context, View, Scene);
         }
     }
     View.mTarget->Bind(mDeviceContext.Get());
 }
 
-bool FRenderer::UploadLightContext(const FRenderProbe& Probe) {
+bool FRenderer::UploadLightContext(const FSceneRenderData& Scene) {
     ID3D11ShaderResourceView* NullResource{nullptr};
     mDeviceContext->PSSetShaderResources(2, 1, &NullResource);
-    if (!mLightContextArray.UploadDiscard(mDevice.Get(), mDeviceContext.Get(), Probe.mLightProbes)) {
+    if (!mLightContextArray.UploadDiscard(mDevice.Get(), mDeviceContext.Get(), Scene.mLightProbes)) {
         return false;
     }
     mFrameLightCount = mLightContextArray.GetCount();
     return true;
 }
 
-void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FRenderProbe& Probe) {
+void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FSceneRenderData& Scene) {
     View.mTarget->Bind(mDeviceContext.Get());
     BindSamplerStates();
     switch (Pass) {
@@ -113,19 +113,19 @@ void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, con
             mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), View.mCamera, ERenderMode::Outline);
             break;
         case ERenderPass::SceneGuides:
-            DrawSceneGuides(View, Probe);
+            DrawSceneGuides(View);
             break;
         case ERenderPass::Gizmo:
-            if (!Probe.mGizmoProbes.empty()) {
+            if (!View.mGizmoProbes.empty()) {
                 View.mTarget->ClearDepth(mDeviceContext.Get());
                 mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), View.mCamera, ERenderMode::Lit);
             }
             break;
         case ERenderPass::Text:
-            mTextRenderer.Render(mDeviceContext.Get(), Probe.mTextProbes, View.mCamera, mAssetRegistry);
+            mTextRenderer.Render(mDeviceContext.Get(), Scene.mTextProbes, View.mCamera, mAssetRegistry);
             break;
         case ERenderPass::Billboard:
-            mBillboardRenderer.Render(mDeviceContext.Get(), Probe.mBillboardProbes, View.mCamera, mAssetRegistry, View.mRenderMode);
+            mBillboardRenderer.Render(mDeviceContext.Get(), Scene.mBillboardProbes, View.mCamera, mAssetRegistry, View.mRenderMode);
             break;
         case ERenderPass::OrientationAxis:
             DrawOrientationAxis(View);
@@ -135,14 +135,14 @@ void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, con
     }
 }
 
-void FRenderer::DrawSceneGuides(const FRenderView& View, const FRenderProbe& Probe) {
+void FRenderer::DrawSceneGuides(const FRenderView& View) {
     mLineRenderer.Clear();
-    for (const FLineProbe& Line : Probe.mSceneGuides.GetLines()) {
+    for (const FLineProbe& Line : View.mSceneGuides.GetLines()) {
         mLineRenderer.AddGridLine(Line.mStart, Line.mEnd, Line.mColor, Line.mWidthPixels, Line.mGridSpacing, Line.mDepthMode);
     }
     if (!mLineRenderer.IsEmpty()) {
         const D3D11_VIEWPORT& Viewport{View.mTarget->GetViewport()};
-        mLineRenderer.Render(mDeviceContext.Get(), FLineViewData{View.mCamera.mViewProjection, FVector2D{Viewport.Width, Viewport.Height}, Probe.mGridFade});
+        mLineRenderer.Render(mDeviceContext.Get(), FLineViewData{View.mCamera.mViewProjection, FVector2D{Viewport.Width, Viewport.Height}, View.mGridFade});
     }
 }
 

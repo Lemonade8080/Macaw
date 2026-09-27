@@ -70,11 +70,18 @@ namespace Stat {
         std::size_t mActorCount{};
     };
 
+    struct FPickingStats {
+        double mLastMilliseconds{};
+        double mTotalMilliseconds{};
+        std::uint64_t mAttemptCount{};
+    };
+
     struct FStats {
         FFrameStats mFrame{};
         FSystemStats mSystem{};
         FMemoryStats mMemory{};
         FObjectStats mObjects{};
+        FPickingStats mPicking{};
     };
 
     void BeginFrame(double DeltaSeconds = 0.0);
@@ -85,6 +92,7 @@ namespace Stat {
     void RecordAllocation(std::size_t Size, EMemoryTag Tag);
     void RecordDeallocation(std::size_t Size, EMemoryTag Tag);
     void RecordObjectCounts(std::size_t ObjectCount, std::size_t ActorCount);
+    void RecordPickingTime(double Milliseconds);
 
     FStats GetStats();
     FFrameStats GetFrameStats();
@@ -92,6 +100,7 @@ namespace Stat {
     FSystemStatSample GetSystemSample(ESystemStatStage Stage);
     FMemoryStats GetMemoryStats();
     FObjectStats GetObjectStats();
+    FPickingStats GetPickingStats();
 
     const char* GetSystemStageName(ESystemStatStage Stage);
     // 태그 이름을 문자열로 반환하는 헬퍼 함수

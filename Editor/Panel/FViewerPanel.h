@@ -35,7 +35,7 @@ private:
     void DrawProperties();
     void DrawPreview();
     void ResizeSurfaceIfNeeded(ID3D11Device* Device, Uint32 Width, Uint32 Height);
-    FRenderProbe BuildPreviewProbe();
+    FSceneRenderData BuildPreviewScene();
     CameraProbe BuildPreviewCamera() const;
     void ProcessInput();
     FMatrix MakeCameraWorldMatrix(const FVector3& Eye) const;

@@ -104,8 +104,8 @@ void FAssetThumbnailRenderer::RenderThumbnail(const FAssetEntry& Entry, FSceneRe
 
     ActorProbe.mWorld = BuildMeshTransform(*Mesh);
 
-    FRenderProbe Probe{};
-    Probe.mActorProbes.push_back(ActorProbe);
+    FSceneRenderData Scene{};
+    Scene.mActorProbes.push_back(ActorProbe);
 
     FLightProbe LightProbe{};
     LightProbe.mType = ELightType::Directional;
@@ -113,7 +113,7 @@ void FAssetThumbnailRenderer::RenderThumbnail(const FAssetEntry& Entry, FSceneRe
     LightProbe.mColor = FVector{1.0f, 1.0f, 1.0f};
     LightProbe.mIntensity = 1.0f;
 
-    Probe.mLightProbes.push_back(LightProbe);
+    Scene.mLightProbes.push_back(LightProbe);
 
     FSceneRenderSurface* Surface{PreviewSurface};
     if (Surface == nullptr) {
@@ -140,7 +140,7 @@ void FAssetThumbnailRenderer::RenderThumbnail(const FAssetEntry& Entry, FSceneRe
     View.mSettings = RenderSettings;
     View.mPasses.reset();
     View.SetPassEnabled(ERenderPass::SceneGeometry, true);
-    mRenderer->RenderView(View, Probe);
+    mRenderer->RenderView(View, Scene);
 }
 
 ID3D11ShaderResourceView* FAssetThumbnailRenderer::GetThumbnail(FAssetHandle AssetHandle) const {

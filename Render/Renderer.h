@@ -29,7 +29,7 @@ public:
     bool Initialize();
 
     void BeginFrame(float DeltaTime);
-    void RenderView(const FRenderView& View, const FRenderProbe& Probe);
+    void RenderView(const FRenderView& View, const FSceneRenderData& Scene);
     void BeginUiRender();
     void EndFrame();
 
@@ -45,10 +45,10 @@ private:
     void CreateDeviceAndSwapChain(HWND WindowHandle);
     bool CreateSamplerStates();
     void BindSamplerStates();
-    bool UploadLightContext(const FRenderProbe& Probe);
+    bool UploadLightContext(const FSceneRenderData& Scene);
 
-    void ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FRenderProbe& Probe);
-    void DrawSceneGuides(const FRenderView& View, const FRenderProbe& Probe);
+    void ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FSceneRenderData& Scene);
+    void DrawSceneGuides(const FRenderView& View);
     void DrawOrientationAxis(const FRenderView& View);
 
 private:

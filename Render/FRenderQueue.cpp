@@ -8,12 +8,19 @@ bool FMeshDrawItem::HasSameBatch(const FMeshDrawItem& Other) const {
     return mProbe.mPipelineHandle == Other.mProbe.mPipelineHandle && mProbe.mMaterialHandle == Other.mProbe.mMaterialHandle && mProbe.mMeshHandle == Other.mProbe.mMeshHandle && mTextureSignature == Other.mTextureSignature && mMaterialGroupIndex == Other.mMaterialGroupIndex && mFirstIndex == Other.mFirstIndex && mIndexCount == Other.mIndexCount;
 }
 
-void FRenderQueue::Build(const IAssetRegistry* Registry, const FRenderView& View, const FRenderProbe& Probe) {
+void FRenderQueue::Build(const IAssetRegistry* Registry, const FSceneRenderData& Scene, const FRenderView& View) {
     mSceneItems.clear();
     mOutlineItems.clear();
     mGizmoItems.clear();
     if (View.IsPassEnabled(ERenderPass::SceneGeometry)) {
-        BuildItems(Registry, Probe.mActorProbes, mSceneItems, View.mSettings.mBRenderSky, Probe.mBForceUnlit || View.mRenderMode == ERenderMode::Unlit || View.mRenderMode == ERenderMode::Wireframe);
+        BuildItems(Registry, Scene.mActorProbes, mSceneItems, View.mSettings.mBRenderSky, View.mBForceUnlit || View.mRenderMode == ERenderMode::Unlit || View.mRenderMode == ERenderMode::Wireframe);
+    }
+    if (View.mSelectedActorHandle.IsValid()) {
+        for (FMeshDrawItem& Item : mSceneItems) {
+            if (Item.mProbe.mOwnerHandle == View.mSelectedActorHandle) {
+                Item.mProbe.mFlags |= static_cast<Uint32>(ERenderObjectFlags::Selected);
+            }
+        }
     }
     if (View.IsPassEnabled(ERenderPass::SelectionOutline)) {
         for (const FMeshDrawItem& Item : mSceneItems) {
@@ -23,7 +30,7 @@ void FRenderQueue::Build(const IAssetRegistry* Registry, const FRenderView& View
         }
     }
     if (View.IsPassEnabled(ERenderPass::Gizmo)) {
-        BuildItems(Registry, Probe.mGizmoProbes, mGizmoItems, true, true);
+        BuildItems(Registry, View.mGizmoProbes, mGizmoItems, true, true);
     }
 }
 

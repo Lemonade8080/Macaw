@@ -17,7 +17,7 @@ struct FMeshDrawItem {
 
 class FRenderQueue {
 public:
-    void Build(const IAssetRegistry* Registry, const FRenderView& View, const FRenderProbe& Probe);
+    void Build(const IAssetRegistry* Registry, const FSceneRenderData& Scene, const FRenderView& View);
     const TArray<FMeshDrawItem>& GetItems(ERenderPass Pass) const;
 
 private:

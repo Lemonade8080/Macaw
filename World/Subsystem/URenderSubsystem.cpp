@@ -5,7 +5,6 @@
 #include "World/AActor.h"
 #include "World/UWorld.h"
 #include "World/Component/UStaticMeshComponent.h"
-#include "World/FWorldEditorContext.h"
 
 #include <algorithm>
 #include <tuple>
@@ -40,12 +39,8 @@ void URenderSubsystem::UpdateComponentRenderState(UStaticMeshComponent* Componen
     mComponents.insert(NewPosition, Component);
 }
 
-void URenderSubsystem::BuildRenderProbes(FRenderProbe& Probe) const {
-    Probe.mActorProbes.clear();
-    Probe.mGizmoProbes.clear();
-
-    const FWorldEditorContext* EditorContext{GetWorld()->GetEditorContext()};
-    const AActor* SelectedActor{EditorContext != nullptr ? EditorContext->GetSelectedActor() : nullptr};
+void URenderSubsystem::BuildRenderProbes(FSceneRenderData& Scene) const {
+    Scene.mActorProbes.clear();
     for (const UStaticMeshComponent* Component : mComponents) {
         if (!Component->IsActive() || !Component->IsVisible()) {
             continue;
@@ -53,12 +48,8 @@ void URenderSubsystem::BuildRenderProbes(FRenderProbe& Probe) const {
 
         FActorProbe ActorProbe{};
         Component->MakeRender(ActorProbe);
-
-        if (SelectedActor != nullptr && Component->GetOwner() == SelectedActor) {
-            ActorProbe.mFlags |= static_cast<Uint32>(ERenderObjectFlags::Selected);
-        }
-
-        Probe.mActorProbes.push_back(ActorProbe);
+        ActorProbe.mOwnerHandle = Component->GetOwner()->GetHandle();
+        Scene.mActorProbes.push_back(ActorProbe);
     }
 }
 

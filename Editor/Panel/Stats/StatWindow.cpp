@@ -4,6 +4,7 @@
 #include "Core/Stat/Stat.h"
 #include "ImGui/imgui.h"
 #include <array>
+#include <cfloat>
 #include <cstdarg>
 #include <cstdio>
 
@@ -35,21 +36,21 @@ namespace {
         va_end(Arguments);
     }
 
-    void DrawShadowedText(ImDrawList& DrawList, const ImVec2& Position, ImU32 Color, const char* Text) {
-        DrawList.AddText(ImVec2{Position.x + 1.0f, Position.y + 1.0f}, IM_COL32(0, 0, 0, 220), Text);
-        DrawList.AddText(Position, Color, Text);
+    void DrawShadowedText(ImDrawList& DrawList, const ImVec2& Position, ImU32 Color, const char* Text, float FontSize) {
+        DrawList.AddText(ImGui::GetFont(), FontSize, ImVec2{Position.x + 1.0f, Position.y + 1.0f}, IM_COL32(0, 0, 0, 220), Text);
+        DrawList.AddText(ImGui::GetFont(), FontSize, Position, Color, Text);
     }
 }
 
 void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags StatFlags) {
-    if (!StatFlags.mBShowFps && !StatFlags.mBShowMemory && !StatFlags.mBObjectSystem) {
+    if (!StatFlags.mBShowFps && !StatFlags.mBShowMemory && !StatFlags.mBObjectSystem && !StatFlags.mBShowPicking) {
         return;
     }
 
-    const float FontSize{ImGui::GetFontSize()};
-    const float LineHeight{FontSize + 4.0f};
-    const float Margin{10.0f};
-    const float Padding{10.0f};
+    const float FontSize{ImGui::GetFontSize() * 1.25f};
+    const float LineHeight{FontSize + 6.0f};
+    const float Margin{12.0f};
+    const float Padding{14.0f};
     const float AvailableWidth{Max.x - Min.x - Margin * 2.0f};
     const float AvailableHeight{Max.y - Min.y - Margin * 2.0f - Padding * 2.0f};
     if (AvailableWidth < FontSize * 8.0f || AvailableHeight < LineHeight) {
@@ -66,6 +67,17 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
         const ImU32 FpsColor{FPS >= 60.0 ? IM_COL32(123, 235, 133, 255) : FPS >= 30.0 ? HeadingColor : IM_COL32(255, 112, 103, 255)};
         AddRow(Rows, RowCount, "STAT FPS", 0, FpsColor, "%.1f FPS", FPS);
         AddRow(Rows, RowCount, "Frame time", 0, TextColor, "%.2f ms", Snapshot.mFrame.mAverageFrameMilliseconds);
+    }
+
+    if (StatFlags.mBShowFps || StatFlags.mBShowPicking) {
+        const Stat::FPickingStats& Picking{Snapshot.mPicking};
+        AddRow(Rows, RowCount, "STAT PICKING", 0, HeadingColor, "");
+        AddRow(Rows, RowCount, "Last picking", 0, TextColor, "%.3f ms", Picking.mLastMilliseconds);
+        AddRow(Rows, RowCount, "Picking attempts", 0, TextColor, "%llu", static_cast<unsigned long long>(Picking.mAttemptCount));
+        AddRow(Rows, RowCount, "Picking total", 0, TextColor, "%.3f ms", Picking.mTotalMilliseconds);
+    }
+
+    if (StatFlags.mBShowFps) {
         if (Snapshot.mSystem.mFrameCount > 0) {
             AddRow(Rows, RowCount, "CPU / previous frame", 1, HeadingColor, "ms / calls");
             for (std::size_t Index{}; Index < static_cast<std::size_t>(Stat::ESystemStatStage::Count); ++Index) {
@@ -113,7 +125,7 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
     const bool BCompact{DetailLevel < 2 || LevelCounts[DetailLevel] > Capacity};
     const int VisibleRows{std::min(LevelCounts[DetailLevel], Capacity - (BCompact && Capacity > 1 ? 1 : 0))};
     const bool BFooter{BCompact && Capacity > 1};
-    const float Width{std::min(FontSize * 27.0f, AvailableWidth)};
+    const float Width{std::min(FontSize * 35.0f, AvailableWidth)};
     const ImVec2 PanelMin{Max.x - Margin - Width, Min.y + Margin};
     const ImVec2 PanelMax{Max.x - Margin, PanelMin.y + Padding * 2.0f + LineHeight * static_cast<float>(VisibleRows + (BFooter ? 1 : 0))};
     ImDrawList& DrawList{*ImGui::GetWindowDrawList()};
@@ -129,20 +141,20 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
         if (Row.mDetailLevel > DetailLevel) {
             continue;
         }
-        const float ValueWidth{ImGui::CalcTextSize(Row.mValue.data()).x};
+        const float ValueWidth{ImGui::GetFont()->CalcTextSizeA(FontSize, FLT_MAX, 0.0f, Row.mValue.data()).x};
         const float ValueLeft{std::max(Left + (Right - Left) * 0.45f, Right - ValueWidth)};
         DrawList.PushClipRect(ImVec2{Left, Y}, ImVec2{Row.mValue[0] != '\0' ? ValueLeft - 8.0f : Right, Y + LineHeight}, true);
-        DrawShadowedText(DrawList, ImVec2{Left, Y}, Row.mColor, Row.mLabel);
+        DrawShadowedText(DrawList, ImVec2{Left, Y}, Row.mColor, Row.mLabel, FontSize);
         DrawList.PopClipRect();
         DrawList.PushClipRect(ImVec2{ValueLeft, Y}, ImVec2{Right, Y + LineHeight}, true);
-        DrawShadowedText(DrawList, ImVec2{ValueLeft, Y}, Row.mColor, Row.mValue.data());
+        DrawShadowedText(DrawList, ImVec2{ValueLeft, Y}, Row.mColor, Row.mValue.data(), FontSize);
         DrawList.PopClipRect();
         Y += LineHeight;
         ++DrawnRows;
     }
     if (BFooter) {
         DrawList.PushClipRect(ImVec2{Left, Y}, ImVec2{Right, Y + LineHeight}, true);
-        DrawShadowedText(DrawList, ImVec2{Left, Y}, MutedColor, "Enlarge viewport for details");
+        DrawShadowedText(DrawList, ImVec2{Left, Y}, MutedColor, "Enlarge viewport for details", FontSize);
         DrawList.PopClipRect();
     }
     DrawList.PopClipRect();

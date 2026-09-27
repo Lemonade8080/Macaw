@@ -1,11 +1,13 @@
-﻿#include "pch.h"
+#include "pch.h"
 
 #include "UPickingSubsystem.h"
 
+#include "Core/Stat/Stat.h"
 #include "World/Component/UMeshComponent.h"
 #include "World/Component/UBillboardComponent.h"
 #include "World/Component/UPrimitiveComponent.h"
 
+#include <chrono>
 #include <cmath>
 
 void UPickingSubsystem::RegisterComponent(UPrimitiveComponent* Component) {
@@ -23,6 +25,7 @@ void UPickingSubsystem::UnregisterComponent(UPrimitiveComponent* Component) {
 }
 
 bool UPickingSubsystem::Raycast(const FRay& Ray, UPrimitiveComponent*& OutComponent, float& OutDistance, const FMatrix* CameraWorld) const {
+    const std::chrono::steady_clock::time_point StartTime{std::chrono::steady_clock::now()};
     OutComponent = nullptr;
     OutDistance = std::numeric_limits<float>::max();
 
@@ -85,6 +88,8 @@ bool UPickingSubsystem::Raycast(const FRay& Ray, UPrimitiveComponent*& OutCompon
         }
     }
 
+    const double Milliseconds{std::chrono::duration<double, std::milli>{std::chrono::steady_clock::now() - StartTime}.count()};
+    Stat::RecordPickingTime(Milliseconds);
     return OutComponent != nullptr;
 }
 

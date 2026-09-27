@@ -1,6 +1,6 @@
 #pragma once
 #include "Core/Base/FAssetHandle.h"
-#include "Core/Render/FLineRenderData.h"
+#include "Core/Base/FObjectHandle.h"
 
 struct FTextVertex {
     // 텍스트 원점으로부터 글자의 상대 위치
@@ -55,6 +55,7 @@ struct FActorProbe {
     FAssetHandle mMaterialHandle{};
     FAssetHandle mPipelineHandle{};
     Uint32 mFlags{0x0000'0000};
+    FObjectHandle mOwnerHandle{};
 };
 
 struct CameraProbe {
@@ -82,13 +83,9 @@ struct FLightProbe {
 
 static_assert(sizeof(FLightProbe) == 64);
 
-struct FRenderProbe {
+struct FSceneRenderData {
     TArray<FActorProbe> mActorProbes{};
-    TArray<FActorProbe> mGizmoProbes{};
     TArray<FTextProbe> mTextProbes{};
     TArray<FBillboardProbe> mBillboardProbes{};
     TArray<FLightProbe> mLightProbes{};
-    FLineRenderData mSceneGuides{};
-    FVector4 mGridFade{};
-    bool mBForceUnlit{false};
 };

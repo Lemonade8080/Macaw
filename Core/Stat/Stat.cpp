@@ -72,6 +72,7 @@ void Stat::ResetFrameStats() {
     State.mCurrentSamples = {};
     State.mStats.mSystem = {};
     State.mStats.mFrame = {};
+    State.mStats.mPicking = {};
     State.mFrameWindowSeconds = 0.0;
     State.mFrameWindowCount = 0;
     ++State.mActiveFrameId;
@@ -173,6 +174,16 @@ void Stat::RecordObjectCounts(std::size_t ObjectCount, std::size_t ActorCount) {
     GetStatState().mStats.mObjects = FObjectStats{ObjectCount, ActorCount};
 }
 
+void Stat::RecordPickingTime(double Milliseconds) {
+    if (!std::isfinite(Milliseconds) || Milliseconds < 0.0) {
+        return;
+    }
+    FPickingStats& Stats{GetStatState().mStats.mPicking};
+    Stats.mLastMilliseconds = Milliseconds;
+    Stats.mTotalMilliseconds += Milliseconds;
+    ++Stats.mAttemptCount;
+}
+
 Stat::FStats Stat::GetStats() {
     return GetStatState().mStats;
 }
@@ -187,6 +198,10 @@ Stat::FMemoryStats Stat::GetMemoryStats() {
 
 Stat::FObjectStats Stat::GetObjectStats() {
     return GetStatState().mStats.mObjects;
+}
+
+Stat::FPickingStats Stat::GetPickingStats() {
+    return GetStatState().mStats.mPicking;
 }
 
 const char* Stat::GetMemoryTagName(EMemoryTag Tag) {

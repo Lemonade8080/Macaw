@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 
 #include "ULightSubsystem.h"
 
@@ -16,9 +16,9 @@ void ULightSubsystem::UnregisterComponent(ULightComponent* Component) {
     std::erase(mComponents, Component);
 }
 
-void ULightSubsystem::BuildLightProbes(FRenderProbe& Probe) const {
-    Probe.mLightProbes.clear();
-    Probe.mLightProbes.reserve(mComponents.size());
+void ULightSubsystem::BuildLightProbes(FSceneRenderData& Scene) const {
+    Scene.mLightProbes.clear();
+    Scene.mLightProbes.reserve(mComponents.size());
 
     for (const ULightComponent* Component : mComponents) {
         if (Component == nullptr || !Component->IsActive() || !Component->IsVisible()) {
@@ -27,7 +27,7 @@ void ULightSubsystem::BuildLightProbes(FRenderProbe& Probe) const {
 
         FLightProbe LightProbe{};
         Component->MakeLightProbe(LightProbe);
-        Probe.mLightProbes.push_back(LightProbe);
+        Scene.mLightProbes.push_back(LightProbe);
     }
 }
 

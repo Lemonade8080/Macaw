@@ -39,6 +39,11 @@ void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime)
         return;
     }
 
+    FSceneRenderData Scene{};
+    Context.mWorld->BuildSceneRenderData(Scene);
+    const AActor* SelectedActor{Context.mEditorContext->GetSelectedActor()};
+    const FObjectHandle SelectedActorHandle{SelectedActor != nullptr ? SelectedActor->GetHandle() : FObjectHandle{}};
+
     for (FViewportId Id{}; Id < FViewportHostWindow::MaximumViewportCount; ++Id) {
         FEditorViewport* Viewport{ViewportHostWindow->PrepareViewportForRender(Id)};
         if (Viewport == nullptr) {
@@ -51,13 +56,13 @@ void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime)
             continue;
         }
 
-        FRenderProbe& Probe{Context.mWorld->BuildRenderProbe()};
-        Context.mEditorView->BuildRenderProbes(Probe, Camera, Viewport->GetCameraPosition(), Viewport->GetRenderViewport());
         FRenderView View{};
         View.mTarget = &Viewport->GetRenderSurface();
         View.mCamera = Camera;
         View.mSettings = Viewport->GetRenderSettings();
         View.mRenderMode = static_cast<ERenderMode>(Context.mEditorContext->GetRenderModeState());
-        Context.mRenderer.RenderView(View, Probe);
+        View.mSelectedActorHandle = SelectedActorHandle;
+        Context.mEditorView->BuildViewRenderData(View, Camera, Viewport->GetCameraPosition(), Viewport->GetRenderViewport());
+        Context.mRenderer.RenderView(View, Scene);
     }
 }

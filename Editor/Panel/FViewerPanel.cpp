@@ -196,10 +196,10 @@ FMatrix FViewerPanel::MakeCameraWorldMatrix(const FVector3& Eye) const {
     return Result;
 }
 
-FRenderProbe FViewerPanel::BuildPreviewProbe() {
-    FRenderProbe Probe{};
+FSceneRenderData FViewerPanel::BuildPreviewScene() {
+    FSceneRenderData Scene{};
     if (mRegistry == nullptr || mSurfaceWidth == 0 || mSurfaceHeight == 0) {
-        return Probe;
+        return Scene;
     }
 
     if (mRegistry->ResolveAsset<UMesh>(mMeshHandle) == nullptr) {
@@ -225,7 +225,7 @@ FRenderProbe FViewerPanel::BuildPreviewProbe() {
         ActorProbe.mMeshHandle = mMeshHandle;
         ActorProbe.mMaterialHandle = mMaterialHandle;
         ActorProbe.mPipelineHandle = PipelineHandle;
-        Probe.mActorProbes.push_back(ActorProbe);
+        Scene.mActorProbes.push_back(ActorProbe);
     }
 
     FLightProbe LightProbe{};
@@ -235,8 +235,8 @@ FRenderProbe FViewerPanel::BuildPreviewProbe() {
     FVector3 LightDirection{-FMatrix::CreateFromQuaternion(mOrbitRotation).TransformDirection(-FVector::UnitX) - FVector::UnitZ * 0.75f};
     LightDirection.Normalize();
     LightProbe.mDirection = LightDirection;
-    Probe.mLightProbes.push_back(LightProbe);
-    return Probe;
+    Scene.mLightProbes.push_back(LightProbe);
+    return Scene;
 }
 
 CameraProbe FViewerPanel::BuildPreviewCamera() const {
@@ -280,7 +280,7 @@ void FViewerPanel::RenderOffscreen(FRenderer& InRenderer, FAssetRegistry&) {
         return;
     }
 
-    FRenderProbe PreviewProbe{BuildPreviewProbe()};
+    FSceneRenderData PreviewScene{BuildPreviewScene()};
     FRenderSettings PreviewSettings{};
     PreviewSettings.mClearColor = FVector4{0.12f, 0.13f, 0.15f, 1.0f};
     FRenderView View{};
@@ -291,7 +291,7 @@ void FViewerPanel::RenderOffscreen(FRenderer& InRenderer, FAssetRegistry&) {
     View.mPasses.reset();
     View.SetPassEnabled(ERenderPass::SceneGeometry, true);
     View.SetPassEnabled(ERenderPass::OrientationAxis, true);
-    InRenderer.RenderView(View, PreviewProbe);
+    InRenderer.RenderView(View, PreviewScene);
 }
 
 void FViewerPanel::ReleaseRenderResources() {

@@ -48,7 +48,7 @@ public:
     void FlushPendingDestroyActors();
 
     const TArray<std::unique_ptr<AActor>>& GetActors() const;
-    FRenderProbe& BuildRenderProbe();
+    void BuildSceneRenderData(FSceneRenderData& Scene) const;
 
     void SetEditorContext(FWorldEditorContext* InEditorContext);
     FWorldEditorContext* GetEditorContext() const noexcept;
@@ -120,7 +120,6 @@ private:
     std::unique_ptr<UTextSubsystem> mTextSubsystem{};
     std::unique_ptr<ULightSubsystem> mLightSubsystem{};
 
-    FRenderProbe mProbe{};
 };
 
 template <typename T> requires std::is_base_of_v<AActor, T> T* UWorld::AdoptActor() {

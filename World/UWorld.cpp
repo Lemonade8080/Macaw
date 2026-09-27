@@ -208,22 +208,11 @@ const ULightSubsystem& UWorld::GetLightSubsystem() const {
     return *mLightSubsystem;
 }
 
-FRenderProbe& UWorld::BuildRenderProbe() {
-    mProbe.mActorProbes.clear();
-    mProbe.mGizmoProbes.clear();
-    mProbe.mTextProbes.clear();
-    mProbe.mBillboardProbes.clear();
-    mProbe.mLightProbes.clear();
-    mProbe.mSceneGuides.Clear();
-    mProbe.mGridFade = FVector4{};
-    mProbe.mBForceUnlit = false;
-
-    mRenderSubsystem->BuildRenderProbes(mProbe);
-    mLightSubsystem->BuildLightProbes(mProbe);
-    mTextSubsystem->BuildTextProbes(mProbe);
-
-    mBillboardSubsystem->BuildRenderProbes(mProbe);
-    return mProbe;
+void UWorld::BuildSceneRenderData(FSceneRenderData& Scene) const {
+    mRenderSubsystem->BuildRenderProbes(Scene);
+    mLightSubsystem->BuildLightProbes(Scene);
+    mTextSubsystem->BuildTextProbes(Scene);
+    mBillboardSubsystem->BuildRenderProbes(Scene);
 }
 
 void UWorld::SetEditorContext(FWorldEditorContext* InEditorContext) {

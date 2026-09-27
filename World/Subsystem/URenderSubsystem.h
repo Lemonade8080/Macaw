@@ -17,7 +17,7 @@ public:
     void RegisterComponent(UStaticMeshComponent* Component);
     void UnregisterComponent(UStaticMeshComponent* Component);
     void UpdateComponentRenderState(UStaticMeshComponent* Component);
-    void BuildRenderProbes(FRenderProbe& Probe) const;
+    void BuildRenderProbes(FSceneRenderData& Scene) const;
 
     bool ContainsComponent(const UStaticMeshComponent* Component) const;
     const TArray<UStaticMeshComponent*>& GetRegisteredComponents() const;
