@@ -9,16 +9,24 @@ FEditorApplication::FEditorApplication() = default;
 FEditorApplication::~FEditorApplication() = default;
 
 void FEditorApplication::InitializeMode(FApplicationContext& Context, HWND WindowHandle) {
-    Context.mMenuPanel = std::make_unique<FControlPanel>(*Context.mEditorContext, WindowHandle, Context.mEditorContext->GetEditorToWorldSender());
+    if (Context.mEditorContext->GetEditorSettings().mControlPanelEnabled) {
+        Context.mMenuPanel = std::make_unique<FControlPanel>(*Context.mEditorContext, WindowHandle, Context.mEditorContext->GetEditorToWorldSender());
+    }
     Context.mEditorUIManager->Initialize(*Context.mWorld, Context.mRenderer, *Context.mAssetRegistry, *Context.mEditorContext, WindowHandle, Context.mEditorView->GetGizmoMode(), Context.mEditorView->GetGizmoCoordinateSpace(), Context.mThumbnailRenderer.get());
 }
 
 void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime) {
     FViewportHostWindow* ViewportHostWindow{Context.mEditorUIManager->GetViewportHostWindow()};
-    ViewportHostWindow->ProcessInput(*Context.mEditorView, Context.mKeyboardInput, Context.mMouseInput, DeltaTime);
+    if (ViewportHostWindow != nullptr) {
+        ViewportHostWindow->ProcessInput(*Context.mEditorView, Context.mKeyboardInput, Context.mMouseInput, DeltaTime);
+    }
     Context.mWorldCommandChannel->Dispatch();
     Context.mWorld->Tick(DeltaTime);
     Context.mEditorContext->Dispatch();
+
+    if (ViewportHostWindow == nullptr) {
+        return;
+    }
 
     for (FViewportId Id{}; Id < FViewportHostWindow::MaximumViewportCount; ++Id) {
         FEditorViewport* Viewport{ViewportHostWindow->PrepareViewportForRender(Id)};

@@ -18,5 +18,15 @@ struct FEditorSettings {
     Float32 mViewportSplitterRatio0{0.5f};
     Float32 mViewportSplitterRatio1{0.5f};
     Float32 mViewportSplitterRatio2{0.5f};
+    bool mControlPanelEnabled{true};
+    bool mViewportPanelEnabled{true};
+    bool mPropertyPanelEnabled{true};
+    bool mConsolePanelEnabled{true};
+    bool mStatPanelEnabled{true};
+    bool mAssetBrowserPanelEnabled{true};
+    bool mMaterialEditorPanelEnabled{true};
+    bool mOutlinerPanelEnabled{true};
+    bool mViewerPanelEnabled{true};
+
     void Serialize(FArchive& Ar);
 };
