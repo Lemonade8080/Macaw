@@ -195,8 +195,8 @@ FRotator FQuat::ToRotator() const
 
 	// Radian -> Degree
 	ResultRotator.Pitch = FMath::RadiansToDegrees(ResultRotator.Pitch);
-	ResultRotator.Yaw = FMath::RadiansToDegrees(ResultRotator.Yaw);
-	ResultRotator.Roll = FMath::RadiansToDegrees(ResultRotator.Roll);
+	ResultRotator.Yaw   = FMath::RadiansToDegrees(ResultRotator.Yaw);
+	ResultRotator.Roll  = FMath::RadiansToDegrees(ResultRotator.Roll);
 
 	return ResultRotator;
 }
@@ -207,11 +207,11 @@ FQuat FQuat::FromRotator(const FRotator& Rotation)
 	const float YawRadians = FMath::DegreesToRadians(Rotation.Yaw);
 	const float RollRadians = FMath::DegreesToRadians(Rotation.Roll);
 
-	const FQuat Pitch = CreateFromAxisAngle(FVector::UnitX, PitchRadians);
+	const FQuat Pitch = CreateFromAxisAngle(FVector::UnitY, PitchRadians);
 	const FQuat Yaw = CreateFromAxisAngle(FVector::UnitZ, YawRadians);
-	const FQuat Roll = CreateFromAxisAngle(FVector::UnitY, RollRadians);
+	const FQuat Roll = CreateFromAxisAngle(FVector::UnitX, RollRadians);
 
-	FQuat Result = (Roll * Pitch) * Yaw;
+	FQuat Result = (Yaw * Pitch) * Roll;
 	Result.Normalize();
 	return Result;
 }

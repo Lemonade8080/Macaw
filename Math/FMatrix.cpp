@@ -376,7 +376,7 @@ FMatrix FMatrix::CreateRotationZ(float Radians)
 
 FMatrix FMatrix::CreateFromYawPitchRoll(float Yaw, float Pitch, float Roll)
 {
-	return CreateRotationY(Roll) * CreateRotationX(Pitch) * CreateRotationZ(Yaw);
+	return CreateRotationX(Roll) * CreateRotationY(Pitch) * CreateRotationZ(Yaw);
 }
 
 FVector FMatrix::TransformDirection(const FVector& Direction) const
@@ -399,9 +399,15 @@ void FMatrix::Translation(const FVector& Position)
 	M[3][2] = Position.Z;
 }
 
-FVector FMatrix::Right() const { return FVector(M[0][0], M[0][1], M[0][2]); }
-FVector FMatrix::Up() const { return FVector(M[2][0], M[2][1], M[2][2]); }
-FVector FMatrix::Forward() const { return FVector(M[1][0], M[1][1], M[1][2]); }
+//FVector FMatrix::Right() const { return FVector(M[0][0], M[0][1], M[0][2]); }
+//FVector FMatrix::Up() const { return FVector(M[2][0], M[2][1], M[2][2]); }
+//FVector FMatrix::Forward() const { return FVector(M[1][0], M[1][1], M[1][2]); }
+
+FVector FMatrix::Forward() const { return FVector(M[0][0], M[0][1], M[0][2]); } // X축
+FVector FMatrix::Right()   const { return FVector(M[1][0], M[1][1], M[1][2]); } // Y축
+FVector FMatrix::Up()      const { return FVector(M[2][0], M[2][1], M[2][2]); } // Z축
+
+
 
 FMatrix FMatrix::CreatePerspectiveFieldOfView(float FovY, float AspectRatio, float NearZ, float FarZ)
 {

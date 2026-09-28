@@ -666,11 +666,11 @@ bool FTransformGizmo::GetAxisParameterOnDragPlane(const FRay& WorldRay, const FD
 FVector3 FTransformGizmo::GetWorldAxis(EAxis Axis) const {
     switch (Axis) {
         case EAxis::X:
+            return mGizmoWorldTransform.Forward();
+        case EAxis::Y:
             return mGizmoWorldTransform.Right();
         case EAxis::Z:
             return mGizmoWorldTransform.Up();
-        case EAxis::Y:
-            return mGizmoWorldTransform.Forward();
         default:
             return FVector3::Zero;
     }

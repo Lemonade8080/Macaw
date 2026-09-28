@@ -53,7 +53,7 @@ FTransform FTransform::Compose(const FTransform& Parent) const {
 
     const FVector3 WorldScale{ mScale.mX * Parent.mScale.mX, mScale.mY * Parent.mScale.mY, mScale.mZ * Parent.mScale.mZ};
 
-    FTransform WorldTransform{ WorldPosition, mBAbsoluteRotation ? mRotation : FQuat::Concatenate(mRotation, Parent.mRotation), mBAbsoluteScale ? mScale : WorldScale};
+    FTransform WorldTransform{ WorldPosition, mBAbsoluteRotation ? mRotation : FQuat::Concatenate(Parent.mRotation, mRotation), mBAbsoluteScale ? mScale : WorldScale};
     WorldTransform.SetAbsoluteLocation(mBAbsoluteLocation);
     WorldTransform.SetAbsoluteRotation(mBAbsoluteRotation);
     WorldTransform.SetAbsoluteScale(mBAbsoluteScale);
