@@ -12,6 +12,7 @@ struct FMeshDrawItem {
     Uint32 mMaterialGroupIndex{};
     Uint32 mFirstIndex{};
     Uint32 mIndexCount{};
+    Uint32 mModelIndex{};
     bool HasSameBatch(const FMeshDrawItem& Other) const;
 };
 

@@ -5,9 +5,9 @@
 #include "Math/FMath.h"
 #include "Core/STL.h"
 #include "Core/Base/FRenderProbe.h"
-#include "Render/Buffer/FGraphicsBuffer.h"
-#include "Render/Buffer/TGraphicsRootConstants.h"
 #include "Core/Asset/IAssetRegistry.h"
+
+class FFrameResource;
 
 enum class ERenderMode : std::size_t;
 
@@ -21,30 +21,15 @@ struct FBillboardData {
 };
 
 class FBillboardRenderer {
-private:
-    struct FBillboardViewConstans {
-        FMatrix mViewProjection{};
-        FMatrix mCameraWorld{};
-    };
-
-    static_assert(sizeof(FBillboardViewConstans) == sizeof(Uint32) * 32);
-
 public:
     FBillboardRenderer() = default;
     ~FBillboardRenderer() = default;
 
 public:
     bool Initialize(ID3D11Device* InDevice, std::uint32_t InitialCapacity = 256);
-    void Render(ID3D11DeviceContext* Context, const TArray<FBillboardProbe>& BillboardProbe, const CameraProbe& Camera, const IAssetRegistry* AssetRegistry, ERenderMode Mode);
-
-private:
-    bool EnsureCapacity(Uint32 RequiredCapacity);
+    void Render(ID3D11DeviceContext* Context, FFrameResource& FrameResource, const TArray<FBillboardProbe>& BillboardProbe, const IAssetRegistry* AssetRegistry, ERenderMode Mode);
 
 private:
     ID3D11Device* mDevice{nullptr};
 
-    FGraphicsBuffer mInstanceBuffer{};
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> mInstanceBufferSrv{};
-    Uint32 mInstanceCapacity{0};
-    TGraphicsRootConstants<32> mViewConstantBuffer{};
 };

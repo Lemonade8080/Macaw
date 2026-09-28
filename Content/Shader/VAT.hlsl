@@ -29,18 +29,8 @@ Texture2D VATTexture : register(t6);
 SamplerState LinearWrap : register(s0);
 SamplerState PointClamp : register(s2);
 
-cbuffer RootConstants : register(b0)
-{
-    row_major float4x4 View;
-    row_major float4x4 Projection;
-    row_major float4x4 ViewProjection;
-
-    uint ModelContextStart;
-    uint LightCount;
-
-    uint currentFrame;
-    float padding;
-};
+#include "FrameResource.hlsli"
+#include "MeshDraw.hlsli"
 
 struct VS_INPUT
 {
@@ -79,7 +69,7 @@ PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID)
     float IndexNormalize = Input.Color.r;
 
     //프레임에 따라 y값 산출
-    float FrameNormalize = currentFrame / (TotalFrame - 1);
+    float FrameNormalize = AnimationFrame / (TotalFrame - 1);
 
     //VAT 텍스처 샘플링 할 uv
     float2 VATUV = float2(IndexNormalize, FrameNormalize);   

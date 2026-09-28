@@ -14,11 +14,7 @@ Texture2D SpriteTexture : register(t3);
 SamplerState LinearWrap : register(s0);
 SamplerState LinearClamp : register(s1);
 
-cbuffer BillboardViewConstans : register(b0)
-{
-    row_major float4x4 ViewProjection;
-    row_major float4x4 CameraWorld;
-};
+#include "FrameResource.hlsli"
 
 struct VS_OUTPUT
 {

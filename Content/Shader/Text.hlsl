@@ -1,12 +1,9 @@
 Texture2D FontAtlas : register(t3);
 SamplerState PointClamp : register(s2);
 
-cbuffer TextConstants : register(b0)
-{
+#include "FrameResource.hlsli"
+cbuffer TextConstants : register(b2) {
     row_major float4x4 World;
-    row_major float4x4 ViewProjection;
-    row_major float4x4 CameraWorld;
-
     float4 TextColor;
     float3 ScreenBoundsExtent;
     float ScreenUpPadding;

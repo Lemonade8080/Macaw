@@ -22,6 +22,9 @@ void FRenderQueue::Build(const IAssetRegistry* Registry, const FSceneRenderData&
             }
         }
     }
+    for (std::size_t Index{}; Index < mSceneItems.size(); ++Index) {
+        mSceneItems[Index].mModelIndex = static_cast<Uint32>(Index);
+    }
     if (View.IsPassEnabled(ERenderPass::SelectionOutline)) {
         for (const FMeshDrawItem& Item : mSceneItems) {
             if ((Item.mProbe.mFlags & static_cast<Uint32>(ERenderObjectFlags::Selected)) != 0) {
@@ -31,6 +34,9 @@ void FRenderQueue::Build(const IAssetRegistry* Registry, const FSceneRenderData&
     }
     if (View.IsPassEnabled(ERenderPass::Gizmo)) {
         BuildItems(Registry, View.mGizmoProbes, mGizmoItems, true, true);
+        for (std::size_t Index{}; Index < mGizmoItems.size(); ++Index) {
+            mGizmoItems[Index].mModelIndex = static_cast<Uint32>(mSceneItems.size() + Index);
+        }
     }
 }
 

@@ -5,14 +5,10 @@
 #include "Core/Render/ILineDrawContext.h"
 
 #include "Render/Buffer/FGraphicsBuffer.h"
-#include "Render/Buffer/TGraphicsRootConstants.h"
 #include "Asset/Pipeline/UPipeline.h"
 
-struct FLineViewData {
-    FMatrix mViewProjection{};
-    FVector2D mViewportSize{};
-    FVector4 mGridFade{};
-};
+class FFrameResource;
+enum class EFrameStream : Uint8;
 
 class ILineRenderer : public ILineDrawContext {
 public:
@@ -34,7 +30,7 @@ public:
 
     virtual void AddRay(const FVector3& Origin, const FVector3& Direction, float Length, const FVector4& Color, float WidthPixels = 1.0f, ELineDepthMode DepthMode = ELineDepthMode::DepthTested) = 0;
 
-    virtual void Render(ID3D11DeviceContext* Context, const FLineViewData& ViewData) = 0;
+    virtual void Render(ID3D11DeviceContext* Context, FFrameResource& FrameResource) = 0;
     virtual void Clear() = 0;
 
     [[nodiscard]] virtual Uint32 GetLineCount() const = 0;

@@ -3,47 +3,18 @@
 #include "Core/Asset/IAssetRegistry.h"
 #include "Asset/UMesh.h"
 #include "Asset/UTexture.h"
+#include "FFrameResource.h"
 
-bool FMeshRenderer::Initialize(ID3D11Device* Device, ID3D11DeviceContext* Context) {
-    return mModelContextArray.Initialize(Device, Context, 128) && mRootConstants.Initialize(Device);
-}
-
-void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawItem>& Items, const CameraProbe& Camera, ERenderMode Mode) {
-    if (Items.empty() || Context.mAssetRegistry == nullptr) {
+void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawItem>& Items, ERenderMode Mode) {
+    if (Items.empty() || Context.mAssetRegistry == nullptr || Context.mFrameResource == nullptr) {
         return;
-    }
-    mModelContexts.clear();
-    mModelContexts.reserve(Items.size());
-    for (const FMeshDrawItem& Item : Items) {
-        mModelContexts.push_back(FModelContext{Item.mProbe.mWorld, Item.mMaterialIndex, Item.mProbe.mFlags});
     }
     ID3D11DeviceContext* DeviceContext{Context.mDeviceContext};
-    ID3D11ShaderResourceView* NullResource{nullptr};
-    DeviceContext->VSSetShaderResources(0, 1, &NullResource);
-    DeviceContext->PSSetShaderResources(0, 1, &NullResource);
-    if (!mModelContextArray.UploadDiscard(Context.mDevice, DeviceContext, mModelContexts)) {
+    if (!Context.mFrameResource->BindModels(DeviceContext)) {
         return;
     }
-    DeviceContext->VSSetShaderResources(0, 1, mModelContextArray.GetSRV());
-    DeviceContext->PSSetShaderResources(0, 1, mModelContextArray.GetSRV());
     DeviceContext->VSSetShaderResources(1, 1, &Context.mMaterialResource);
     DeviceContext->PSSetShaderResources(1, 1, &Context.mMaterialResource);
-    DeviceContext->PSSetShaderResources(2, 1, &Context.mLightResource);
-
-    struct FCameraData {
-        FMatrix mView{};
-        FMatrix mProjection{};
-        FMatrix mViewProjection{};
-    };
-    mRootConstants.SetGraphicsRoot32BitConstants(FCameraData{Camera.mView, Camera.mProjection, Camera.mViewProjection}, 0);
-    mRootConstants.SetGraphicsRoot32BitConstant(Context.mLightCount, 49);
-    mRootConstants.SetGraphicsRoot32BitConstant(Context.mAnimationFrame, 50);
-    UINT ViewportCount{1};
-    D3D11_VIEWPORT Viewport{};
-    DeviceContext->RSGetViewports(&ViewportCount, &Viewport);
-    const FVector4 ViewportConstants{Viewport.Width, Viewport.Height, Viewport.Width > 0.0f ? 1.0f / Viewport.Width : 0.0f, Viewport.Height > 0.0f ? 1.0f / Viewport.Height : 0.0f};
-    mRootConstants.SetGraphicsRoot32BitConstants(ViewportConstants, 52);
-    mRootConstants.Bind(DeviceContext, 0, EGraphicsShaderStage::Graphics);
 
     for (std::size_t Begin{}; Begin < Items.size();) {
         const FMeshDrawItem& First{Items[Begin]};
@@ -74,23 +45,17 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
             DeviceContext->IASetVertexBuffers(0, _countof(VertexBuffers), VertexBuffers, Strides, Offsets);
             DeviceContext->IASetIndexBuffer(Mesh->GetIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
 #ifdef ENABLE_INSTANCE
-            mRootConstants.SetGraphicsRoot32BitConstant(static_cast<Uint32>(Begin), 48);
-            mRootConstants.Commit(DeviceContext);
-            DeviceContext->DrawIndexedInstanced(First.mIndexCount, static_cast<Uint32>(End - Begin), First.mFirstIndex, 0, 0);
+            if (Context.mFrameResource->BindMeshDraw(DeviceContext, First.mModelIndex)) {
+                DeviceContext->DrawIndexedInstanced(First.mIndexCount, static_cast<Uint32>(End - Begin), First.mFirstIndex, 0, 0);
+            }
 #else
             for (std::size_t Index{Begin}; Index < End; ++Index) {
-                mRootConstants.SetGraphicsRoot32BitConstant(static_cast<Uint32>(Index), 48);
-                mRootConstants.Commit(DeviceContext);
-                DeviceContext->DrawIndexed(First.mIndexCount, First.mFirstIndex, 0);
+                if (Context.mFrameResource->BindMeshDraw(DeviceContext, Items[Index].mModelIndex)) {
+                    DeviceContext->DrawIndexed(First.mIndexCount, First.mFirstIndex, 0);
+                }
             }
 #endif
         }
         Begin = End;
     }
-}
-
-void FMeshRenderer::Reset() {
-    mModelContextArray.Reset();
-    mRootConstants.Reset();
-    mModelContexts.clear();
 }

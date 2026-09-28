@@ -9,14 +9,8 @@ StructuredBuffer<FModelContext> ModelContexts : register(t0);
 Texture2D BaseColorTexture : register(t4);
 SamplerState LinearWrap : register(s0);
 
-cbuffer RootConstants : register(b0)
-{
-    row_major float4x4 View;
-    row_major float4x4 Projection;
-    row_major float4x4 ViewProjection;
-
-    uint ModelContextStart;
-};
+#include "FrameResource.hlsli"
+#include "MeshDraw.hlsli"
 
 struct VS_INPUT
 {

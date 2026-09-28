@@ -6,16 +6,8 @@ struct FModelContext {
 
 StructuredBuffer<FModelContext> ModelContexts : register(t0);
 
-cbuffer RootConstants : register(b0) {
-    row_major float4x4 View;
-    row_major float4x4 Projection;
-    row_major float4x4 ViewProjection;
-    uint ModelContextStart;
-    uint LightCount;
-    uint AnimationFrame;
-    float Padding;
-    float4 Viewport;
-};
+#include "FrameResource.hlsli"
+#include "MeshDraw.hlsli"
 
 struct FOutlineInput {
     float3 mPosition : POSITION;

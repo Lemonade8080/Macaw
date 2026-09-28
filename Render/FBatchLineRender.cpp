@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "FBatchLineRender.h"
+#include "FFrameResource.h"
 
 void FBatchLineRenderer::Initialize(ID3D11Device* InDevice, Uint32 InitialLineCapacity) {
     ErrorHandler::Report(InDevice == nullptr, "[ FLineRenderer ]", "Invalid device pointer.", ErrorHandler::EErrorLevel::Critical);
@@ -16,24 +17,15 @@ void FBatchLineRenderer::Initialize(ID3D11Device* InDevice, Uint32 InitialLineCa
 
     InitialLineCapacity = std::max(InitialLineCapacity * 2, 2u);
 
-    ErrorHandler::Report(not CreateVertexBuffer(mDevice, mDepthTestedBatch, InitialLineCapacity), "[ FLineRenderer ]", "Failed to create instance buffer for depth-tested lines.", ErrorHandler::EErrorLevel::Critical);
-    ErrorHandler::Report(not CreateVertexBuffer(mDevice, mOverlayBatch, InitialLineCapacity), "[ FLineRenderer ]", "Failed to create instance buffer for overlay lines.", ErrorHandler::EErrorLevel::Critical);
-    ErrorHandler::Report(not mFrameConstants.Initialize(mDevice), "[ FLineRenderer ]", "Failed to initialize frame constants.", ErrorHandler::EErrorLevel::Critical);
 
     mDepthTestedBatch.mVertices.reserve(InitialLineCapacity);
     mOverlayBatch.mVertices.reserve(InitialLineCapacity);
 }
 
 void FBatchLineRenderer::Reset() {
-    mDepthTestedBatch.mVertexBuffer.Reset();
     mDepthTestedBatch.mVertices.clear();
-    mDepthTestedBatch.mCapacity = 0;
 
-    mOverlayBatch.mVertexBuffer.Reset();
     mOverlayBatch.mVertices.clear();
-    mOverlayBatch.mCapacity = 0;
-
-    mFrameConstants.Reset();
 
     mDepthTestedPipeline = nullptr;
     mOverlayPipeline = nullptr;
@@ -62,19 +54,15 @@ void FBatchLineRenderer::AddRay(const FVector3& Origin, const FVector3& Directio
     AddLine(Origin, Origin + NormalizedDirection * Length, Color, WidthPixels, DepthMode);
 }
 
-void FBatchLineRenderer::Render(ID3D11DeviceContext* Context, const FLineViewData& ViewData) {
+void FBatchLineRenderer::Render(ID3D11DeviceContext* Context, FFrameResource& FrameResource) {
     ErrorHandler::Report(mDevice == nullptr, "[ FLineRenderer ]", "Invalid device pointer.", ErrorHandler::EErrorLevel::Critical);
     ErrorHandler::Report(Context == nullptr, "[ FLineRenderer ]", "Invalid device context pointer.", ErrorHandler::EErrorLevel::Critical);
-    ErrorHandler::Report(ViewData.mViewportSize.mX <= 0.0f || ViewData.mViewportSize.mY <= 0.0f, "[ FLineRenderer ]", "Invalid viewport size.", ErrorHandler::EErrorLevel::Critical);
     ErrorHandler::Report(mDepthTestedPipeline == nullptr, "[ FLineRenderer ]", "Depth-tested pipeline is not initialized.", ErrorHandler::EErrorLevel::Critical);
 
-    const FLineFrameConstants Constants{ .mViewProjection = ViewData.mViewProjection, .mViewport = FVector4{ ViewData.mViewportSize.mX, ViewData.mViewportSize.mY, 1.0f / ViewData.mViewportSize.mX, 1.0f / ViewData.mViewportSize.mY}};
+    ErrorHandler::Report(not FrameResource.BindCommon(Context), "[ FLineRenderer ]", "Failed to bind frame constants.", ErrorHandler::EErrorLevel::Critical);
 
-    ErrorHandler::Report(not mFrameConstants.SetGraphicsRoot32BitConstants(Constants), "[ FLineRenderer ]", "Failed to set frame constants.", ErrorHandler::EErrorLevel::Critical);
-    ErrorHandler::Report(not mFrameConstants.Bind(Context, 0, EGraphicsShaderStage::Vertex), "[ FLineRenderer ]", "Failed to bind frame constants.", ErrorHandler::EErrorLevel::Critical);
-
-    ErrorHandler::Report(not RenderBatch(mDevice, Context, mDepthTestedBatch, mDepthTestedPipeline.get()), "[ FLineRenderer ]", "Failed to render depth-tested lines.", ErrorHandler::EErrorLevel::Critical);
-    ErrorHandler::Report(not RenderBatch(mDevice, Context, mOverlayBatch, mOverlayPipeline.get()), "[ FLineRenderer ]", "Failed to render overlay lines.", ErrorHandler::EErrorLevel::Critical);
+    ErrorHandler::Report(not RenderBatch(Context, FrameResource, mDepthTestedBatch, mDepthTestedPipeline.get(), EFrameStream::BatchLineDepth), "[ FLineRenderer ]", "Failed to render depth-tested lines.", ErrorHandler::EErrorLevel::Critical);
+    ErrorHandler::Report(not RenderBatch(Context, FrameResource, mOverlayBatch, mOverlayPipeline.get(), EFrameStream::BatchLineOverlay), "[ FLineRenderer ]", "Failed to render overlay lines.", ErrorHandler::EErrorLevel::Critical);
 
     Clear();
 }
@@ -92,63 +80,23 @@ bool FBatchLineRenderer::IsEmpty() const {
     return mDepthTestedBatch.mVertices.empty() && mOverlayBatch.mVertices.empty();
 }
 
-bool FBatchLineRenderer::CreateVertexBuffer(ID3D11Device* InDevice, FLineBatch& Batch, Uint32 Capacity) {
-    if (InDevice == nullptr || Capacity == 0)
-        return false;
-
-    FGraphicsBufferDescription Description{};
-    Description.mByteSize = static_cast<Uint32>(Capacity * sizeof(FBatchLineInstance));
-    Description.mUsage = D3D11_USAGE_DYNAMIC;
-    Description.mBindFlags = D3D11_BIND_VERTEX_BUFFER;
-    Description.mCpuAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-    FGraphicsBuffer NewBuffer{};
-    if (!NewBuffer.Initialize(InDevice, Description))
-        return false;
-
-    Batch.mVertexBuffer = std::move(NewBuffer);
-    Batch.mCapacity = Capacity;
-    return true;
-}
-
-bool FBatchLineRenderer::EnsureCapacity(ID3D11Device* InDevice, FLineBatch& Batch, Uint32 RequiredCapacity) {
-    if (RequiredCapacity <= Batch.mCapacity) {
-        return true;
-    }
-
-    Uint32 NewCapacity{std::max(Batch.mCapacity, 1u)};
-
-    while (NewCapacity < RequiredCapacity) {
-        if (NewCapacity > std::numeric_limits<Uint32>::max() / 2) {
-            NewCapacity = RequiredCapacity;
-            break;
-        }
-
-        NewCapacity *= 2;
-    }
-
-    return CreateVertexBuffer(InDevice, Batch, NewCapacity);
-}
-
-bool FBatchLineRenderer::RenderBatch(ID3D11Device* InDevice, ID3D11DeviceContext* Context, FLineBatch& Batch, const UPipeline* Pipeline) {
+bool FBatchLineRenderer::RenderBatch(ID3D11DeviceContext* Context, FFrameResource& FrameResource, FLineBatch& Batch, const UPipeline* Pipeline, EFrameStream Stream) {
     if (Batch.mVertices.empty()) {
         return true;
     }
 
-    if (InDevice == nullptr || Context == nullptr || Pipeline == nullptr) {
+    if (mDevice == nullptr || Context == nullptr || Pipeline == nullptr) {
         return false;
     }
 
     const Uint32 VertexCount{static_cast<Uint32>(Batch.mVertices.size())};
-    const Uint32 VertexByteSize{static_cast<Uint32>(VertexCount * sizeof(FBatchLineInstance))};
-
-    if (!EnsureCapacity(InDevice, Batch, VertexCount) || !Batch.mVertexBuffer.WriteDiscard(Context, Batch.mVertices.data(), VertexByteSize)) {
+    if (!FrameResource.UploadStream(mDevice, Context, Stream, Batch.mVertices.data(), VertexCount, sizeof(FBatchLineInstance), D3D11_BIND_VERTEX_BUFFER)) {
         return false;
     }
 
     Pipeline->Bind(Context);
 
-    ID3D11Buffer* VertexBuffers[]{Batch.mVertexBuffer.GetBuffer()};
+    ID3D11Buffer* VertexBuffers[]{FrameResource.GetStreamBuffer(Stream)};
     const Uint32 Strides[]{static_cast<Uint32>(sizeof(FBatchLineInstance))};
     const Uint32 Offsets[]{0};
 

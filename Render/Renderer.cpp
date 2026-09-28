@@ -6,7 +6,11 @@
 #include <ranges>
 #include <cmath>
 
-FRenderer::~FRenderer() = default;
+FRenderer::~FRenderer() {
+    if (mFrameFenceEvent != nullptr) {
+        CloseHandle(mFrameFenceEvent);
+    }
+}
 
 void FRenderer::Create(HWND WindowHandle, UINT Width, UINT Height) {
     mBackBufferWidth = Width;
@@ -23,8 +27,21 @@ void FRenderer::Create(HWND WindowHandle, UINT Width, UINT Height) {
 }
 
 bool FRenderer::Initialize() {
-    if (!CreateSamplerStates() || !mMeshRenderer.Initialize(mDevice.Get(), mDeviceContext.Get()) || !mLightContextArray.Initialize(mDevice.Get(), mDeviceContext.Get(), 16) || !mTextRenderer.Initialize(mDevice.Get(), 256) || !mBillboardRenderer.Initialize(mDevice.Get(), 64)) {
+    if (!CreateSamplerStates() || !mTextRenderer.Initialize(mDevice.Get(), 256) || !mBillboardRenderer.Initialize(mDevice.Get(), 64)) {
         return false;
+    }
+    Microsoft::WRL::ComPtr<ID3D11Device5> FenceDevice{};
+    if (FAILED(mDevice.As(&FenceDevice)) || FAILED(mDeviceContext.As(&mFenceContext)) || FAILED(FenceDevice->CreateFence(0, D3D11_FENCE_FLAG_NONE, IID_PPV_ARGS(mFrameFence.GetAddressOf())))) {
+        return false;
+    }
+    mFrameFenceEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    if (mFrameFenceEvent == nullptr) {
+        return false;
+    }
+    for (FFrameResource& FrameResource : mFrameResources) {
+        if (!FrameResource.Initialize(mDevice.Get(), mDeviceContext.Get())) {
+            return false;
+        }
     }
 
     mLineRenderer.Initialize(mDevice.Get());
@@ -46,6 +63,13 @@ void FRenderer::BindSamplerStates() {
 }
 
 void FRenderer::EndFrame() {
+    if (mCurrentFrameResource != nullptr) {
+        const HRESULT Result{mFenceContext->Signal(mFrameFence.Get(), mNextFenceValue)};
+        ErrorHandler::ReportHRESULT(Result, "[ FRenderer ]", "Failed to signal the frame fence.", ErrorHandler::EErrorLevel::Critical);
+        mCurrentFrameResource->SetCompletionValue(mNextFenceValue);
+        ++mNextFenceValue;
+        mCurrentFrameResource = nullptr;
+    }
     mSwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
 }
 
@@ -62,14 +86,39 @@ void FRenderer::BindAssetRegistry(IRenderAssetRegistry* InAssetRegistry) {
 }
 
 void FRenderer::BeginFrame(float DeltaTime) {
+    if (mCurrentFrameResource != nullptr) {
+        return;
+    }
     if (std::isfinite(DeltaTime) && DeltaTime > 0.0f) {
         mAnimationTime = std::fmod(mAnimationTime + DeltaTime, 25.0f);
-        mAnimationFrame = static_cast<Uint32>(mAnimationTime / 0.1f) % 250;
     }
+    FFrameResource& FrameResource{mFrameResources[mNextFrameResourceIndex]};
+    const Uint64 CompletionValue{FrameResource.GetCompletionValue()};
+    if (CompletionValue != 0 && mFrameFence->GetCompletedValue() < CompletionValue) {
+        const HRESULT Result{mFrameFence->SetEventOnCompletion(CompletionValue, mFrameFenceEvent)};
+        ErrorHandler::ReportHRESULT(Result, "[ FRenderer ]", "Failed to register the frame fence event.", ErrorHandler::EErrorLevel::Critical);
+        mDeviceContext->Flush();
+        for (;;) {
+            const DWORD WaitResult{WaitForSingleObject(mFrameFenceEvent, 1000)};
+            if (WaitResult == WAIT_OBJECT_0) {
+                break;
+            }
+            if (WaitResult != WAIT_TIMEOUT || FAILED(mDevice->GetDeviceRemovedReason())) {
+                ErrorHandler::Report("[ FRenderer ]", "Failed to wait for the frame fence.", ErrorHandler::EErrorLevel::Critical);
+                return;
+            }
+        }
+    }
+    if (!FrameResource.BeginFrame(mDeviceContext.Get(), mAnimationTime)) {
+        ErrorHandler::Report("[ FRenderer ]", "Failed to begin a frame resource.", ErrorHandler::EErrorLevel::Critical);
+        return;
+    }
+    mCurrentFrameResource = &FrameResource;
+    mNextFrameResourceIndex = (mNextFrameResourceIndex + 1) % mFrameResourceCount;
 }
 
 void FRenderer::RenderView(const FRenderView& View, const FSceneRenderData& Scene) {
-    if (View.mTarget == nullptr || !View.mTarget->IsValid() || mDeviceContext == nullptr) {
+    if (View.mTarget == nullptr || !View.mTarget->IsValid() || mDeviceContext == nullptr || mCurrentFrameResource == nullptr) {
         return;
     }
     ID3D11ShaderResourceView* NullResource{nullptr};
@@ -77,12 +126,15 @@ void FRenderer::RenderView(const FRenderView& View, const FSceneRenderData& Scen
     View.mTarget->Bind(mDeviceContext.Get());
     const float ClearColor[]{View.mSettings.mClearColor.mX, View.mSettings.mClearColor.mY, View.mSettings.mClearColor.mZ, View.mSettings.mClearColor.mW};
     View.mTarget->Clear(mDeviceContext.Get(), ClearColor);
-    if (mAssetRegistry == nullptr || !UploadLightContext(Scene)) {
+    if (mAssetRegistry == nullptr) {
         return;
     }
     mAssetRegistry->FlushMaterialBuffer(mDeviceContext.Get());
     mRenderQueue.Build(mAssetRegistry, Scene, View);
-    const FRenderContext Context{mDevice.Get(), mDeviceContext.Get(), mAssetRegistry, mAssetRegistry->GetMaterialBufferSRV(), *mLightContextArray.GetSRV(), mFrameLightCount, mAnimationFrame};
+    if (!mCurrentFrameResource->PrepareView(mDevice.Get(), mDeviceContext.Get(), View, Scene, mRenderQueue)) {
+        return;
+    }
+    const FRenderContext Context{mDeviceContext.Get(), mAssetRegistry, mAssetRegistry->GetMaterialBufferSRV(), mCurrentFrameResource};
     constexpr std::array Passes{ERenderPass::SceneGeometry, ERenderPass::SelectionOutline, ERenderPass::SceneGuides, ERenderPass::Gizmo, ERenderPass::Text, ERenderPass::Billboard, ERenderPass::OrientationAxis};
     for (const ERenderPass Pass : Passes) {
         if (View.IsPassEnabled(Pass)) {
@@ -92,25 +144,15 @@ void FRenderer::RenderView(const FRenderView& View, const FSceneRenderData& Scen
     View.mTarget->Bind(mDeviceContext.Get());
 }
 
-bool FRenderer::UploadLightContext(const FSceneRenderData& Scene) {
-    ID3D11ShaderResourceView* NullResource{nullptr};
-    mDeviceContext->PSSetShaderResources(2, 1, &NullResource);
-    if (!mLightContextArray.UploadDiscard(mDevice.Get(), mDeviceContext.Get(), Scene.mLightProbes)) {
-        return false;
-    }
-    mFrameLightCount = mLightContextArray.GetCount();
-    return true;
-}
-
 void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FSceneRenderData& Scene) {
     View.mTarget->Bind(mDeviceContext.Get());
     BindSamplerStates();
     switch (Pass) {
         case ERenderPass::SceneGeometry:
-            mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), View.mCamera, View.mRenderMode);
+            mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), View.mRenderMode);
             break;
         case ERenderPass::SelectionOutline:
-            mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), View.mCamera, ERenderMode::Outline);
+            mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), ERenderMode::Outline);
             break;
         case ERenderPass::SceneGuides:
             DrawSceneGuides(View);
@@ -118,14 +160,14 @@ void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, con
         case ERenderPass::Gizmo:
             if (!View.mGizmoProbes.empty()) {
                 View.mTarget->ClearDepth(mDeviceContext.Get());
-                mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), View.mCamera, ERenderMode::Lit);
+                mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), ERenderMode::Lit);
             }
             break;
         case ERenderPass::Text:
-            mTextRenderer.Render(mDeviceContext.Get(), Scene.mTextProbes, View.mCamera, mAssetRegistry);
+            mTextRenderer.Render(mDeviceContext.Get(), *mCurrentFrameResource, Scene.mTextProbes, mAssetRegistry);
             break;
         case ERenderPass::Billboard:
-            mBillboardRenderer.Render(mDeviceContext.Get(), Scene.mBillboardProbes, View.mCamera, mAssetRegistry, View.mRenderMode);
+            mBillboardRenderer.Render(mDeviceContext.Get(), *mCurrentFrameResource, Scene.mBillboardProbes, mAssetRegistry, View.mRenderMode);
             break;
         case ERenderPass::OrientationAxis:
             DrawOrientationAxis(View);
@@ -141,8 +183,7 @@ void FRenderer::DrawSceneGuides(const FRenderView& View) {
         mLineRenderer.AddGridLine(Line.mStart, Line.mEnd, Line.mColor, Line.mWidthPixels, Line.mGridSpacing, Line.mDepthMode);
     }
     if (!mLineRenderer.IsEmpty()) {
-        const D3D11_VIEWPORT& Viewport{View.mTarget->GetViewport()};
-        mLineRenderer.Render(mDeviceContext.Get(), FLineViewData{View.mCamera.mViewProjection, FVector2D{Viewport.Width, Viewport.Height}, View.mGridFade});
+        mLineRenderer.Render(mDeviceContext.Get(), *mCurrentFrameResource);
     }
 }
 
@@ -164,7 +205,10 @@ void FRenderer::DrawOrientationAxis(const FRenderView& View) {
     mLineRenderer.AddRay(FVector3{}, FVector3{1.0f, 0.0f, 0.0f}, 1.0f, FVector4{1.0f, 0.0f, 0.0f, 1.0f}, 3.0f);
     mLineRenderer.AddRay(FVector3{}, FVector3{0.0f, 1.0f, 0.0f}, 1.0f, FVector4{0.0f, 1.0f, 0.0f, 1.0f}, 3.0f);
     mLineRenderer.AddRay(FVector3{}, FVector3{0.0f, 0.0f, 1.0f}, 1.0f, FVector4{0.0f, 0.0f, 1.0f, 1.0f}, 3.0f);
-    mLineRenderer.Render(mDeviceContext.Get(), FLineViewData{AxisView * Projection, FVector2D{AxisSize, AxisSize}});
+    const CameraProbe AxisCamera{AxisView * Projection, AxisView, Projection};
+    if (mCurrentFrameResource->UpdateView(mDeviceContext.Get(), AxisCamera, AxisViewport, FVector4{})) {
+        mLineRenderer.Render(mDeviceContext.Get(), *mCurrentFrameResource);
+    }
 }
 
 void FRenderer::ReSize(Uint32 Width, Uint32 Height) {
@@ -181,8 +225,19 @@ void FRenderer::ReSize(Uint32 Width, Uint32 Height) {
 void FRenderer::Terminate() {
     mDeviceContext->ClearState();
     mLineRenderer.Reset();
-    mMeshRenderer.Reset();
-    mLightContextArray.Reset();
+    for (FFrameResource& FrameResource : mFrameResources) {
+        FrameResource.Reset();
+    }
+    mFrameFence.Reset();
+    mFenceContext.Reset();
+    if (mFrameFenceEvent != nullptr) {
+        CloseHandle(mFrameFenceEvent);
+        mFrameFenceEvent = nullptr;
+    }
+    mNextFenceValue = 1;
+    mCurrentFrameResource = nullptr;
+    mNextFrameResourceIndex = 0;
+    mAnimationTime = 0.0f;
 
     if (mBackBufferSurface != nullptr) {
         mBackBufferSurface->Reset();

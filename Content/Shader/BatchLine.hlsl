@@ -1,8 +1,4 @@
-cbuffer LineFrameConstants : register(b0)
-{
-    row_major float4x4 ViewProjection;
-    float4 Viewport;
-};
+#include "FrameResource.hlsli"
 
 struct VS_INPUT
 {
