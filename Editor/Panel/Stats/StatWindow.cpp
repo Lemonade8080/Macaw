@@ -73,6 +73,10 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
         const Stat::FPickingStats& Picking{Snapshot.mPicking};
         AddRow(Rows, RowCount, "STAT PICKING", 0, HeadingColor, "");
         AddRow(Rows, RowCount, "Last picking", 0, TextColor, "%.3f ms", Picking.mLastMilliseconds);
+        if (Picking.mHasPhaseTiming) {
+            AddRow(Rows, RowCount, "Last broad phase", 0, TextColor, "%.3f ms", Picking.mLastBroadPhaseMilliseconds);
+            AddRow(Rows, RowCount, "Last narrow phase", 0, TextColor, "%.3f ms", Picking.mLastNarrowPhaseMilliseconds);
+        }
         AddRow(Rows, RowCount, "Picking attempts", 0, TextColor, "%llu", static_cast<unsigned long long>(Picking.mAttemptCount));
         AddRow(Rows, RowCount, "Picking total", 0, TextColor, "%.3f ms", Picking.mTotalMilliseconds);
     }

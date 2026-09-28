@@ -56,7 +56,8 @@ bool FObjSerializer::SaveBinary(const FGeometry& GeometryData, const FString& Fi
     return static_cast<bool>(Out);
 }
 
-bool FObjSerializer::LoadBinary(const FString& FilePath, FGeometry& OutGeoData) {
+bool FObjSerializer::LoadBinary(const FString& FilePath, FGeometry& OutGeoData, Uint32& LoadedVersion) {
+    LoadedVersion = {};
     std::ifstream In{FilePath.c_str(), std::ios::binary};
     if (!In.is_open()) {
         return false;
@@ -69,9 +70,10 @@ bool FObjSerializer::LoadBinary(const FString& FilePath, FGeometry& OutGeoData) 
     In.read(reinterpret_cast<char*>(&Version), sizeof(Version));
 
     //버전이 안 맞으면 바이너리를 읽어오지 않는다.
-    if (Magic != MagicNumber || Version != CurrentVersion) {
+    if (Magic != MagicNumber || (Version != 3 && Version != CurrentVersion)) {
         return false;
     }
+    LoadedVersion = Version;
 
     Uint32 PositionCount{0};
     In.read(reinterpret_cast<char*>(&PositionCount), sizeof(PositionCount));

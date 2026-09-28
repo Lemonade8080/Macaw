@@ -72,6 +72,9 @@ namespace Stat {
 
     struct FPickingStats {
         double mLastMilliseconds{};
+        double mLastBroadPhaseMilliseconds{};
+        double mLastNarrowPhaseMilliseconds{};
+        bool mHasPhaseTiming{};
         double mTotalMilliseconds{};
         std::uint64_t mAttemptCount{};
     };
@@ -92,7 +95,8 @@ namespace Stat {
     void RecordAllocation(std::size_t Size, EMemoryTag Tag);
     void RecordDeallocation(std::size_t Size, EMemoryTag Tag);
     void RecordObjectCounts(std::size_t ObjectCount, std::size_t ActorCount);
-    void RecordPickingTime(double Milliseconds);
+    // A negative narrow-phase value means the optional breakdown was not measured.
+    void RecordPickingTime(double Milliseconds, double NarrowPhaseMilliseconds = -1.0);
 
     FStats GetStats();
     FFrameStats GetFrameStats();
