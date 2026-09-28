@@ -19,6 +19,7 @@ struct FRotator
 
 	FRotator();
 	FRotator(float P, float Y, float R);
+	FRotator(FVector Vector);
 
 	static FRotator Identitiy;
 	static FRotator Zero;
