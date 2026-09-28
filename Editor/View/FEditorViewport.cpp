@@ -347,6 +347,7 @@ bool FEditorViewport::BuildCameraProbe(CameraProbe& OutCamera) {
     }
 
     OutCamera.mViewProjection = OutCamera.mView * OutCamera.mProjection;
+    UpdateViewFrustum(OutCamera);
     return true;
 }
 
@@ -501,6 +502,19 @@ void FEditorViewport::SetCameraParameter(const FVector3& InPosition, const FQuat
         const float CameraDistance{(mNearPlane + mFarPlane) * 0.5f};
         mOrthographicTarget = mCameraPosition + CameraForward * CameraDistance;
     }
+}
+
+const FFrustum& FEditorViewport::GetViewFrustum() const
+{
+    return mViewFrustum;
+}
+
+void FEditorViewport::UpdateViewFrustum(const CameraProbe& InCamera)
+{
+    FFrustum LocalFrustum;
+    FFrustum::CreateFromMatrix(LocalFrustum, InCamera.mProjection.ToSimpleMath());
+
+    LocalFrustum.Transform(mViewFrustum, InCamera.mView.Inverse().ToSimpleMath());
 }
 
 void FEditorViewport::ApplyOrthographicView() {
