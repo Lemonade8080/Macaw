@@ -76,6 +76,7 @@ StyleCopReport.xml
 *.ilk
 *.obj
 !OBJFiles/**/*.obj
+!Content/**/*.obj
 *.bin
 !Content/**/*.bin
 *.iobj

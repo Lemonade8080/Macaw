@@ -2,9 +2,11 @@
 #include "UMesh.h"
 
 #include "Core/Console/Console.h"
+#include "Core/Base/FGuid.h"
 
 #include "FObjImporter.h"
 #include "Asset/Importer/FObjSerializer.h"
+#include <windows.h>
 
 std::size_t UMesh::GetAttributeIndex(EVertexAttribute Attribute) {
     return static_cast<std::size_t>(Attribute);
@@ -25,7 +27,25 @@ bool UMesh::Initialize(ID3D11Device* Device, const std::filesystem::path& Source
 
     std::error_code FileSystemError{};
     const bool BHasBinary{!BinaryPath.empty() && std::filesystem::is_regular_file(BinaryPath, FileSystemError)};
-    const bool BLoadedFromBinary{BHasBinary && FObjSerializer::LoadBinary(BinaryPath.string().c_str(), Geometry)};
+    Uint32 LoadedVersion{};
+    const bool BLoadedFromBinary{BHasBinary && FObjSerializer::LoadBinary(BinaryPath.string().c_str(), Geometry, LoadedVersion)};
+    bool BHasRawGeometry{BLoadedFromBinary && LoadedVersion == FObjSerializer::CurrentVersion};
+
+    if (BLoadedFromBinary && !BHasRawGeometry && !SourceObjPath.empty() && std::filesystem::is_regular_file(SourceObjPath, FileSystemError)) {
+        FGeometry RawGeometry{};
+        if (ObjImporter.LoadObjFile(SourceObjPath.string().c_str(), RawGeometry)) {
+            const FString TemporarySuffix{FGuid::NewGuid().ToString()};
+            const std::filesystem::path TemporaryBinaryPath{BinaryPath.string() + "." + TemporarySuffix.c_str() + ".tmp"};
+            if (FObjSerializer::SaveBinary(RawGeometry, TemporaryBinaryPath.string().c_str()) && MoveFileExW(TemporaryBinaryPath.c_str(), BinaryPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+                Geometry = std::move(RawGeometry);
+                BHasRawGeometry = true;
+                Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "Rebuilt legacy model binary with original UVs: %s", BinaryPath.generic_string().c_str());
+            } else {
+                Console::AddLog(Console::STDOutHandle, ELogLevel::Warning, ELogCategory::Etc, "Failed to rebuild legacy model binary: %s", BinaryPath.generic_string().c_str());
+                std::filesystem::remove(TemporaryBinaryPath, FileSystemError);
+            }
+        }
+    }
 
     if (BLoadedFromBinary) {
         Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "Loaded model binary: %s", BinaryPath.generic_string().c_str());
@@ -39,16 +59,24 @@ bool UMesh::Initialize(ID3D11Device* Device, const std::filesystem::path& Source
             Console::AddLog(Console::STDOutHandle, ELogLevel::Warning, ELogCategory::Etc, "[UMesh] Failed to load model binary; Maybe Different Version. falling back to OBJ: %s", BinaryPath.generic_string().c_str());
         }
 
-        if (!ObjImporter.LoadObjFile(SourceObjPath.string().c_str(), Geometry, FlipUV)) {
+        Geometry = FGeometry{};
+        if (!ObjImporter.LoadObjFile(SourceObjPath.string().c_str(), Geometry)) {
             Console::AddLog(Console::STDOutHandle, ELogLevel::Error, ELogCategory::Etc, "[UMesh] Failed to import OBJ geometry: %s", SourceObjPath.generic_string().c_str());
             Console::AddLog(Console::STDOutHandle, ELogLevel::Error, ELogCategory::Etc, "[UMesh] Import Failed. Check Obj File Path : %s", SourceObjPath.generic_string().c_str());
             return false;
         }
+        BHasRawGeometry = true;
 
         if (!BinaryPath.empty() && !FObjSerializer::SaveBinary(Geometry, BinaryPath.string().c_str())) {
             Console::AddLog(Console::STDOutHandle, ELogLevel::Warning, ELogCategory::Etc, "[UMesh] Failed to create model binary: %s", BinaryPath.generic_string().c_str());
         } else if (!BinaryPath.empty()) {
             Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "[UMesh] Created model binary: %s", BinaryPath.generic_string().c_str());
+        }
+    }
+
+    if (FlipUV && BHasRawGeometry) {
+        for (FVector2& UV : Geometry.mTexCoords) {
+            UV.mY = 1.0f - UV.mY;
         }
     }
 

@@ -120,16 +120,10 @@ namespace {
 
     bool LoadMeshAssets(const std::string& RelativeMeshPath, FAssetRegistry& AssetRegistry, FTemporaryMeshAssets& Result) {
         const std::filesystem::path RelativePath{RelativeMeshPath};
-        const std::filesystem::path MeshPath{AssetRegistry.GetContentRoot() / RelativePath};
         std::filesystem::path RelativeMaterialPath{RelativePath};
         RelativeMaterialPath.replace_extension(".mtl");
         std::filesystem::path RelativeBinaryPath{RelativePath};
         RelativeBinaryPath.replace_extension(".bin");
-        const std::filesystem::path MaterialPath{AssetRegistry.GetContentRoot() / RelativeMaterialPath};
-
-        if (!std::filesystem::is_regular_file(MeshPath) || !std::filesystem::is_regular_file(MaterialPath)) {
-            return false;
-        }
 
         const std::string MaterialAssetPath{std::string{"/Game/"} + RelativeMaterialPath.generic_string()};
         const std::string MeshAssetPath{std::string{"/Game/"} + RelativeBinaryPath.generic_string()};
@@ -139,8 +133,18 @@ namespace {
         }
 
         Result.mMesh = AssetRegistry.FindAsset(FAssetPath{MeshAssetPath.c_str()});
-        if (!Result.mMesh) {
-            Result.mMesh = AssetRegistry.ImportMesh(MeshPath, FString{"/Game/Data"});
+        if (AssetRegistry.ResolveAsset<UMesh>(Result.mMesh) == nullptr) {
+            const std::filesystem::path BinaryPath{AssetRegistry.GetContentRoot() / RelativeBinaryPath};
+            std::error_code ErrorCode{};
+            const bool BHasBinary{std::filesystem::exists(BinaryPath, ErrorCode)};
+            if (ErrorCode) {
+                return false;
+            }
+            if (!BHasBinary) {
+                const std::filesystem::path MeshPath{AssetRegistry.GetContentRoot() / RelativePath};
+                const std::string TargetVirtualFolder{std::string{"/Game/"} + RelativePath.parent_path().generic_string()};
+                Result.mMesh = AssetRegistry.ImportMesh(MeshPath, FString{TargetVirtualFolder.c_str()});
+            }
         }
         return AssetRegistry.ResolveAsset<UMesh>(Result.mMesh) != nullptr;
     }

@@ -7,7 +7,7 @@
 
 #include "Core/Console/Console.h"
 
-bool FObjImporter::LoadObjFile(const FString& FilePath, FGeometry& OutGeometry, bool FlipUV) {
+bool FObjImporter::LoadObjFile(const FString& FilePath, FGeometry& OutGeometry) {
     std::ifstream File{FilePath.c_str()};
     if (!File.is_open()) {
         Console::AddLog(Console::STDOutHandle, ELogLevel::Error, ELogCategory::Etc, "[ObjImporter] Obj Load Failed. Can not Open File");
@@ -74,9 +74,6 @@ bool FObjImporter::LoadObjFile(const FString& FilePath, FGeometry& OutGeometry, 
             if (Tokens.size() != 3)
                 continue;
             FVector2 UV{std::stof(Tokens[1].c_str()), std::stof(Tokens[2].c_str())};
-            if (FlipUV) {
-                UV.mY = 1.0f - UV.mY;
-            }
             ObjInfo.mUVs.push_back(UV);
         } else if (Tag == "o") // o Name
         {

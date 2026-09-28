@@ -81,7 +81,7 @@ public:
 
     //Obj 파일 로드
     //std::unique_ptr<UObject> LoadObjFile(const FString& FilePath);
-    bool LoadObjFile(const FString& FilePath, FGeometry& OutGeometry, bool FlipUV);
+    bool LoadObjFile(const FString& FilePath, FGeometry& OutGeometry);
     //한줄 나누기
     static TArray<FString> SplitTokens(const FString& Line);
 
