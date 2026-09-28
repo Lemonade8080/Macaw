@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "UWorld.h"
+#include "FTemporarySceneLoader.h"
 
 #include <algorithm>
 #include <random>
@@ -31,6 +32,7 @@
 #include "Core/Channel/FEditorInfo.h"
 #include "Asset/Pipeline/UPipeline.h"
 #include "Asset/UMesh.h"
+#include "Asset/FAssetRegistry.h"
 
 #include "Serialization/FArchiveJson.h"
 #include "../Core/Base/TypeRegistry.h"
@@ -326,6 +328,20 @@ bool UWorld::SaveScene(const FString& SceneName, const IAssetRegistry* AssetRegi
 }
 
 bool UWorld::LoadScene(const std::filesystem::path& ScenePath) {
+    if (ScenePath.extension() == ".scene") {
+        FAssetRegistry* Registry{dynamic_cast<FAssetRegistry*>(mAssetRegistryMutator)};
+        if (Registry == nullptr) {
+            return false;
+        }
+
+        FTemporarySceneLoader Loader{};
+        const bool Loaded{Loader.Load(ScenePath, *this, *Registry)};
+        if (!Loaded) {
+            Console::AddLog(Console::STDOutHandle, ELogLevel::Error, ELogCategory::Etc, "Failed to load temporary scene: %s", ScenePath.generic_string().c_str());
+        }
+        return Loaded;
+    }
+
     std::ifstream InputFileStream{ScenePath};
     if (!InputFileStream.is_open()) {
         return false;
