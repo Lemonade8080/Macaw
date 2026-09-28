@@ -1,8 +1,4 @@
-cbuffer LineFrameConstants : register(b0)
-{
-    row_major float4x4 ViewProjection;
-    float4 Viewport;
-};
+#include "FrameResource.hlsli"
 
 struct VS_INPUT
 {
@@ -22,7 +18,7 @@ PS_INPUT mainVS(VS_INPUT Input)
 
     Output.Position = mul(float4(Input.Position, 1.0f), ViewProjection);
     Output.Color = Input.Color;
-    
+
     return Output;
 }
 

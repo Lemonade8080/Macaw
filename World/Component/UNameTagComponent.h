@@ -30,16 +30,18 @@ public:
     bool ResolveLoadedReferences() override;
     void RefreshGuidText();
     void OnRegister() override;
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
 
 private:
     void Serialize(FArchive& Archive) override;
 
 private:
     TObjectRef<AActor> mTargetActor{};
+
     // invalid GUID이면 Owner Actor를 사용한다.
     // TObjectRef가 무효화돼도 원래 Target GUID는 보존된다.
     FGuid mExplicitTargetGuid{};
+
     // Target Actor의 로컬 좌표 기준 Offset.
     FVector3 mTargetLocalOffset{};
 };

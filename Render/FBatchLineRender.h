@@ -1,16 +1,17 @@
-﻿#pragma once
+#pragma once
 
 #include "ILineRenderer.h"
 
 class FBatchLineRenderer : public ILineRenderer {
 private:
-    struct FBatchLineInstance { FVector3 mPosition{}; FVector4 mColor{}; };
+    struct FBatchLineInstance {
+        FVector3 mPosition{};
+        FVector4 mColor{};
+    };
 
-    struct FLineFrameConstants { FMatrix mViewProjection{}; FVector4 mViewport{}; };
-
-    static_assert(sizeof(FLineFrameConstants) == sizeof(Uint32) * 20);
-
-    struct FLineBatch { TArray<FBatchLineInstance> mVertices{}; FGraphicsBuffer mVertexBuffer{}; Uint32 mCapacity{0}; };
+    struct FLineBatch {
+        TArray<FBatchLineInstance> mVertices{};
+    };
 
 public:
     FBatchLineRenderer() = default;
@@ -29,16 +30,14 @@ public:
     void AddLine(const FVector3& Start, const FVector3& End, const FVector4& Color, float WidthPixels = 1.0f, ELineDepthMode DepthMode = ELineDepthMode::DepthTested);
     void AddRay(const FVector3& Origin, const FVector3& Direction, float Length, const FVector4& Color, float WidthPixels = 1.0f, ELineDepthMode DepthMode = ELineDepthMode::DepthTested);
 
-    void Render(ID3D11DeviceContext* Context, const FLineViewData& ViewData);
+    void Render(ID3D11DeviceContext* Context, FFrameResource& FrameResource);
     void Clear();
 
     [[nodiscard]] Uint32 GetLineCount() const;
     [[nodiscard]] bool IsEmpty() const;
 
 private:
-    bool CreateVertexBuffer(ID3D11Device* InDevice, FLineBatch& Batch, Uint32 Capacity);
-    bool EnsureCapacity(ID3D11Device* InDevice, FLineBatch& Batch, Uint32 RequiredCapacity);
-    bool RenderBatch(ID3D11Device* InDevice, ID3D11DeviceContext* Context, FLineBatch& Batch, const UPipeline* Pipeline);
+    bool RenderBatch(ID3D11DeviceContext* Context, FFrameResource& FrameResource, FLineBatch& Batch, const UPipeline* Pipeline, EFrameStream Stream);
 
 private:
     ID3D11Device* mDevice{nullptr};
@@ -49,5 +48,4 @@ private:
     FLineBatch mDepthTestedBatch{};
     FLineBatch mOverlayBatch{};
 
-    TGraphicsRootConstants<20> mFrameConstants{};
 };

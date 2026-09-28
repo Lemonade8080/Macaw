@@ -12,18 +12,18 @@ enum class EUndoType {
 };
 
 namespace FUndoSystem {
-// =================================================================
-// Message Sender
-// =================================================================
-void InitializeSenderToWorldChannel(FMessageChannel::FSender&& SenderToWorldChannel);
+    // =================================================================
+    // Message Sender
+    // =================================================================
+    void InitializeSenderToWorldChannel(FMessageChannel::FSender&& SenderToWorldChannel);
 
-// =================================================================
-// Undo/Redo API
-// =================================================================
-void BeginTransaction(const FString& TransactionName);
-void RecordObject(UObject* TargetObject, EUndoType UndoType, const IAssetRegistry* AssetRegistry);
-void EndTransaction();
+    // =================================================================
+    // Undo/Redo API
+    // =================================================================
+    void BeginTransaction(const FString& TransactionName);
+    void RecordObject(UObject* TargetObject, EUndoType UndoType, const IAssetRegistry* AssetRegistry);
+    void EndTransaction();
 
-void Undo();
-void Redo();
+    void Undo();
+    void Redo();
 }

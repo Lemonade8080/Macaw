@@ -7,60 +7,60 @@
 #include <sstream>
 
 namespace {
-struct FSurfaceOpaqueGroupGPUData {
-    FVector4 mDiffuseAndOpacity{1.0f, 1.0f, 1.0f, 1.0f};
-    FVector4 mAmbientAndShininess{};
-    FVector4 mSpecularAndRefractionIndex{};
-    FVector4 mEmissiveAndSharpness{};
-    FVector4 mTransmissionFilter{};
-    Int32 mIlluminationModel{};
-    Uint32 mDissolveHalo{};
-    float mPadding0{};
-    float mPadding1{};
-    FVector4 mReserved1{};
-    FVector4 mReserved2{};
-};
+    struct FSurfaceOpaqueGroupGPUData {
+        FVector4 mDiffuseAndOpacity{1.0f, 1.0f, 1.0f, 1.0f};
+        FVector4 mAmbientAndShininess{};
+        FVector4 mSpecularAndRefractionIndex{};
+        FVector4 mEmissiveAndSharpness{};
+        FVector4 mTransmissionFilter{};
+        Int32 mIlluminationModel{};
+        Uint32 mDissolveHalo{};
+        float mPadding0{};
+        float mPadding1{};
+        FVector4 mReserved1{};
+        FVector4 mReserved2{};
+    };
 
-static_assert(sizeof(FSurfaceOpaqueGroupGPUData) == MaterialGpuStride);
-static_assert(offsetof(FSurfaceOpaqueGroupGPUData, mIlluminationModel) == 80);
-static_assert(offsetof(FSurfaceOpaqueGroupGPUData, mDissolveHalo) == 84);
+    static_assert(sizeof(FSurfaceOpaqueGroupGPUData) == MaterialGpuStride);
+    static_assert(offsetof(FSurfaceOpaqueGroupGPUData, mIlluminationModel) == 80);
+    static_assert(offsetof(FSurfaceOpaqueGroupGPUData, mDissolveHalo) == 84);
 
-bool ParseVector3(std::istringstream& Stream, FVector3& OutValue) {
-    float X{0.0f};
-    float Y{0.0f};
-    float Z{0.0f};
+    bool ParseVector3(std::istringstream& Stream, FVector3& OutValue) {
+        float X{0.0f};
+        float Y{0.0f};
+        float Z{0.0f};
 
-    if (!(Stream >> X >> Y >> Z)) {
-        return false;
+        if (!(Stream >> X >> Y >> Z)) {
+            return false;
+        }
+
+        OutValue = FVector3{X, Y, Z};
+        return true;
     }
 
-    OutValue = FVector3{X, Y, Z};
-    return true;
-}
+    std::filesystem::path GetTextureReference(std::istringstream& Stream) {
+        std::string Token{};
+        std::string TextureReference{};
 
-std::filesystem::path GetTextureReference(std::istringstream& Stream) {
-    std::string Token{};
-    std::string TextureReference{};
+        while (Stream >> Token) {
+            TextureReference = Token;
+        }
 
-    while (Stream >> Token) {
-        TextureReference = Token;
+        return TextureReference;
     }
 
-    return TextureReference;
-}
+    bool LoadTextureMap(FMaterialTextureMap& OutTextureMap, std::istringstream& Stream, const std::filesystem::path& MtlPath, const USurfaceOpaque::FTextureResolver& TextureResolver) {
+        const std::filesystem::path TextureReference{GetTextureReference(Stream)};
 
-bool LoadTextureMap(FMaterialTextureMap& OutTextureMap, std::istringstream& Stream, const std::filesystem::path& MtlPath, const USurfaceOpaque::FTextureResolver& TextureResolver) {
-    const std::filesystem::path TextureReference{GetTextureReference(Stream)};
+        if (TextureReference.empty()) {
+            return false;
+        }
 
-    if (TextureReference.empty()) {
-        return false;
+        const std::filesystem::path TexturePath{(MtlPath.parent_path() / TextureReference).lexically_normal()};
+        OutTextureMap.mSourcePath = TextureReference.generic_string().c_str();
+        OutTextureMap.mTexture = TextureResolver(TexturePath);
+        return static_cast<bool>(OutTextureMap.mTexture);
     }
-
-    const std::filesystem::path TexturePath{(MtlPath.parent_path() / TextureReference).lexically_normal()};
-    OutTextureMap.mSourcePath = TextureReference.generic_string().c_str();
-    OutTextureMap.mTexture = TextureResolver(TexturePath);
-    return static_cast<bool>(OutTextureMap.mTexture);
-}
 }
 
 void USurfaceOpaque::Reset() {

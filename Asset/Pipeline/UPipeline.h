@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <d3d11.h>
 #include <wrl/client.h>
@@ -19,16 +19,12 @@ struct PipelineUnit {
     FShader mVertexShader{};
     FShader mPixelShader{};
     FShader mGeometryShader{};
-
     Microsoft::WRL::ComPtr<ID3D11InputLayout> mInputLayout{};
     Microsoft::WRL::ComPtr<ID3D11RasterizerState> mRasterizerState{};
     Microsoft::WRL::ComPtr<ID3D11BlendState> mBlendState{};
     Microsoft::WRL::ComPtr<ID3D11DepthStencilState> mDepthStencilState{};
-
     D3D11_PRIMITIVE_TOPOLOGY mPrimitiveTopology{D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST};
-
     bool mInitialized{false};
-
     UINT mStencilRef{0};
 };
 
@@ -37,7 +33,6 @@ enum class ERenderMode : std::size_t {
     Outline,
     Unlit,
     Wireframe,
-    LitWireframe,
     Max
 };
 
@@ -58,12 +53,13 @@ public:
     bool Initialize(ID3D11Device* Device, const std::filesystem::path& PipelinePath);
 
     void Bind(ID3D11DeviceContext* Context) const;
-    void Bind(ID3D11DeviceContext* Context, ERenderMode Mode) const;
+    void Bind(ID3D11DeviceContext* Context, ERenderMode Mode, UINT StencilReference = 1) const;
     void Reset();
 
     void SetRenderMode(ERenderMode Mode);
-    bool RenderModeSettable(ERenderMode Mode);
+    bool RenderModeSettable(ERenderMode Mode) const;
     ERenderMode GetRenderMode() const;
+    ERenderMode ResolveRenderMode(ERenderMode Mode) const;
 
 private:
     bool InitializeFamily(ID3D11Device* Device, const std::filesystem::path& FamilyDirectory);

@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 
 #include "FTransformGizmo.h"
 
@@ -315,22 +315,18 @@ std::optional<FTransformGizmo::FAxisHit> FTransformGizmo::HitTest(const FRay& Wo
         for (int I{0}; I < 3; I++) {
             FVector3 PlaneNormal{PlaneNormals[I]};
             float Denominator{LocalDirection.Dot(PlaneNormal)};
-            if (std::abs(Denominator) <= 0.000001f) // 레이와 평면이 거의 평행한 경우 패스
-            {
+            if (std::abs(Denominator) <= 0.000001f) { // 레이와 평면이 거의 평행한 경우 패스
                 continue;
             }
             float Distance{(mBoundsCenterInGizmoSpace - LocalOrigin).Dot(PlaneNormal) / Denominator};
-            if (Distance < 0.0f) // 교차점이 카메라 밖에 있는 경우
-            {
+            if (Distance < 0.0f) { // 교차점이 카메라 밖에 있는 경우
                 continue;
             }
             FVector3 HitPosition{LocalOrigin + LocalDirection * Distance};
             float DistanceFromPivot{(HitPosition - mBoundsCenterInGizmoSpace).Length()}; // 중심과 마우스를 클릭한 사이의 거리
-            float DistanceFromRadius{std::abs(DistanceFromPivot - mCurrentRingRadius)};  // 그 거리 - 현재 링 반지름 => 해당값이 허용 오차 사이에 있어야 인정
-            if (DistanceFromRadius <= mCurrentRingPickHalfWidth)                         // CurrentRingPickHalfWidth = 허용 오차
-            {
-                if (!NearestHit.has_value() || Distance < NearestHit->mDistance) // t가 가장 작은걸 선택
-                {
+            float DistanceFromRadius{std::abs(DistanceFromPivot - mCurrentRingRadius)}; // 그 거리 - 현재 링 반지름 => 해당값이 허용 오차 사이에 있어야 인정
+            if (DistanceFromRadius <= mCurrentRingPickHalfWidth) { // CurrentRingPickHalfWidth = 허용 오차
+                if (!NearestHit.has_value() || Distance < NearestHit->mDistance) { // t가 가장 작은걸 선택
                     NearestHit = FAxisHit{ .mAxis = Axis[I], .mDistance = Distance};
                 }
             }
@@ -350,6 +346,7 @@ std::optional<FTransformGizmo::FAxisHit> FTransformGizmo::HitTest(const FRay& Wo
 }
 
 bool FTransformGizmo::BeginDrag(EAxis Axis, const FRay& WorldRay) {
+
     // 선택 대상이나 유효한 축이 없으면 드래그를 시작하지 않는다.
     if (mEditorContext == nullptr || Axis == EAxis::None) {
         return false;
@@ -394,6 +391,7 @@ bool FTransformGizmo::BeginDrag(EAxis Axis, const FRay& WorldRay) {
 
     // Rotation은 링 평면을 사용한다.
     if (CurrentMode == EModifyMode::Rotate) {
+
         // 회전 링 평면은 회전축에 수직이므로 평면 법선은 회전축과 같다.
         NewSession.mDragPlaneNormal = AxisWorld;
 
@@ -421,6 +419,7 @@ bool FTransformGizmo::BeginDrag(EAxis Axis, const FRay& WorldRay) {
 
         NewSession.mPreviousRotationDirection = InitialDirection;
     }
+
     //Translate와 Scale은 기존 축 드래그 평면을 사용한다.
     else {
         FVector3 ViewDirection{WorldRay.direction};
@@ -469,6 +468,7 @@ void FTransformGizmo::UpdateDrag(const FRay& WorldRay) {
 
     // Rotation은 방향 벡터 사이의 각도로 계산한다.
     if (Session.mModifyMode == EModifyMode::Rotate) {
+
         // BeginDrag에서 사용한 것과 동일한 회전 평면.
         // 평면 중심 = 기즈모 Pivot
         // 평면 법선 = 선택한 회전축
@@ -539,6 +539,7 @@ void FTransformGizmo::UpdateDrag(const FRay& WorldRay) {
         }
         return;
     }
+
     // Translate와 Scale은 축 위의 이동량으로 계산한다.
     else {
         float CurrentAxisParameter{0.0f};
@@ -675,7 +676,7 @@ FVector3 FTransformGizmo::GetWorldAxis(EAxis Axis) const {
     }
 }
 
-void FTransformGizmo::Render(FRenderProbe& Probe) {
+void FTransformGizmo::BuildGizmoProbes(TArray<FActorProbe>& GizmoProbes) {
     RefreshAssetHandles();
 
     if (!mBVisible) {
@@ -685,7 +686,7 @@ void FTransformGizmo::Render(FRenderProbe& Probe) {
     const EModifyMode CurrentMode{mGizmoMode.HasValue() ? static_cast<EModifyMode>(mGizmoMode.Peek()) : EModifyMode::None};
 
     const auto Submit{[&](const FMatrix& LocalTransform, FAssetHandle MeshHandle, FAssetHandle MaterialHandle) {
-        Probe.mGizmoProbes.emplace_back(FActorProbe{ .mWorld = LocalTransform * mGizmoWorldTransform, .mMeshHandle = MeshHandle, .mMaterialHandle = MaterialHandle, .mPipelineHandle = mGizmoPipeline, .mFlags = static_cast<Uint32>(ERenderObjectFlags::Unlit)});
+        GizmoProbes.emplace_back(FActorProbe{ .mWorld = LocalTransform * mGizmoWorldTransform, .mMeshHandle = MeshHandle, .mMaterialHandle = MaterialHandle, .mPipelineHandle = mGizmoPipeline, .mFlags = static_cast<Uint32>(ERenderObjectFlags::Unlit)});
     }};
 
     switch (CurrentMode) {

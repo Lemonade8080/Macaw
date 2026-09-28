@@ -1,6 +1,7 @@
 ﻿#include "pch.h"
 
 #include "FEditorViewport.h"
+#include "Editor/Panel/FStatPanel.h"
 
 #include "EditorViewport.h"
 #include "Editor/Input/FKeyboardInput.h"
@@ -18,48 +19,48 @@
 #include "../../Core/Console/Console.h"
 
 namespace {
-constexpr float HalfSqrtTwo{0.70710678118f};
-constexpr float DefaultDropDistance{10.0f};
-constexpr float DropPlaneEpsilon{0.000001f};
-constexpr char StaticMeshAssetPayloadType[]{"MACAW_STATIC_MESH_ASSET"};
+    constexpr float HalfSqrtTwo{0.70710678118f};
+    constexpr float DefaultDropDistance{10.0f};
+    constexpr float DropPlaneEpsilon{0.000001f};
+    constexpr char StaticMeshAssetPayloadType[]{"MACAW_STATIC_MESH_ASSET"};
 
-const char* GetOrthographicViewName(EOrthographicView View) {
-    switch (View) {
-        case EOrthographicView::Front:
-            return "Front";
-        case EOrthographicView::Back:
-            return "Back";
-        case EOrthographicView::Left:
-            return "Left";
-        case EOrthographicView::Right:
-            return "Right";
-        case EOrthographicView::Top:
-            return "Top";
-        case EOrthographicView::Bottom:
-            return "Bottom";
-        default:
-            return "Orthographic";
+    const char* GetOrthographicViewName(EOrthographicView View) {
+        switch (View) {
+            case EOrthographicView::Front:
+                return "Front";
+            case EOrthographicView::Back:
+                return "Back";
+            case EOrthographicView::Left:
+                return "Left";
+            case EOrthographicView::Right:
+                return "Right";
+            case EOrthographicView::Top:
+                return "Top";
+            case EOrthographicView::Bottom:
+                return "Bottom";
+            default:
+                return "Orthographic";
+        }
     }
-}
 
-FQuat GetOrthographicRotation(EOrthographicView View) {
-    switch (View) {
-        case EOrthographicView::Front:
-            return {0.0f, 0.0f, 1.0f, 0.0f};
-        case EOrthographicView::Back:
-            return {};
-        case EOrthographicView::Left:
-            return {0.0f, 0.0f, -HalfSqrtTwo, HalfSqrtTwo};
-        case EOrthographicView::Right:
-            return {0.0f, 0.0f, HalfSqrtTwo, HalfSqrtTwo};
-        case EOrthographicView::Top:
-            return {-HalfSqrtTwo, 0.0f, 0.0f, HalfSqrtTwo};
-        case EOrthographicView::Bottom:
-            return {HalfSqrtTwo, 0.0f, 0.0f, HalfSqrtTwo};
-        default:
-            return {};
+    FQuat GetOrthographicRotation(EOrthographicView View) {
+        switch (View) {
+            case EOrthographicView::Front:
+                return {0.0f, 0.0f, 1.0f, 0.0f};
+            case EOrthographicView::Back:
+                return {};
+            case EOrthographicView::Left:
+                return {0.0f, 0.0f, -HalfSqrtTwo, HalfSqrtTwo};
+            case EOrthographicView::Right:
+                return {0.0f, 0.0f, HalfSqrtTwo, HalfSqrtTwo};
+            case EOrthographicView::Top:
+                return {-HalfSqrtTwo, 0.0f, 0.0f, HalfSqrtTwo};
+            case EOrthographicView::Bottom:
+                return {HalfSqrtTwo, 0.0f, 0.0f, HalfSqrtTwo};
+            default:
+                return {};
+        }
     }
-}
 }
 
 FEditorViewport::FEditorViewport(FViewportId InViewportId, ID3D11Device* InDevice, FWorldEditorContext& InEditorContext)
@@ -96,7 +97,7 @@ void FEditorViewport::BeginFrame() {
     mBFocused = false;
 }
 
-bool FEditorViewport::Draw(const FRect& Rect, const ImVec2& MainViewportPosition, bool BInputBlocked) {
+bool FEditorViewport::Draw(const FRect& Rect, const ImVec2& MainViewportPosition, bool BInputBlocked, FStatPanel* StatOverlay) {
     if (Rect.IsEmpty()) {
         return false;
     }
@@ -139,6 +140,10 @@ bool FEditorViewport::Draw(const FRect& Rect, const ImVec2& MainViewportPosition
                     BActivated = SpawnDroppedStaticMesh(MeshHandle, ImGui::GetMousePos()) || BActivated;
                 }
                 ImGui::EndDragDropTarget();
+            }
+
+            if (StatOverlay != nullptr) {
+                StatOverlay->Draw(ImagePosition, ImVec2{ImagePosition.x + ImageSize.x, ImagePosition.y + ImageSize.y});
             }
 
             mBHovered = !BInputBlocked && ImGui::IsItemHovered();

@@ -36,7 +36,7 @@ private:
 
     bool SupportsAssetThumbnail(const FTypeInfo& AssetType) const;
 
-    ID3D11ShaderResourceView* GetAssetThumbnail(const IAssetRegistry& Registry, FAssetHandle AssetHandle) const;
+    ID3D11ShaderResourceView* GetAssetThumbnail(const IAssetRegistry* Registry, FAssetHandle AssetHandle) const;
 
     bool DrawAssetOption(const char* Label, ID3D11ShaderResourceView* Thumbnail, bool BSelected) const;
 

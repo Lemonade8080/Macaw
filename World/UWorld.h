@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <filesystem>
 #include <memory>
@@ -18,6 +18,7 @@
 #include "Core/Base/UObjectSystem.h"
 #include "Core/Base/FRenderProbe.h"
 #include "FWorldEditorContext.h"
+#include "FWorldTime.h"
 #include "Core/Channel/Messages/FMousePickRequestMessage.h"
 #include "Core/Channel/FEditorInfo.h"
 #include "World/Subsystem/UCameraSubsystem.h"
@@ -37,23 +38,24 @@ public:
     UWorld();
     ~UWorld() override;
 
+public:
     AActor* AddActor(std::unique_ptr<AActor> InActor);
 
-    template <typename T>
-    requires std::is_base_of_v<AActor, T>
-    T* AdoptActor();
+    template <typename T> requires std::is_base_of_v<AActor, T> T* AdoptActor();
 
     AActor* SpawnActor(const FAssetHandle& MeshHandle, const FAssetHandle& PipelineHandle, const FAssetHandle& MaterialHandle, const FVector3& Position);
     bool DestroyActor(AActor* Actor);
     void FlushPendingDestroyActors();
 
     const TArray<std::unique_ptr<AActor>>& GetActors() const;
-    FRenderProbe& BuildRenderProbe();
+    void BuildSceneRenderData(FSceneRenderData& Scene) const;
 
     void SetEditorContext(FWorldEditorContext* InEditorContext);
     FWorldEditorContext* GetEditorContext() const noexcept;
 
     void Tick(float DeltaTime);
+    FWorldTime& GetTime();
+    const FWorldTime& GetTime() const;
 
     URenderSubsystem& GetRenderSubsystem();
     const URenderSubsystem& GetRenderSubsystem() const;
@@ -77,7 +79,7 @@ public:
     JG_DECLARE_DERIVED_TYPEINFO(UWorld, UObject);
 
     void HandleMousePickRequest(const FMousePickRequestMessage& Message);
-    void HandleSpawnComponent(const FMessageSpawnComponent& Message, const IAssetRegistry& AssetRegistry);
+    void HandleSpawnComponent(const FMessageSpawnComponent& Message, const IAssetRegistry* AssetRegistry);
 #ifdef OBJ_VIEWER
     void HandleMouseCameraRotateRequest(const FMouseCameraRotateRequestMessage& Message);
     void HandleKeyboardCameraMoveRequest(const FKeyboardCameraMoveRequestMessage& Message);
@@ -98,6 +100,7 @@ private:
     void DeinitializeSubsystems();
 
 private:
+    FWorldTime mTime{};
     TArray<std::unique_ptr<AActor>> mActors{};
     TArray<AActor*> mPendingDestroyActors{};
 
@@ -117,7 +120,6 @@ private:
     std::unique_ptr<UTextSubsystem> mTextSubsystem{};
     std::unique_ptr<ULightSubsystem> mLightSubsystem{};
 
-    FRenderProbe mProbe{};
 };
 
 template <typename T> requires std::is_base_of_v<AActor, T> T* UWorld::AdoptActor() {

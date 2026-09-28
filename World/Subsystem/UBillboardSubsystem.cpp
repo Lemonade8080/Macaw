@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "UBillboardSubsystem.h"
 
 #include "World/AActor.h"
@@ -20,11 +20,9 @@ void UBillboardSubsystem::UnregisterComponent(UBillboardComponent* Component) {
     std::erase(mComponents, Component);
 }
 
-void UBillboardSubsystem::BuildRenderProbes(IAssetRegistryMutator* AssetRegistryMutator, FRenderProbe& Probe) const {
-    Probe.mBillboardProbes.clear();
+void UBillboardSubsystem::BuildRenderProbes(FSceneRenderData& Scene) const {
+    Scene.mBillboardProbes.clear();
 
-    const FWorldEditorContext* EditorContext{GetWorld()->GetEditorContext()};
-    const AActor* SelectedActor{EditorContext != nullptr ? EditorContext->GetSelectedActor() : nullptr};
     for (const UBillboardComponent* Component : mComponents) {
         FBillboardProbe BillboardProbe{};
         if (!Component->MakeBillboardRender(BillboardProbe))
@@ -33,11 +31,7 @@ void UBillboardSubsystem::BuildRenderProbes(IAssetRegistryMutator* AssetRegistry
         if (not Component->IsActive() or not Component->IsVisible())
             continue;
 
-        if (AssetRegistryMutator != nullptr && EditorContext != nullptr) {
-            AssetRegistryMutator->SetPipelineRenderMode(Component->GetPipelineHandle(), static_cast<ERenderMode>(EditorContext->GetRenderModeState()));
-        }
-
-        Probe.mBillboardProbes.push_back(BillboardProbe);
+        Scene.mBillboardProbes.push_back(BillboardProbe);
     }
 }
 

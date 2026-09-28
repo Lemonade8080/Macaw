@@ -1,6 +1,7 @@
-﻿#pragma once
+#pragma once
 
-#include "World/UWorld.h"
 #include "Core/Channel/FEditorInfo.h"
 
-void DrawStatContents(const UWorld& World, FStatDisplayFlags StatFlags);
+struct ImVec2;
+
+void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags StatFlags);

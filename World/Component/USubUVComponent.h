@@ -31,7 +31,7 @@ public:
 
     void Tick(float DeltaTime) override;
 
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
 
 protected:
     void Serialize(FArchive& Archive) override;

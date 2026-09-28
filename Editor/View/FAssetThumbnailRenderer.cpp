@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 
 #include "FAssetThumbnailRenderer.h"
 #include "Render/Renderer.h"
@@ -9,12 +9,12 @@
 #include <algorithm>
 
 namespace {
-constexpr Uint32 ThumbnailSize{256};
+    constexpr Uint32 ThumbnailSize{256};
 
-constexpr const char* DefaultMaterialPath{"/Game/System/Material/Default.mtl"};
-constexpr const char* SphereMeshPath{"/Game/System/Mesh/Sphere.bin"};
-constexpr const char* StaticMeshPipelinePath{"/Game/Pipeline/Base"};
-constexpr const char* MaterialPipelinePath{"/Game/Pipeline/TexturedBase.json"};
+    constexpr const char* DefaultMaterialPath{"/Game/System/Material/Default.mtl"};
+    constexpr const char* SphereMeshPath{"/Game/System/Mesh/Sphere.bin"};
+    constexpr const char* StaticMeshPipelinePath{"/Game/Pipeline/Base"};
+    constexpr const char* MaterialPipelinePath{"/Game/Pipeline/TexturedBase"};
 }
 
 void FAssetThumbnailRenderer::Create(FRenderer* InRenderer, FAssetRegistry* InAssetRegistry) {
@@ -104,8 +104,8 @@ void FAssetThumbnailRenderer::RenderThumbnail(const FAssetEntry& Entry, FSceneRe
 
     ActorProbe.mWorld = BuildMeshTransform(*Mesh);
 
-    FRenderProbe Probe{};
-    Probe.mActorProbes.push_back(ActorProbe);
+    FSceneRenderData Scene{};
+    Scene.mActorProbes.push_back(ActorProbe);
 
     FLightProbe LightProbe{};
     LightProbe.mType = ELightType::Directional;
@@ -113,7 +113,7 @@ void FAssetThumbnailRenderer::RenderThumbnail(const FAssetEntry& Entry, FSceneRe
     LightProbe.mColor = FVector{1.0f, 1.0f, 1.0f};
     LightProbe.mIntensity = 1.0f;
 
-    Probe.mLightProbes.push_back(LightProbe);
+    Scene.mLightProbes.push_back(LightProbe);
 
     FSceneRenderSurface* Surface{PreviewSurface};
     if (Surface == nullptr) {
@@ -134,7 +134,13 @@ void FAssetThumbnailRenderer::RenderThumbnail(const FAssetEntry& Entry, FSceneRe
     RenderSettings.mClearColor = FVector4{ 0.075f, 0.080f, 0.095f, 1.0f};
     RenderSettings.mBRenderSky = false;
 
-    mRenderer->RenderScene(*Surface, Probe, BuildCamera(), RenderSettings);
+    FRenderView View{};
+    View.mTarget = Surface;
+    View.mCamera = BuildCamera();
+    View.mSettings = RenderSettings;
+    View.mPasses.reset();
+    View.SetPassEnabled(ERenderPass::SceneGeometry, true);
+    mRenderer->RenderView(View, Scene);
 }
 
 ID3D11ShaderResourceView* FAssetThumbnailRenderer::GetThumbnail(FAssetHandle AssetHandle) const {

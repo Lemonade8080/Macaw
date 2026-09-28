@@ -11,16 +11,13 @@ class FControlPanel : public IEditorPanel {
 public:
     FControlPanel(FWorldEditorContext& InEditorContext, HWND InputWindowHandle, FMessageChannel::FSender InEditorToWorldSender);
 
+public:
     void DrawPanel() override;
-
-    FString OpenFileDialog();
-    FString OpenFileDialog(const FString& FilePath, const OPENFILENAMEA& OFN);
 
 private:
     FWorldEditorContext* mEditorContext{nullptr};
     FMessageChannel::FSender mEditorToWorldSender;
 
-private:
     char mSceneNameBuffer[256]{"NewScene"};
 
     int mSelectedComponentIndex{-1};

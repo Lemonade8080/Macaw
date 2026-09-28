@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "UWorldSubsystem.h"
 
@@ -14,7 +14,7 @@ public:
 
     void RegisterComponent(ULightComponent* Component);
     void UnregisterComponent(ULightComponent* Component);
-    void BuildLightProbes(FRenderProbe& Probe) const;
+    void BuildLightProbes(FSceneRenderData& Scene) const;
 
     bool ContainsComponent(const ULightComponent* Component) const;
     const TArray<ULightComponent*>& GetRegisteredComponents() const;

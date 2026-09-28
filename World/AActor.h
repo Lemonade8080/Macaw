@@ -33,7 +33,7 @@ public:
     /// <typeparam name="T">생성할 UActorComponent 파생 타입입니다.</typeparam>
     /// <returns>Actor가 소유하는 새 Component입니다.</returns>
     template <typename T>
-    requires std::is_base_of_v<UActorComponent, T>
+        requires std::is_base_of_v<UActorComponent, T>
     T* AddComponent();
 
     UActorComponent* AddComponent(const FTypeInfo& Type);
@@ -42,7 +42,7 @@ public:
     /// <typeparam name="T">찾을 UActorComponent 파생 타입입니다.</typeparam>
     /// <returns>찾은 Component 또는 없으면 nullptr입니다.</returns>
     template <typename T>
-    requires std::is_base_of_v<UActorComponent, T>
+        requires std::is_base_of_v<UActorComponent, T>
     T* GetComponent();
 
     /// <summary>Actor가 RAII 방식으로 소유하는 모든 Component를 반환합니다.</summary>

@@ -108,9 +108,9 @@ void UBoxColliderComponent::Serialize(FArchive& Archive) {
     }
 }
 
-void UBoxColliderComponent::DrawPanels(IPropertyEditorContext& Context) {
+void UBoxColliderComponent::DrawPanels(IPropertyEditorContext* Context) {
     UCollisionComponent::DrawPanels(Context);
-    Context.DrawVector3("Extent", GetExtent(), 0.05f, 0.001f, FLT_MAX, [this](const FVector3& Extent) {
+    Context->DrawVector3("Extent", GetExtent(), 0.05f, 0.001f, FLT_MAX, [this](const FVector3& Extent) {
         SetExtent(Extent);
     });
 
@@ -132,15 +132,15 @@ void UBoxColliderComponent::DrawPanels(IPropertyEditorContext& Context) {
                                   SetMeshComponent(Mesh);
                               }});
     }
-    Context.DrawReferencePicker("Source Mesh Component", Preview, CurrentMesh == nullptr, [this] {
+    Context->DrawReferencePicker("Source Mesh Component", Preview, CurrentMesh == nullptr, [this] {
         SetMeshComponent(nullptr);
     }, Candidates);
-    Context.DrawButton("Build Bounds From Mesh", [this] {
+    Context->DrawButton("Build Bounds From Mesh", [this] {
         BuildBoundsFromMesh();
     });
 }
 
-void UBoxColliderComponent::DrawEditorBounds(ILineDrawContext& LineContext, ELineDepthMode DepthMode) const {
+void UBoxColliderComponent::DrawEditorBounds(ILineDrawContext* LineContext, ELineDepthMode DepthMode) const {
     DirectX::BoundingOrientedBox WorldBox{};
     mObb.Transform(WorldBox, GetComponentToWorld().ToSimpleMath());
 
@@ -149,8 +149,8 @@ void UBoxColliderComponent::DrawEditorBounds(ILineDrawContext& LineContext, ELin
 
     const FVector4 LineColor{FVector4{1.0f, 1.0f, 0.0f, 1.0f}};
     const float Thickness{1.0f};
-    const auto AddEdge{[&LineContext, &Corners, LineColor, Thickness, DepthMode](std::size_t Start, std::size_t End) {
-        LineContext.AddLine(FVector3{Corners[Start]}, FVector3{Corners[End]}, LineColor, Thickness, DepthMode);
+    const auto AddEdge{[LineContext, &Corners, LineColor, Thickness, DepthMode](std::size_t Start, std::size_t End) {
+        LineContext->AddLine(FVector3{Corners[Start]}, FVector3{Corners[End]}, LineColor, Thickness, DepthMode);
     }};
 
     AddEdge(0, 1);

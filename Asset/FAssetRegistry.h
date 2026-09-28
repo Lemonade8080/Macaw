@@ -1,7 +1,7 @@
 ﻿#pragma once
 
 #include "Core/Base/UObject.h"
-#include "Core/Asset/IAssetRegistry.h"
+#include "Asset/IRenderAssetRegistry.h"
 #include "Asset/IAssetRegistryMutator.h"
 #include "FAssetEntry.h"
 #include "FMaterialBuffer.h"
@@ -17,7 +17,7 @@
 #include <type_traits>
 #include <utility>
 
-class FAssetRegistry : public IAssetRegistry, public IAssetRegistryMutator {
+class FAssetRegistry : public IRenderAssetRegistry, public IAssetRegistryMutator {
 public:
     using FProgressCallback = std::function<void(float, const std::string&)>;
 
@@ -57,11 +57,11 @@ public:
     FAssetHandle LoadViewerAsset(const std::filesystem::path& SourcePath);
 
     template <typename T>
-    requires std::is_base_of_v<UAsset, T>
+        requires std::is_base_of_v<UAsset, T>
     T* ResolveAsset(FAssetHandle Handle);
 
     template <typename T>
-    requires std::is_base_of_v<UAsset, T>
+        requires std::is_base_of_v<UAsset, T>
     const T* ResolveAsset(FAssetHandle Handle) const;
 
     template <typename T, typename Func> requires std::is_base_of_v<UAsset, T> void ModifyAsset(FAssetHandle Handle, Func&& Modifier);
@@ -69,6 +69,10 @@ public:
     FMaterialBuffer& GetMaterialBuffer();
 
     const FMaterialBuffer& GetMaterialBuffer() const;
+
+    void FlushMaterialBuffer(ID3D11DeviceContext* Context) override;
+    ID3D11ShaderResourceView* GetMaterialBufferSRV() const override;
+    void FlushFontAtlas(FAssetHandle Handle, ID3D11DeviceContext* Context) override;
 
     auto GetAssetList() const;
 

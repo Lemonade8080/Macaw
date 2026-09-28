@@ -7,75 +7,75 @@
 #include <DirectXTex.h>
 
 namespace {
-bool GetTextureExtension(const std::filesystem::path& Path, ETextureExtension& OutExtension) {
-    FString Extension{Path.extension().generic_string().c_str()};
-    std::ranges::transform(Extension, Extension.begin(), [](unsigned char Character) {
-        return static_cast<char>(std::tolower(Character));
-    });
+    bool GetTextureExtension(const std::filesystem::path& Path, ETextureExtension& OutExtension) {
+        FString Extension{Path.extension().generic_string().c_str()};
+        std::ranges::transform(Extension, Extension.begin(), [](unsigned char Character) {
+            return static_cast<char>(std::tolower(Character));
+        });
 
-    if (Extension == ".dds") {
-        OutExtension = ETextureExtension::DDS;
-        return true;
+        if (Extension == ".dds") {
+            OutExtension = ETextureExtension::DDS;
+            return true;
+        }
+
+        if (Extension == ".tga") {
+            OutExtension = ETextureExtension::TGA;
+            return true;
+        }
+
+        if (Extension == ".bmp") {
+            OutExtension = ETextureExtension::BMP;
+            return true;
+        }
+
+        if (Extension == ".png") {
+            OutExtension = ETextureExtension::PNG;
+            return true;
+        }
+
+        if (Extension == ".gif") {
+            OutExtension = ETextureExtension::GIF;
+            return true;
+        }
+
+        if (Extension == ".tif") {
+            OutExtension = ETextureExtension::TIF;
+            return true;
+        }
+
+        if (Extension == ".tiff") {
+            OutExtension = ETextureExtension::TIFF;
+            return true;
+        }
+
+        if (Extension == ".jpg") {
+            OutExtension = ETextureExtension::JPG;
+            return true;
+        }
+
+        if (Extension == ".jpeg") {
+            OutExtension = ETextureExtension::JPEG;
+            return true;
+        }
+
+        if (Extension == ".hdr") {
+            OutExtension = ETextureExtension::HDR;
+            return true;
+        }
+
+        return false;
     }
 
-    if (Extension == ".tga") {
-        OutExtension = ETextureExtension::TGA;
-        return true;
+    DXGI_FORMAT GetDXGIFormat(ETextureFormat TextureFormat) {
+        switch (TextureFormat) {
+            case ETextureFormat::UNORM:
+                return DXGI_FORMAT_R8G8B8A8_UNORM;
+            case ETextureFormat::SRGB:
+                return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+            default:
+                return DXGI_FORMAT_UNKNOWN;
+        }
     }
-
-    if (Extension == ".bmp") {
-        OutExtension = ETextureExtension::BMP;
-        return true;
-    }
-
-    if (Extension == ".png") {
-        OutExtension = ETextureExtension::PNG;
-        return true;
-    }
-
-    if (Extension == ".gif") {
-        OutExtension = ETextureExtension::GIF;
-        return true;
-    }
-
-    if (Extension == ".tif") {
-        OutExtension = ETextureExtension::TIF;
-        return true;
-    }
-
-    if (Extension == ".tiff") {
-        OutExtension = ETextureExtension::TIFF;
-        return true;
-    }
-
-    if (Extension == ".jpg") {
-        OutExtension = ETextureExtension::JPG;
-        return true;
-    }
-
-    if (Extension == ".jpeg") {
-        OutExtension = ETextureExtension::JPEG;
-        return true;
-    }
-
-    if (Extension == ".hdr") {
-        OutExtension = ETextureExtension::HDR;
-        return true;
-    }
-
-    return false;
-}
-
-DXGI_FORMAT GetDXGIFormat(ETextureFormat TextureFormat) {
-    switch (TextureFormat) {
-        case ETextureFormat::UNORM:
-            return DXGI_FORMAT_R8G8B8A8_UNORM;
-        case ETextureFormat::SRGB:
-            return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-        default:
-            return DXGI_FORMAT_UNKNOWN;
-    }
-}
 }
 
 bool UTexture::Initialize(ID3D11Device* Device, const std::filesystem::path& ImagePath, bool MakeDDS, ETextureFormat TextureFormat, bool BGenerateMipMap) {

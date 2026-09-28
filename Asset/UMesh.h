@@ -96,7 +96,7 @@ private:
 };
 
 template <typename T> UMesh::TVertexAttributeStorage<T>::TVertexAttributeStorage(std::span<const T> InData)
-                          : mData(InData.begin(), InData.end()) {
+    : mData(InData.begin(), InData.end()) {
 }
 
 template <typename T> const void* UMesh::TVertexAttributeStorage<T>::GetData() const {

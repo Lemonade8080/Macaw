@@ -36,13 +36,8 @@ Texture2D ReflectionTexture : register(t14);
 
 SamplerState LinearWrap : register(s0);
 
-cbuffer RootConstants : register(b0) {
-    row_major float4x4 View;
-    row_major float4x4 Projection;
-    row_major float4x4 ViewProjection;
-    uint ModelContextStart;
-    uint LightCount;
-};
+#include "FrameResource.hlsli"
+#include "MeshDraw.hlsli"
 
 struct VS_INPUT {
     float3 Position : POSITION;

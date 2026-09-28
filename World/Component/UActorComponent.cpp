@@ -27,7 +27,7 @@ void UActorComponent::EndPlay() {
     mBHasBegunPlay = false;
 }
 
-void UActorComponent::Tick(float /*DeltaTime*/) {
+void UActorComponent::Tick(float /*DeltaTime*/  ) {
 }
 
 void UActorComponent::OnUnregister() {
@@ -85,7 +85,7 @@ void UActorComponent::UnregisterComponent() {
     mParentWorld = nullptr;
 }
 
-void UActorComponent::DestroyComponent(bool /*bPromoteChildren*/) {
+void UActorComponent::DestroyComponent(bool /*bPromoteChildren*/  ) {
     if (mBIsBeingDestroyed) {
         return;
     }
@@ -108,8 +108,8 @@ void UActorComponent::Serialize(FArchive& Archive) {
     Archive.Serialize("bActive", mBActive);
 }
 
-void UActorComponent::DrawPanels(IPropertyEditorContext& Context) {
-    Context.DrawBool("Active", IsActive(), [this](bool BActive) {
+void UActorComponent::DrawPanels(IPropertyEditorContext* Context) {
+    Context->DrawBool("Active", IsActive(), [this](bool BActive) {
         SetActive(BActive);
     });
 }

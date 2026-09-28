@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "PCH.h"
 #include "FEditorWindow.h"
@@ -7,7 +7,6 @@
 #include "Core/Base/FRenderProbe.h"
 #include "Core/Channel/FMessageChannel.h"
 #include "Core/Base/FAssetHandle.h"
-#include "Editor/View/FLineRenderer.h"
 #include "World/FWorldEditorContext.h"
 #include "Render/Renderer.h"
 #include "Asset/FAssetRegistry.h"
@@ -36,12 +35,10 @@ private:
     void DrawProperties();
     void DrawPreview();
     void ResizeSurfaceIfNeeded(ID3D11Device* Device, Uint32 Width, Uint32 Height);
-    FRenderProbe BuildPreviewProbe();
+    FSceneRenderData BuildPreviewScene();
     CameraProbe BuildPreviewCamera() const;
     void ProcessInput();
-    void RenderOrientationAxis(ID3D11DeviceContext* Context);
     FMatrix MakeCameraWorldMatrix(const FVector3& Eye) const;
-    FString OpenFileDialog(const FString& FilePath, const OPENFILENAMEA& OFN) const;
     bool OpenViewerFile(const std::filesystem::path& FilePath);
 
 private:
@@ -53,8 +50,6 @@ private:
     FSceneRenderSurface mSurface{};
     FAssetHandle mMeshHandle{};
     FAssetHandle mMaterialHandle{};
-    std::unique_ptr<ILineRenderer> mLineRenderer{std::make_unique<FLineRenderer>()};
-    bool mLineRendererInitialized{false};
     Uint32 mSurfaceWidth{};
     Uint32 mSurfaceHeight{};
     Uint32 mDesiredWidth{};

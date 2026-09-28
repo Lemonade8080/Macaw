@@ -110,7 +110,12 @@ ConfigureProject("Editor", "StaticLib")
 
 ConfigureProject("Macaw", "WindowedApp")
     -- 파일은 보존하되 생성되는 Macaw 프로젝트에는 포함하지 않는다.
-    files { "Macaw.cpp", "Macaw.h", "framework.h", "targetver.h", "Resource.h", "Macaw.rc", "Scripts/GenerateGizmoTorus.cpp" }
+    files { "Application/**.h", "Application/**.cpp", "Macaw.cpp", "Macaw.h", "framework.h", "targetver.h", "Resource.h", "Macaw.rc", "Scripts/GenerateGizmoTorus.cpp" }
+    filter "configurations:Viewer"
+        removefiles { "Application/FEditorApplication.cpp" }
+    filter "configurations:Debug or Release"
+        removefiles { "Application/FViewApplication.cpp" }
+    filter {}
     ConfigureExecutableLinks()
 
 -- ImGui와 SimpleMath는 PCH를 사용하지 않는다.

@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FEditorUIManager.h"
 
 #include "FPropertyPanel.h"
@@ -16,26 +16,40 @@ FEditorUIManager::FEditorUIManager() = default;
 FEditorUIManager::~FEditorUIManager() = default;
 
 void FEditorUIManager::Initialize(UWorld& World, FRenderer& Renderer, FAssetRegistry& AssetRegistry, FWorldEditorContext& EditorContext, HWND WindowHandle, FStateChannel<Uint8>::FReadWriter GizmoSender, FStateChannel<Uint8>::FReadWriter GizmoCoordinateSpaceSender, FAssetThumbnailRenderer* ThumbnailRenderer) {
-    AddViewportHostWindow(Renderer.GetDevice(), EditorContext);
-    AddWindow(std::make_unique<FPropertyPanel>(EditorContext, std::move(GizmoSender), std::move(GizmoCoordinateSpaceSender), ThumbnailRenderer));
-    AddWindow(std::make_unique<FConsolePanel>(Console::STDOutHandle, mStatDisplayChannel.GetWriter()));
-    AddStatWindow(std::make_unique<FStatPanel>(World, mStatDisplayChannel.GetReader()));
+    const FEditorSettings Settings{EditorContext.GetEditorSettings()};
+    if (Settings.mViewportPanelEnabled) {
+        AddViewportHostWindow(Renderer.GetDevice(), EditorContext);
+    }
+    if (Settings.mPropertyPanelEnabled) {
+        AddWindow(std::make_unique<FPropertyPanel>(EditorContext, std::move(GizmoSender), std::move(GizmoCoordinateSpaceSender), ThumbnailRenderer));
+    }
+    if (Settings.mConsolePanelEnabled) {
+        AddWindow(std::make_unique<FConsolePanel>(Console::STDOutHandle, mStatDisplayChannel.GetWriter()));
+    }
+    if (Settings.mStatPanelEnabled && mViewportHostWindow != nullptr) {
+        mViewportHostWindow->SetStatOverlay(std::make_unique<FStatPanel>(mStatDisplayChannel.GetReader()));
+    }
     std::unique_ptr<FMaterialEditorPanel> MaterialWindow{};
-    if (ThumbnailRenderer != nullptr) {
+    if (Settings.mMaterialEditorPanelEnabled && ThumbnailRenderer != nullptr) {
         MaterialWindow = std::make_unique<FMaterialEditorPanel>(AssetRegistry, *ThumbnailRenderer);
         mMaterialEditorPanel = MaterialWindow.get();
     }
-    AddWindow(std::make_unique<FAssetBrowserPanel>(AssetRegistry, EditorContext, ThumbnailRenderer, [this](FAssetHandle Handle) {
-        if (mMaterialEditorPanel != nullptr) {
-            mMaterialEditorPanel->OpenMaterial(Handle);
-            mFocusMaterialEditor = true;
-        }
-    }));
-    mAssetBrowserPanel = dynamic_cast<FAssetBrowserPanel*>(mWindows.back());
+    if (Settings.mAssetBrowserPanelEnabled) {
+        std::unique_ptr<FAssetBrowserPanel> AssetBrowserWindow{std::make_unique<FAssetBrowserPanel>(AssetRegistry, EditorContext, ThumbnailRenderer, [this](FAssetHandle Handle) {
+            if (mMaterialEditorPanel != nullptr) {
+                mMaterialEditorPanel->OpenMaterial(Handle);
+                mFocusMaterialEditor = true;
+            }
+        })};
+        mAssetBrowserPanel = AssetBrowserWindow.get();
+        AddWindow(std::move(AssetBrowserWindow));
+    }
     if (MaterialWindow != nullptr) {
         AddWindow(std::move(MaterialWindow));
     }
-    AddWindow(std::make_unique<FOutlinerPanel>(World, EditorContext));
+    if (Settings.mOutlinerPanelEnabled) {
+        AddWindow(std::make_unique<FOutlinerPanel>(World, EditorContext));
+    }
     AddViewerWindow(AssetRegistry, EditorContext, WindowHandle, ThumbnailRenderer);
 }
 
@@ -51,9 +65,6 @@ void FEditorUIManager::Tick() {
     }
     if (mViewportHostWindow != nullptr) {
         mViewportHostWindow->PrepareFrame(mDockSpaceId);
-    }
-    if (mStatWindow != nullptr) {
-        mStatWindow->SetVisible(!mStatWindow->CheckVisible());
     }
     if (mMaterialEditorPanel != nullptr && !mMaterialEditorPanel->IsVisible()) {
         mMaterialEditorPanel->ReleaseRenderResources();
@@ -115,6 +126,10 @@ void FEditorUIManager::AddWindow(std::unique_ptr<FEditorWindow> Window) {
 }
 
 void FEditorUIManager::AddViewerWindow(FAssetRegistry& AssetRegistry, FWorldEditorContext& EditorContext, HWND WindowHandle, FAssetThumbnailRenderer* ThumbnailRenderer) {
+    if (!EditorContext.GetEditorSettings().mViewerPanelEnabled) {
+        return;
+    }
+
     std::unique_ptr<FViewerPanel> Window{std::make_unique<FViewerPanel>(AssetRegistry, WindowHandle, EditorContext.GetEditorToWorldSender(), EditorContext, ThumbnailRenderer)};
     mViewerWindow = Window.get();
     mPreviewContext = &EditorContext;
@@ -125,10 +140,4 @@ void FEditorUIManager::AddViewportHostWindow(ID3D11Device* Device, FWorldEditorC
     std::unique_ptr<FViewportHostWindow> Window{std::make_unique<FViewportHostWindow>(Device, EditorContext)};
     mViewportHostWindow = Window.get();
     AddWindow(std::move(Window));
-}
-
-void FEditorUIManager::AddStatWindow(std::unique_ptr<FStatPanel> Window) {
-    mStatWindow = Window.get();
-    mWindows.emplace_back(Window.get());
-    mElements.emplace_back(std::move(Window));
 }

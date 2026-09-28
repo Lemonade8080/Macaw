@@ -11,11 +11,12 @@ public:
     UMeshComponent() = default;
     ~UMeshComponent() override = default;
 
+public:
     JG_DECLARE_ABSTRACT_DERIVED_TYPEINFO(UMeshComponent, UPrimitiveComponent)
 
     FAssetHandle GetMeshHandle() const;
-    void SetMeshHandle(FAssetHandle InHandle);
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    virtual void SetMeshHandle(FAssetHandle InHandle);
+    void DrawPanels(IPropertyEditorContext* Context) override;
     void OnRegister() override;
 
     virtual const UMesh* ResolveMesh() const;

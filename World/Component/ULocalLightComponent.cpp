@@ -22,14 +22,14 @@ void ULocalLightComponent::Serialize(FArchive& Archive) {
     Archive.Serialize("AttenuationRadius", mAttenuationRadius);
 }
 
-void ULocalLightComponent::DrawPanels(IPropertyEditorContext& Context) {
+void ULocalLightComponent::DrawPanels(IPropertyEditorContext* Context) {
     ULightComponent::DrawPanels(Context);
 
-    if (!Context.BeginCategory("Local Light")) {
+    if (!Context->BeginCategory("Local Light")) {
         return;
     }
 
-    Context.DrawFloat("Attenuation Radius", GetAttenuationRadius(), 1.0f, 0.0f, FLT_MAX, [this](float InAttenuationRadius) {
+    Context->DrawFloat("Attenuation Radius", GetAttenuationRadius(), 1.0f, 0.0f, FLT_MAX, [this](float InAttenuationRadius) {
         SetAttenuationRadius(InAttenuationRadius);
     });
 }

@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "UWorld.h"
 
 #include <algorithm>
@@ -208,20 +208,11 @@ const ULightSubsystem& UWorld::GetLightSubsystem() const {
     return *mLightSubsystem;
 }
 
-FRenderProbe& UWorld::BuildRenderProbe() {
-    mProbe.mActorProbes.clear();
-    mProbe.mGizmoProbes.clear();
-    mProbe.mTextProbes.clear();
-    mProbe.mBillboardProbes.clear();
-    mProbe.mLightProbes.clear();
-    mProbe.mBForceUnlit = mEditorContext != nullptr && (mEditorContext->GetRenderModeState() == static_cast<std::size_t>(ERenderMode::Unlit) || mEditorContext->GetRenderModeState() == static_cast<std::size_t>(ERenderMode::Wireframe));
-
-    mRenderSubsystem->BuildRenderProbes(mAssetRegistryMutator, mProbe);
-    mLightSubsystem->BuildLightProbes(mProbe);
-    mTextSubsystem->BuildTextProbes(mProbe);
-
-    mBillboardSubsystem->BuildRenderProbes(mAssetRegistryMutator, mProbe);
-    return mProbe;
+void UWorld::BuildSceneRenderData(FSceneRenderData& Scene) const {
+    mRenderSubsystem->BuildRenderProbes(Scene);
+    mLightSubsystem->BuildLightProbes(Scene);
+    mTextSubsystem->BuildTextProbes(Scene);
+    mBillboardSubsystem->BuildRenderProbes(Scene);
 }
 
 void UWorld::SetEditorContext(FWorldEditorContext* InEditorContext) {
@@ -237,11 +228,23 @@ FWorldEditorContext* UWorld::GetEditorContext() const noexcept {
 }
 
 void UWorld::Tick(float DeltaTime) {
-    for (const std::unique_ptr<AActor>& Actor : mActors) {
-        Actor->Tick(DeltaTime);
+    mTime.Tick(static_cast<double>(DeltaTime));
+    const float WorldDeltaTime{static_cast<float>(mTime.GetDeltaSeconds())};
+    if (WorldDeltaTime > 0.0f) {
+        for (const std::unique_ptr<AActor>& Actor : mActors) {
+            Actor->Tick(WorldDeltaTime);
+        }
     }
 
     FlushPendingDestroyActors();
+}
+
+FWorldTime& UWorld::GetTime() {
+    return mTime;
+}
+
+const FWorldTime& UWorld::GetTime() const {
+    return mTime;
 }
 
 URenderSubsystem& UWorld::GetRenderSubsystem() {
@@ -568,7 +571,7 @@ AActor* UWorld::AddActor(std::unique_ptr<AActor> InActor) {
     return Actor;
 }
 
-void UWorld::HandleSpawnComponent(const FMessageSpawnComponent& Message, const IAssetRegistry& AssetRegistry) {
+void UWorld::HandleSpawnComponent(const FMessageSpawnComponent& Message, const IAssetRegistry* AssetRegistry) {
     static std::mt19937 RandomEngine{std::random_device{}()};
     const FTypeInfo* ComponentType{TypeRegistry::Find(Message.mComponentType)};
     if (ComponentType == nullptr || ComponentType->mCreator == nullptr ||
@@ -577,17 +580,17 @@ void UWorld::HandleSpawnComponent(const FMessageSpawnComponent& Message, const I
     }
 
     const bool BIsStaticMesh{ComponentType->IsA(UStaticMeshComponent::StaticTypeInfo())};
-    const FAssetHandle MeshHandle{BIsStaticMesh ? AssetRegistry.FindAsset(FAssetPath{Message.mMeshType}) : FAssetHandle{}};
-    if (BIsStaticMesh && AssetRegistry.ResolveAsset<UMesh>(MeshHandle) == nullptr) {
+    const FAssetHandle MeshHandle{BIsStaticMesh ? AssetRegistry->FindAsset(FAssetPath{Message.mMeshType}) : FAssetHandle{}};
+    if (BIsStaticMesh && AssetRegistry->ResolveAsset<UMesh>(MeshHandle) == nullptr) {
         return;
     }
-    const FAssetHandle PipelineHandle{BIsStaticMesh ? AssetRegistry.FindAsset(FAssetPath{"/Game/Pipeline/Base"}) : FAssetHandle{}};
-    const FAssetHandle Materials[]{ AssetRegistry.FindAsset(FAssetPath{"/Game/System/Material/Default.mtl"}), AssetRegistry.FindAsset(FAssetPath{"/Game/System/Material/Red.mtl"}), AssetRegistry.FindAsset(FAssetPath{"/Game/System/Material/Green.mtl"}), AssetRegistry.FindAsset(FAssetPath{"/Game/System/Material/Blue.mtl"})};
+    const FAssetHandle PipelineHandle{BIsStaticMesh ? AssetRegistry->FindAsset(FAssetPath{"/Game/Pipeline/Base"}) : FAssetHandle{}};
+    const FAssetHandle Materials[]{ AssetRegistry->FindAsset(FAssetPath{"/Game/System/Material/Default.mtl"}), AssetRegistry->FindAsset(FAssetPath{"/Game/System/Material/Red.mtl"}), AssetRegistry->FindAsset(FAssetPath{"/Game/System/Material/Green.mtl"}), AssetRegistry->FindAsset(FAssetPath{"/Game/System/Material/Blue.mtl"})};
     const bool IsBillboard{ComponentType->IsA(UBillboardComponent::StaticTypeInfo())};
     const bool IsLight{ComponentType->IsA(ULightComponent::StaticTypeInfo())};
-    const FAssetHandle BillboardPipeline{IsBillboard || IsLight ? AssetRegistry.FindAsset(FAssetPath{"/Game/Pipeline/Billboard.json"}) : FAssetHandle{}};
-    const FAssetHandle BillboardTexture{IsBillboard ? AssetRegistry.FindAsset(FAssetPath{"/Game/Texture/Fire+Sparks-Sheet.png"}) : FAssetHandle{}};
-    const FAssetHandle LightProxyTexture{IsLight ? AssetRegistry.FindAsset(FAssetPath{"/Game/System/Light.png"}) : FAssetHandle{}};
+    const FAssetHandle BillboardPipeline{IsBillboard || IsLight ? AssetRegistry->FindAsset(FAssetPath{"/Game/Pipeline/Billboard.json"}) : FAssetHandle{}};
+    const FAssetHandle BillboardTexture{IsBillboard ? AssetRegistry->FindAsset(FAssetPath{"/Game/Texture/Fire+Sparks-Sheet.png"}) : FAssetHandle{}};
+    const FAssetHandle LightProxyTexture{IsLight ? AssetRegistry->FindAsset(FAssetPath{"/Game/System/Light.png"}) : FAssetHandle{}};
 
     std::uniform_int_distribution<std::size_t> MaterialIndex{0, std::size(Materials) - 1};
     const FAssetHandle MaterialHandle{BIsStaticMesh ? Materials[MaterialIndex(RandomEngine)] : FAssetHandle{}};

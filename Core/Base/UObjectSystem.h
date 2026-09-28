@@ -6,17 +6,17 @@
 #include "UObject.h"
 
 namespace UObjectSystem {
-FObjectHandle Register(UObject* Object);
+    FObjectHandle Register(UObject* Object);
 
-FObjectHandle RegisterWithGuid(UObject* Object, const FGuid& InGuid);
+    FObjectHandle RegisterWithGuid(UObject* Object, const FGuid& InGuid);
 
-void Unregister(UObject* Object, FObjectHandle Handle);
+    void Unregister(UObject* Object, FObjectHandle Handle);
 
-UObject* Resolve(FObjectHandle Handle);
+    UObject* Resolve(FObjectHandle Handle);
 
-FObjectHandle FindHandleByGuid(const FGuid& Guid);
+    FObjectHandle FindHandleByGuid(const FGuid& Guid);
 
-FObjectHandle GetHandle(const UObject* Object);
+    FObjectHandle GetHandle(const UObject* Object);
 
-std::uint32_t GetObjectCount();
+    std::uint32_t GetObjectCount();
 }

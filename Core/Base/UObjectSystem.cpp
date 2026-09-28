@@ -6,17 +6,17 @@
 #include "UObject.h"
 
 namespace {
-struct FObjectRegistryState {
-    std::vector<FObjectItem> mObjectItems{};
-    TMap<FGuid, std::uint32_t> mGuidToIndexMap{};
-    std::vector<std::uint32_t> mFreeIndices{};
-    std::uint32_t mObjectCount{0};
-};
+    struct FObjectRegistryState {
+        std::vector<FObjectItem> mObjectItems{};
+        TMap<FGuid, std::uint32_t> mGuidToIndexMap{};
+        std::vector<std::uint32_t> mFreeIndices{};
+        std::uint32_t mObjectCount{0};
+    };
 
-FObjectRegistryState& GetRegistryState() {
-    static FObjectRegistryState State{};
-    return State;
-}
+    FObjectRegistryState& GetRegistryState() {
+        static FObjectRegistryState State{};
+        return State;
+    }
 }
 
 FObjectHandle UObjectSystem::Register(UObject* Object) {

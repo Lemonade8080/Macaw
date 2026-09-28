@@ -11,14 +11,14 @@
 #include <array>
 
 namespace {
-constexpr Uint32 PreviewSize{512};
+    constexpr Uint32 PreviewSize{512};
 
-struct FTextureField {
-    const char* mLabel{};
-    FMaterialTextureMap FMaterialGroup::* mMember{};
-};
+    struct FTextureField {
+        const char* mLabel{};
+        FMaterialTextureMap FMaterialGroup::* mMember{};
+    };
 
-constexpr std::array<FTextureField, 12> TextureFields{{{"Ambient", &FMaterialGroup::mAmbientTexture}, {"Diffuse", &FMaterialGroup::mDiffuseTexture}, {"Specular", &FMaterialGroup::mSpecularTexture}, {"Emissive", &FMaterialGroup::mEmissiveTexture}, {"Transmission", &FMaterialGroup::mTransmissionTexture}, {"Shininess", &FMaterialGroup::mShininessTexture}, {"Opacity", &FMaterialGroup::mOpacityTexture}, {"Bump", &FMaterialGroup::mBumpTexture}, {"Normal", &FMaterialGroup::mNormalTexture}, {"Displacement", &FMaterialGroup::mDisplacementTexture}, {"Decal", &FMaterialGroup::mDecalTexture}, {"Reflection", &FMaterialGroup::mReflectionTexture}}};
+    constexpr std::array<FTextureField, 12> TextureFields{{{"Ambient", &FMaterialGroup::mAmbientTexture}, {"Diffuse", &FMaterialGroup::mDiffuseTexture}, {"Specular", &FMaterialGroup::mSpecularTexture}, {"Emissive", &FMaterialGroup::mEmissiveTexture}, {"Transmission", &FMaterialGroup::mTransmissionTexture}, {"Shininess", &FMaterialGroup::mShininessTexture}, {"Opacity", &FMaterialGroup::mOpacityTexture}, {"Bump", &FMaterialGroup::mBumpTexture}, {"Normal", &FMaterialGroup::mNormalTexture}, {"Displacement", &FMaterialGroup::mDisplacementTexture}, {"Decal", &FMaterialGroup::mDecalTexture}, {"Reflection", &FMaterialGroup::mReflectionTexture}}};
 }
 
 FMaterialEditorPanel::FMaterialEditorPanel(FAssetRegistry& InRegistry, FAssetThumbnailRenderer& InThumbnailRenderer)

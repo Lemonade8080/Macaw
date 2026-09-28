@@ -1,9 +1,10 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FBillboardRenderer.h"
 
 #include "Asset/Pipeline/UPipeline.h"
-#include "Asset/FAssetRegistry.h"
+#include "Core/Asset/IAssetRegistry.h"
 #include "Asset/UTexture.h"
+#include "FFrameResource.h"
 #include <algorithm>
 #include <unordered_map>
 
@@ -13,29 +14,13 @@ bool FBillboardRenderer::Initialize(ID3D11Device* InDevice, std::uint32_t Initia
     }
     mDevice = InDevice;
 
-    if (!mViewConstantBuffer.Initialize(mDevice)) {
-        return false;
-    }
-
-    return EnsureCapacity(InitialCapacity);
+    return true;
 }
 
-void FBillboardRenderer::Render(ID3D11DeviceContext* Context, const TArray<FBillboardProbe>& BillboardProbe, const CameraProbe& Camera, FAssetRegistry* AssetRegistry) {
-    if (Context == nullptr || mDevice == nullptr || BillboardProbe.empty()) {
+void FBillboardRenderer::Render(ID3D11DeviceContext* Context, FFrameResource& FrameResource, const TArray<FBillboardProbe>& BillboardProbe, const IAssetRegistry* AssetRegistry, ERenderMode Mode) {
+    if (Context == nullptr || mDevice == nullptr || AssetRegistry == nullptr || BillboardProbe.empty() || !FrameResource.HasCameraWorld() || !FrameResource.BindCommon(Context)) {
         return;
     }
-
-    FMatrix CameraWorld{};
-    if (!Camera.mView.TryInverse(CameraWorld)) {
-        return;
-    }
-
-    FBillboardViewConstans Constants{ .mViewProjection = Camera.mViewProjection, .mCameraWorld = CameraWorld};
-
-    if (!mViewConstantBuffer.SetGraphicsRoot32BitConstants(Constants, 0)) {
-        return;
-    }
-    mViewConstantBuffer.Bind(Context, 0, EGraphicsShaderStage::Geometry);
 
     // Release Vertex buffer, Index buffer
     UINT Stride{0};
@@ -66,70 +51,22 @@ void FBillboardRenderer::Render(ID3D11DeviceContext* Context, const TArray<FBill
     }
 
     for (auto& [Key, InstanceArray] : Batches) {
-        UPipeline* Pipeline{AssetRegistry->ResolveAsset<UPipeline>(Key.mPipelineHandle)};
-        UTexture* Texture{AssetRegistry->ResolveAsset<UTexture>(Key.mTextureHandle)};
+        const UPipeline* Pipeline{AssetRegistry->ResolveAsset<UPipeline>(Key.mPipelineHandle)};
+        const UTexture* Texture{AssetRegistry->ResolveAsset<UTexture>(Key.mTextureHandle)};
         if (Pipeline == nullptr || Texture == nullptr || InstanceArray.empty()) {
             continue;
         }
         const std::uint32_t InstanceCount{static_cast<std::uint32_t>(InstanceArray.size())};
-        if (!EnsureCapacity(InstanceCount)) {
+        if (!FrameResource.UploadStream(mDevice, Context, EFrameStream::Billboard, InstanceArray.data(), InstanceCount, sizeof(FBillboardData), D3D11_BIND_SHADER_RESOURCE)) {
             continue;
         }
 
-        const std::uint32_t ByteSize{InstanceCount * sizeof(FBillboardData)};
-        if (!mInstanceBuffer.WriteDiscard(Context, InstanceArray.data(), ByteSize)) {
-            continue;
-        }
+        Pipeline->Bind(Context, Pipeline->ResolveRenderMode(Mode));
 
-        Pipeline->Bind(Context);
-
-        ID3D11ShaderResourceView* BufferSRV{mInstanceBufferSrv.Get()};
+        ID3D11ShaderResourceView* BufferSRV{FrameResource.GetStreamResourceView(EFrameStream::Billboard)};
         Context->GSSetShaderResources(0, 1, &BufferSRV);
         ID3D11ShaderResourceView* TextureSRV{Texture->GetSRV()};
         Context->PSSetShaderResources(3, 1, &TextureSRV);
         Context->DrawInstanced(1, InstanceCount, 0, 0);
     }
-}
-
-bool FBillboardRenderer::EnsureCapacity(Uint32 RequiredCapacity) {
-    if (RequiredCapacity <= mInstanceCapacity) {
-        return true;
-    }
-
-    Uint32 NewCapacity{std::max(mInstanceCapacity, 1u)};
-
-    while (NewCapacity < RequiredCapacity) {
-        NewCapacity *= 2;
-    }
-
-    FGraphicsBufferDescription Description{};
-    Description.mByteSize = NewCapacity * sizeof(FBillboardData);
-    Description.mStride = sizeof(FBillboardData);
-    Description.mBindFlags = D3D11_BIND_SHADER_RESOURCE;
-    Description.mCpuAccessFlags = D3D11_CPU_ACCESS_WRITE;
-    Description.mMiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-    Description.mUsage = D3D11_USAGE_DYNAMIC;
-
-    FGraphicsBuffer NewBuffer{};
-    if (!NewBuffer.Initialize(mDevice, Description)) {
-        return false;
-    }
-
-    D3D11_SHADER_RESOURCE_VIEW_DESC SRVDesc{};
-    SRVDesc.Format = DXGI_FORMAT_UNKNOWN;
-    SRVDesc.ViewDimension = D3D11_SRV_DIMENSION_BUFFER;
-    SRVDesc.Buffer.FirstElement = 0;
-    SRVDesc.Buffer.NumElements = NewCapacity;
-
-    Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> NewSRV{};
-    HRESULT Hr{mDevice->CreateShaderResourceView(NewBuffer.GetBuffer(), &SRVDesc, NewSRV.GetAddressOf())};
-    if (FAILED(Hr)) {
-        return false;
-    }
-
-    mInstanceBuffer = std::move(NewBuffer);
-    mInstanceBufferSrv = std::move(NewSRV);
-    mInstanceCapacity = NewCapacity;
-
-    return true;
 }

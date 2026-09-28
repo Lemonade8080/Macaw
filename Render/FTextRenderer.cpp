@@ -1,10 +1,11 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FTextRenderer.h"
 
 #include "Asset/Pipeline/UPipeline.h"
 
-#include "Asset/FAssetRegistry.h"
+#include "Asset/IRenderAssetRegistry.h"
 #include "Asset/UFont.h"
+#include "FFrameResource.h"
 
 #include <algorithm>
 #include <limits>
@@ -14,85 +15,44 @@ bool FTextRenderer::Initialize(ID3D11Device* InDevice, std::uint32_t InitialCapa
         return false;
     }
     mDevice = InDevice;
-    if (!mTextConstants.Initialize(mDevice)) {
-        return false;
-    }
-    return EnsureCapacity(InitialCapacity);
-}
-
-bool FTextRenderer::EnsureCapacity(std::uint32_t RequiredCapacity) {
-    if (RequiredCapacity <= mVertexCapacity) {
-        return true;
-    }
-    std::uint32_t NewCapacity{std::max(mVertexCapacity, 1u)};
-    while (NewCapacity < RequiredCapacity) {
-        NewCapacity *= 2;
-    }
-    if (NewCapacity > std::numeric_limits<std::uint32_t>::max() / sizeof(FTextVertex)) {
-        return false;
-    }
-    FGraphicsBufferDescription Description{};
-    Description.mByteSize = NewCapacity * sizeof(FTextVertex);
-    Description.mUsage = D3D11_USAGE_DYNAMIC;
-    Description.mBindFlags = D3D11_BIND_VERTEX_BUFFER;
-    Description.mCpuAccessFlags = D3D11_CPU_ACCESS_WRITE;
-
-    FGraphicsBuffer NewBuffer{};
-    if (!NewBuffer.Initialize(mDevice, Description)) {
-        return false;
-    }
-    mVertexBuffer = std::move(NewBuffer);
-    mVertexCapacity = NewCapacity;
     return true;
 }
 
-void FTextRenderer::Render(ID3D11DeviceContext* Context, const TArray<FTextProbe>& TextProbes, const CameraProbe& Camera, FAssetRegistry* AssetRegistry) {
-    if (Context == nullptr || mDevice == nullptr || TextProbes.empty()) {
-        return;
-    }
-    FMatrix CameraWorld{};
-    if (!Camera.mView.TryInverse(CameraWorld)) {
+void FTextRenderer::Render(ID3D11DeviceContext* Context, FFrameResource& FrameResource, const TArray<FTextProbe>& TextProbes, IRenderAssetRegistry* AssetRegistry) {
+    if (Context == nullptr || mDevice == nullptr || AssetRegistry == nullptr || TextProbes.empty() || !FrameResource.HasCameraWorld() || !FrameResource.BindCommon(Context)) {
         return;
     }
     for (const FTextProbe& Probe : TextProbes) {
         if (Probe.mVertices.empty()) {
             continue;
         }
-        UFont* Font{AssetRegistry->ResolveAsset<UFont>(Probe.mFontHandle)};
+        const UFont* Font{AssetRegistry->ResolveAsset<UFont>(Probe.mFontHandle)};
         if (Font == nullptr) {
             continue;
         }
-        Font->FlushAtlas(Context);
+        AssetRegistry->FlushFontAtlas(Probe.mFontHandle, Context);
         ID3D11ShaderResourceView* AtlasSRV{Font->GetAtlasSRV()};
         if (AtlasSRV == nullptr) {
             if (AtlasSRV == nullptr) {
                 continue;
             }
         }
-        UPipeline* PipeLine{AssetRegistry->ResolveAsset<UPipeline>(Probe.mPipelineHandle)};
+        const UPipeline* PipeLine{AssetRegistry->ResolveAsset<UPipeline>(Probe.mPipelineHandle)};
         if (PipeLine == nullptr) {
             continue;
         }
         const std::uint32_t VertexCount{static_cast<std::uint32_t>(Probe.mVertices.size())};
-        const std::uint32_t VertexByteSize{VertexCount * sizeof(FTextVertex)};
-        if (!EnsureCapacity(VertexCount)) {
-            continue;
-        }
-        if (!mVertexBuffer.WriteDiscard(Context, Probe.mVertices.data(), VertexByteSize)) {
+        if (!FrameResource.UploadStream(mDevice, Context, EFrameStream::Text, Probe.mVertices.data(), VertexCount, sizeof(FTextVertex), D3D11_BIND_VERTEX_BUFFER)) {
             continue;
         }
         PipeLine->Bind(Context);
-        ID3D11Buffer* Buffer{mVertexBuffer.GetBuffer()};
+        ID3D11Buffer* Buffer{FrameResource.GetStreamBuffer(EFrameStream::Text)};
         UINT Stride{sizeof(FTextVertex)};
         UINT Offset{0};
         Context->IASetVertexBuffers(0, 1, &Buffer, &Stride, &Offset);
         Context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
         Context->PSSetShaderResources(3, 1, &AtlasSRV);
-        FTextConstants Constants{ .mWorld = Probe.mWorld, .mViewwProjection = Camera.mViewProjection, .mCameraWorld = CameraWorld, .mColor = Probe.mColor, .mScreenBoundsExtent = Probe.mScreenBoundsExtent, .mScreenUpPadding = Probe.mScreenUpPadding};
-        if (!mTextConstants.SetGraphicsRoot32BitConstants(Constants, 0)) {
-            continue;
-        }
-        if (!mTextConstants.Bind(Context, 0, EGraphicsShaderStage::Geometry | EGraphicsShaderStage::Pixel)) {
+        if (!FrameResource.BindTextDraw(Context, Probe)) {
             continue;
         }
         Context->Draw(VertexCount, 0);

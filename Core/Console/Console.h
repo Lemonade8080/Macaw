@@ -29,14 +29,14 @@ struct FConsoleOutputHandle {
 };
 
 namespace Console {
-inline constexpr FConsoleOutputHandle STDOutHandle{0};
-inline constexpr FConsoleOutputHandle STDErrorHandle{1};
+    inline constexpr FConsoleOutputHandle STDOutHandle{0};
+    inline constexpr FConsoleOutputHandle STDErrorHandle{1};
 
-void Print(FConsoleOutputHandle Handle, FConsoleMessage Message);
-void Clear(FConsoleOutputHandle Handle);
-void AddLog(FConsoleOutputHandle Handle, ELogLevel Level, ELogCategory Categor, const char* Format, ...);
-void Flush(FConsoleOutputHandle Handle);
+    void Print(FConsoleOutputHandle Handle, FConsoleMessage Message);
+    void Clear(FConsoleOutputHandle Handle);
+    void AddLog(FConsoleOutputHandle Handle, ELogLevel Level, ELogCategory Categor, const char* Format, ...);
+    void Flush(FConsoleOutputHandle Handle);
 
-std::size_t GetMessageCount(FConsoleOutputHandle Handle);
-const FConsoleMessage& GetMessageAt(FConsoleOutputHandle Handle, std::size_t Index);
+    std::size_t GetMessageCount(FConsoleOutputHandle Handle);
+    const FConsoleMessage& GetMessageAt(FConsoleOutputHandle Handle, std::size_t Index);
 }

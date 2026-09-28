@@ -10,69 +10,76 @@ using enum ELogLevel;
 using enum ELogCategory;
 
 namespace {
-const char* LogCategoryToString(ELogCategory Category) {
-    switch (Category) {
-        case ELogCategory::Core:
-            return "[Core]";
-        case ELogCategory::Render:
-            return "[Render]";
-        case ELogCategory::Physics:
-            return "[Physics]";
-        case ELogCategory::Etc:
-            return "[Etc]";
-        default:
-            return "[Unknown]";
+    const char* LogCategoryToString(ELogCategory Category) {
+        switch (Category) {
+            case ELogCategory::Core:
+                return "[Core]";
+            case ELogCategory::Render:
+                return "[Render]";
+            case ELogCategory::Physics:
+                return "[Physics]";
+            case ELogCategory::Etc:
+                return "[Etc]";
+            default:
+                return "[Unknown]";
+        }
     }
-}
 
-void ExecuteCommand(FConsoleOutputHandle Handle, const char* Input, FStateChannel<FStatDisplayFlags>::FWriter Writer) {
-    std::istringstream Stream{Input};
+    void ExecuteCommand(FConsoleOutputHandle Handle, const char* Input, FStateChannel<FStatDisplayFlags>::FWriter Writer) {
+        std::istringstream Stream{Input};
 
-    FString Command{};
-    //Stream >> Command;
+        FString Command{};
+        //Stream >> Command;
 
-    std::getline(Stream, Command);
+        std::getline(Stream, Command);
 
-    if (Command == "clear") {
-        Console::Clear(Handle);
-    } else if (Command == "help") {
-        Console::AddLog(Handle, Log, Core, "Commands: clear, echo, error");
-    } else if (Command == "error") {
-        FString Text{};
-        std::getline(Stream >> std::ws, Text);
+        if (Command == "clear") {
+            Console::Clear(Handle);
+        } else if (Command == "help") {
+            Console::AddLog(Handle, Log, Core, "Commands: clear, echo, error, stat fps, stat picking, stat memory, stat object system, stat none");
+        } else if (Command == "error") {
+            FString Text{};
+            std::getline(Stream >> std::ws, Text);
 
-        Console::AddLog(Handle, Error, Etc, "Error Test");
-    } else if (Command == "echo") {
-        FString Text{};
-        std::getline(Stream >> std::ws, Text);
+            Console::AddLog(Handle, Error, Etc, "Error Test");
+        } else if (Command == "echo") {
+            FString Text{};
+            std::getline(Stream >> std::ws, Text);
 
-        Console::AddLog(Handle, Log, Core, "> %s", Text.c_str());
-    } else if (Command == "stat fps") {
-        Writer.Modify([](FStatDisplayFlags& Flags) {
-            Flags.mBShowFps = !Flags.mBShowFps;
-        });
-    } else if (Command == "stat memory") {
-        Writer.Modify([](FStatDisplayFlags& Flags) {
-            Flags.mBShowMemory = !Flags.mBShowMemory;
-        });
-    } else if (Command == "stat object system") {
-        Writer.Modify([](FStatDisplayFlags& Flags) {
-            Flags.mBObjectSystem = !Flags.mBObjectSystem;
-        });
-    } else if (Command == "stat none") {
-        Writer.Modify([](FStatDisplayFlags& Flags) {
-            Flags.mBShowFps = false;
-        });
-        Writer.Modify([](FStatDisplayFlags& Flags) {
-            Flags.mBShowMemory = false;
-        });
-        Writer.Modify([](FStatDisplayFlags& Flags) {
-            Flags.mBObjectSystem = false;
-        });
-    } else {
-        Console::AddLog(Handle, Warning, Core, "Unknown command: %s", Command.c_str());
+            Console::AddLog(Handle, Log, Core, "> %s", Text.c_str());
+        } else if (Command == "stat fps") {
+            Writer.Modify([](FStatDisplayFlags& Flags) {
+                Flags.mBShowFps = !Flags.mBShowFps;
+            });
+        } else if (Command == "stat memory") {
+            Writer.Modify([](FStatDisplayFlags& Flags) {
+                Flags.mBShowMemory = !Flags.mBShowMemory;
+            });
+        } else if (Command == "stat object system") {
+            Writer.Modify([](FStatDisplayFlags& Flags) {
+                Flags.mBObjectSystem = !Flags.mBObjectSystem;
+            });
+        } else if (Command == "stat picking") {
+            Writer.Modify([](FStatDisplayFlags& Flags) {
+                Flags.mBShowPicking = !Flags.mBShowPicking;
+            });
+        } else if (Command == "stat none") {
+            Writer.Modify([](FStatDisplayFlags& Flags) {
+                Flags.mBShowFps = false;
+            });
+            Writer.Modify([](FStatDisplayFlags& Flags) {
+                Flags.mBShowMemory = false;
+            });
+            Writer.Modify([](FStatDisplayFlags& Flags) {
+                Flags.mBObjectSystem = false;
+            });
+            Writer.Modify([](FStatDisplayFlags& Flags) {
+                Flags.mBShowPicking = false;
+            });
+        } else {
+            Console::AddLog(Handle, Warning, Core, "Unknown command: %s", Command.c_str());
+        }
     }
-}
 }
 
 void DrawConsoleContents(FConsoleOutputHandle Handle, FStateChannel<FStatDisplayFlags>::FWriter Writer) {

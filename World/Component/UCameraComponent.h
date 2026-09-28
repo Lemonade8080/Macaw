@@ -26,7 +26,7 @@ public:
     void SetAspectRatio(float InAspectRatio);
     void SetNearPlane(float InNearPlane);
     void SetFarPlane(float InFarPlane);
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
 
     void OnRegister() override;
     void OnUnregister() override;

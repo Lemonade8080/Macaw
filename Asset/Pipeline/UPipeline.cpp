@@ -1,9 +1,22 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "UPipeline.h"
 
 #include "Core/Base/ErrorHandler.h"
 
 #include <memory>
+
+namespace {
+    EStencillOp ParseStencilOperation(const char* Value) {
+        constexpr std::array Names{"Keep", "Zero", "Replace", "IncrementClamp", "IncrementWrap", "DecrementClamp", "DecrementWrap", "Invert"};
+        for (std::size_t Index{}; Index < Names.size(); ++Index) {
+            if (std::strcmp(Value, Names[Index]) == 0) {
+                return static_cast<EStencillOp>(Index);
+            }
+        }
+        ErrorHandler::Report("ParseStencilOperation", "The stencil operation is invalid.", ErrorHandler::EErrorLevel::Error);
+        return EStencillOp::Keep;
+    }
+}
 
 bool UPipeline::Initialize(ID3D11Device* Device, const std::filesystem::path& PipelinePath) {
     if (std::filesystem::is_directory(PipelinePath)) {
@@ -24,7 +37,7 @@ bool UPipeline::InitializeFamily(ID3D11Device* Device, const std::filesystem::pa
         return false;
     }
 
-    constexpr std::array<const char*, static_cast<std::size_t>(ERenderMode::Max)> ModeNames{"Lit", "Outline", "Unlit", "Wireframe", "LitWireframe"};
+    constexpr std::array<const char*, static_cast<std::size_t>(ERenderMode::Max)> ModeNames{"Lit", "Outline", "Unlit", "Wireframe"};
     std::array<std::filesystem::path, static_cast<std::size_t>(ERenderMode::Max)> ModePaths{};
     const std::string FamilyName{FamilyDirectory.filename().generic_string()};
     for (std::size_t Index{0}; Index < ModeNames.size(); ++Index) {
@@ -41,6 +54,8 @@ bool UPipeline::InitializeFamily(ID3D11Device* Device, const std::filesystem::pa
 
 bool UPipeline::InitializeModes(ID3D11Device* Device, const std::array<std::filesystem::path, static_cast<std::size_t>(ERenderMode::Max)>& ModePaths) {
     std::array<FPipelineDescription, static_cast<std::size_t>(ERenderMode::Max)> Descriptions{};
+    std::array<bool, static_cast<std::size_t>(ERenderMode::Max)> EnabledModes{};
+    EnabledModes.fill(true);
     const std::size_t LitIndex{static_cast<std::size_t>(ERenderMode::Lit)};
     if (!LoadPipelineDescription(ModePaths[LitIndex], Descriptions[LitIndex])) {
         return false;
@@ -60,24 +75,41 @@ bool UPipeline::InitializeModes(ID3D11Device* Device, const std::array<std::file
             continue;
         }
         if (Index == static_cast<std::size_t>(ERenderMode::Outline)) {
-            Descriptions[Index].mPixelShader.mSource = "./Content/Shader/OutlineFill.hlsl";
+            const bool HasNormal{std::ranges::any_of(Descriptions[Index].mInputLayout, [](const FInputElementDescription& Element) {
+                return Element.mSemanticName == "NORMAL" && Element.mSemanticIndex == 0;
+            })};
+            if (!HasNormal) {
+                EnabledModes[Index] = false;
+                continue;
+            }
+            Descriptions[Index].mGeometryShader.mSource = "./Content/Shader/Outline.hlsl";
+            Descriptions[Index].mGeometryShader.mEntryPoint = "MainGS";
+            Descriptions[Index].mGeometryShader.mProfile = "gs_5_0";
+            Descriptions[Index].mGeometryShader.mStage = EShaderStage::Geometry;
+            Descriptions[Index].mBHasGeometryShader = true;
+            Descriptions[Index].mPixelShader.mSource = "./Content/Shader/Outline.hlsl";
             Descriptions[Index].mPixelShader.mEntryPoint = "MainPS";
             Descriptions[Index].mRasterizer.mFillMode = EFillMode::Solid;
             Descriptions[Index].mRasterizer.mCullMode = ECullMode::Front;
             Descriptions[Index].mDepthStencil.mDepthWriteEnable = false;
-        } else if (Index == static_cast<std::size_t>(ERenderMode::Wireframe) || Index == static_cast<std::size_t>(ERenderMode::LitWireframe)) {
+            Descriptions[Index].mDepthStencil.mStencilEnable = true;
+            Descriptions[Index].mDepthStencil.mStencilReadMask = 1;
+            Descriptions[Index].mDepthStencil.mStencilWriteMask = 0;
+            Descriptions[Index].mDepthStencil.mStencilFunc = ECompareFunc::NotEqual;
+            Descriptions[Index].mDepthStencil.mStencilPassOp = EStencillOp::Keep;
+            Descriptions[Index].mDepthStencil.mStencilFailOp = EStencillOp::Keep;
+            Descriptions[Index].mDepthStencil.mStencilDepthFailOp = EStencillOp::Keep;
+        } else if (Index == static_cast<std::size_t>(ERenderMode::Wireframe)) {
             Descriptions[Index].mRasterizer.mFillMode = EFillMode::Wireframe;
-            if (Index == static_cast<std::size_t>(ERenderMode::LitWireframe)) {
-                Descriptions[Index].mPixelShader.mSource = "./Content/Shader/OutlineFill.hlsl";
-                Descriptions[Index].mPixelShader.mEntryPoint = "MainPS";
-                Descriptions[Index].mDepthStencil.mDepthWriteEnable = false;
-            }
         }
     }
 
     Reset();
     mPipelines.resize(Descriptions.size());
     for (std::size_t Index{0}; Index < Descriptions.size(); ++Index) {
+        if (!EnabledModes[Index]) {
+            continue;
+        }
         if (!Make(Device, Descriptions[Index], mPipelines[Index])) {
             Reset();
             return false;
@@ -158,7 +190,8 @@ bool UPipeline::Make(ID3D11Device* Device, const FPipelineDescription& Descripti
     DepthStencilDesc.DepthWriteMask = Description.mDepthStencil.mDepthWriteEnable ? D3D11_DEPTH_WRITE_MASK_ALL : D3D11_DEPTH_WRITE_MASK_ZERO;
     DepthStencilDesc.DepthFunc = ConvertCompareFunc(Description.mDepthStencil.mDepthFunc);
     DepthStencilDesc.StencilEnable = Description.mDepthStencil.mStencilEnable;
-    ;
+    DepthStencilDesc.StencilReadMask = Description.mDepthStencil.mStencilReadMask;
+    DepthStencilDesc.StencilWriteMask = Description.mDepthStencil.mStencilWriteMask;
     DepthStencilDesc.FrontFace.StencilFunc = ConvertCompareFunc(Description.mDepthStencil.mStencilFunc);
     DepthStencilDesc.FrontFace.StencilPassOp = ConvertStencillOp(Description.mDepthStencil.mStencilPassOp);
     DepthStencilDesc.FrontFace.StencilFailOp = ConvertStencillOp(Description.mDepthStencil.mStencilFailOp);
@@ -206,7 +239,7 @@ void UPipeline::Bind(ID3D11DeviceContext* Context) const {
     Bind(Context, static_cast<ERenderMode>(mModeIndex));
 }
 
-void UPipeline::Bind(ID3D11DeviceContext* Context, ERenderMode Mode) const {
+void UPipeline::Bind(ID3D11DeviceContext* Context, ERenderMode Mode, UINT StencilReference) const {
     if (Context == nullptr) {
         ErrorHandler::Report("Pipeline::Bind", "A valid Direct3D device context is required to bind a pipeline.", ErrorHandler::EErrorLevel::Error);
         return;
@@ -229,7 +262,7 @@ void UPipeline::Bind(ID3D11DeviceContext* Context, ERenderMode Mode) const {
 
     Context->RSSetState(mPipelines[Index].mRasterizerState.Get());
     Context->OMSetBlendState(mPipelines[Index].mBlendState.Get(), nullptr, 0xffffffff);
-    Context->OMSetDepthStencilState(mPipelines[Index].mDepthStencilState.Get(), 1);
+    Context->OMSetDepthStencilState(mPipelines[Index].mDepthStencilState.Get(), StencilReference);
 }
 
 void UPipeline::Reset() {
@@ -260,7 +293,7 @@ void UPipeline::SetRenderMode(ERenderMode Mode) {
     }
 }
 
-bool UPipeline::RenderModeSettable(ERenderMode Mode) {
+bool UPipeline::RenderModeSettable(ERenderMode Mode) const {
     const std::size_t RequestedIndex{static_cast<std::size_t>(Mode)};
     return RequestedIndex < mPipelines.size() && mPipelines[RequestedIndex].mInitialized;
 }
@@ -427,6 +460,13 @@ bool UPipeline::LoadPipelineDescription(const std::filesystem::path& Path, FPipe
     Description.mDepthStencil.mDepthEnable = GetBool(*DepthStencil, "DepthEnable", true);
     Description.mDepthStencil.mDepthWriteEnable = GetBool(*DepthStencil, "DepthWriteEnable", true);
     Description.mDepthStencil.mDepthFunc = ParseCompareFunc(GetString(*DepthStencil, "DepthFunc", "LessEqual"));
+    Description.mDepthStencil.mStencilEnable = GetBool(*DepthStencil, "StencilEnable", true);
+    Description.mDepthStencil.mStencilReadMask = static_cast<Uint8>(GetUint(*DepthStencil, "StencilReadMask", 255));
+    Description.mDepthStencil.mStencilWriteMask = static_cast<Uint8>(GetUint(*DepthStencil, "StencilWriteMask", 255));
+    Description.mDepthStencil.mStencilFunc = ParseCompareFunc(GetString(*DepthStencil, "StencilFunc", "Always"));
+    Description.mDepthStencil.mStencilPassOp = ParseStencilOperation(GetString(*DepthStencil, "StencilPassOp", "Replace"));
+    Description.mDepthStencil.mStencilFailOp = ParseStencilOperation(GetString(*DepthStencil, "StencilFailOp", "Keep"));
+    Description.mDepthStencil.mStencilDepthFailOp = ParseStencilOperation(GetString(*DepthStencil, "StencilDepthFailOp", "Keep"));
 
     const rapidjson::Value* Blend{GetObject(Root, "Blend")};
 
@@ -449,4 +489,9 @@ bool UPipeline::LoadPipelineDescription(const std::filesystem::path& Path, FPipe
 
 void UPipeline::Serialize(FArchive& Ar) {
     UAsset::Serialize(Ar);
+}
+
+ERenderMode UPipeline::ResolveRenderMode(ERenderMode Mode) const {
+    const std::size_t Index{static_cast<std::size_t>(Mode)};
+    return Index < mPipelines.size() && mPipelines[Index].mInitialized ? Mode : static_cast<ERenderMode>(mPrimaryIndex);
 }

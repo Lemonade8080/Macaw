@@ -1,5 +1,6 @@
-﻿#pragma once
+#pragma once
 #include "Core/Base/FAssetHandle.h"
+#include "Core/Base/FObjectHandle.h"
 
 struct FTextVertex {
     // 텍스트 원점으로부터 글자의 상대 위치
@@ -26,10 +27,8 @@ struct FTextProbe {
 
 struct FBillboardProbe {
     FMatrix mWorld{};
-
     FAssetHandle mTextureHandle{};
     FAssetHandle mPipelineHandle{};
-
     FVector2 mSize{};
     FVector2 mUvMin{};
     FVector2 mUvMax{};
@@ -56,6 +55,7 @@ struct FActorProbe {
     FAssetHandle mMaterialHandle{};
     FAssetHandle mPipelineHandle{};
     Uint32 mFlags{0x0000'0000};
+    FObjectHandle mOwnerHandle{};
 };
 
 struct CameraProbe {
@@ -72,13 +72,10 @@ struct FRenderSettings {
 struct FLightProbe {
     FVector3 mColor{1.0f, 1.0f, 1.0f};
     float mIntensity{1.0f};
-
     FVector3 mPosition{};
     float mAttenuationRadius{};
-
     FVector3 mDirection{0.0f, 0.0f, 1.0f};
     float mInnerConeCos{1.0f};
-
     float mOuterConeCos{1.0f};
     ELightType mType{ELightType::Directional};
     FVector2 mPadding{};
@@ -86,12 +83,9 @@ struct FLightProbe {
 
 static_assert(sizeof(FLightProbe) == 64);
 
-struct FRenderProbe {
+struct FSceneRenderData {
     TArray<FActorProbe> mActorProbes{};
-    TArray<FActorProbe> mGizmoProbes{};
     TArray<FTextProbe> mTextProbes{};
     TArray<FBillboardProbe> mBillboardProbes{};
     TArray<FLightProbe> mLightProbes{};
-
-    bool mBForceUnlit{false};
 };

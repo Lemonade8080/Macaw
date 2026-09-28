@@ -10,13 +10,13 @@
 #endif
 
 namespace {
-std::int32_t GetMouseX(LPARAM LParam) {
-    return static_cast<std::int32_t>(static_cast<std::int16_t>(LOWORD(LParam)));
-}
+    std::int32_t GetMouseX(LPARAM LParam) {
+        return static_cast<std::int32_t>(static_cast<std::int16_t>(LOWORD(LParam)));
+    }
 
-std::int32_t GetMouseY(LPARAM LParam) {
-    return static_cast<std::int32_t>(static_cast<std::int16_t>(HIWORD(LParam)));
-}
+    std::int32_t GetMouseY(LPARAM LParam) {
+        return static_cast<std::int32_t>(static_cast<std::int16_t>(HIWORD(LParam)));
+    }
 }
 
 void FMouseInput::InitializeWorldCommandSender(FMessageChannel::FSender&& InSender) {

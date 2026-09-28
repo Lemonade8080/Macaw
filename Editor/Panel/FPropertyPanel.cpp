@@ -29,7 +29,7 @@ void FPropertyPanel::DrawContents() {
         ImGui::PushID(Component);
         UWorld* World{Actor->GetWorld()};
         mPropertyEditor.BindAssetRegistry(World != nullptr ? World->GetAssetRegistry() : nullptr);
-        Component->DrawPanels(mPropertyEditor);
+        Component->DrawPanels(&mPropertyEditor);
         ImGui::Separator();
         HandleDeleteShortcut(*Actor, *Component);
         ImGui::PopID();

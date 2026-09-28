@@ -107,8 +107,10 @@ bool UNameTagComponent::MakeTextRender(FTextProbe& OutProbe) const {
     }
 
     const FVector3 Center{HasMeshBounds ? (Minimum + Maximum) * 0.5f : TargetOrigin};
+
     // TargetLocalOffset이 Target의 로컬 공간 Offset이므로 Target의 회전과 scale까지 적용한다.
     const FVector3 Offset{TargetWorld.TransformPosition(mTargetLocalOffset) - TargetOrigin};
+
     // NameTag 컴포넌트 자신의 scale 등은 유지하고, 렌더링 원점만 Target 위치로 교체한다.
     // 현재 Text Shader는 World에서 translation만 사용하므로 실질적으로 AnchorWorld가 Billboard 원점이 된다.
     OutProbe.mWorld.Translation(Center + Offset);
@@ -152,28 +154,28 @@ void UNameTagComponent::RefreshGuidText() {
     }
 }
 
-void UNameTagComponent::DrawPanels(IPropertyEditorContext& Context) {
-    if (!Context.BeginCategory("Name Tag")) {
+void UNameTagComponent::DrawPanels(IPropertyEditorContext* Context) {
+    if (!Context->BeginCategory("Name Tag")) {
         return;
     }
 
-    Context.DrawColor("Color", GetColor(), [this](const FVector4& NewColor) {
+    Context->DrawColor("Color", GetColor(), [this](const FVector4& NewColor) {
         SetColor(NewColor);
     });
-    Context.DrawFloat("Character Height", GetCharacterHeight(), 0.01f, 0.001f, 1000.0f, [this](float NewHeight) {
+    Context->DrawFloat("Character Height", GetCharacterHeight(), 0.01f, 0.001f, 1000.0f, [this](float NewHeight) {
         SetCharacterHeight(NewHeight);
     });
-    Context.DrawFloat("Letter Spacing", GetLetterSpacing(), 0.01f, -100.0f, 100.0f, [this](float NewSpacing) {
+    Context->DrawFloat("Letter Spacing", GetLetterSpacing(), 0.01f, -100.0f, 100.0f, [this](float NewSpacing) {
         SetLetterSpacing(NewSpacing);
     });
-    Context.DrawFloat("Line Spacing", GetLineSpacing(), 0.01f, -100.0f, 100.0f, [this](float NewSpacing) {
+    Context->DrawFloat("Line Spacing", GetLineSpacing(), 0.01f, -100.0f, 100.0f, [this](float NewSpacing) {
         SetLineSpacing(NewSpacing);
     });
 
-    Context.DrawAssetPicker("Font", *UFont::StaticTypeInfo(), GetFontHandle(), [this](FAssetHandle NewHandle) {
+    Context->DrawAssetPicker("Font", *UFont::StaticTypeInfo(), GetFontHandle(), [this](FAssetHandle NewHandle) {
         SetFontHandle(NewHandle);
     });
-    Context.DrawAssetPicker("Pipeline", *UPipeline::StaticTypeInfo(), GetPipelineHandle(), [this](FAssetHandle NewHandle) {
+    Context->DrawAssetPicker("Pipeline", *UPipeline::StaticTypeInfo(), GetPipelineHandle(), [this](FAssetHandle NewHandle) {
         SetPipelineHandle(NewHandle);
     });
 }

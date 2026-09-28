@@ -1,6 +1,7 @@
 ﻿#include "pch.h"
 
 #include "Editor/Panel/FAssetBrowserPanel.h"
+#include "Editor/FileDialog.h"
 
 #include "Asset/FAssetRegistry.h"
 #include "Asset/UTexture.h"
@@ -14,43 +15,20 @@
 #include <string_view>
 
 namespace {
-constexpr float FolderPaneWidth{190.0f};
-constexpr float ThumbnailSize{96.0f};
-constexpr float TileWidth{ThumbnailSize + 18.0f};
-constexpr char StaticMeshAssetPayloadType[]{"MACAW_STATIC_MESH_ASSET"};
-constexpr char MaterialAssetPayloadType[]{"MACAW_MATERIAL_ASSET"};
-constexpr char TextureAssetPayloadType[]{"MACAW_TEXTURE_ASSET"};
-
-FString OpenFileDialog(const FString& FilePath, const OPENFILENAMEA& OFN) {
-    char FileName[MAX_PATH]{0};
-
-    OPENFILENAMEA OpenFileName{OFN};
-
-    OpenFileName.lpstrFile = FileName;
-
-    std::string InitialDirectoryPath{std::filesystem::absolute(FilePath.c_str()).string()};
-
-    if (!std::filesystem::exists(InitialDirectoryPath)) {
-        std::filesystem::create_directories(InitialDirectoryPath);
-    }
-
-    OpenFileName.lpstrInitialDir = InitialDirectoryPath.c_str();
-
-    if (GetOpenFileNameA(&OpenFileName)) {
-        return FString{FileName};
-    }
-
-    return "";
-}
-
+    constexpr float FolderPaneWidth{190.0f};
+    constexpr float ThumbnailSize{96.0f};
+    constexpr float TileWidth{ThumbnailSize + 18.0f};
+    constexpr char StaticMeshAssetPayloadType[]{"MACAW_STATIC_MESH_ASSET"};
+    constexpr char MaterialAssetPayloadType[]{"MACAW_MATERIAL_ASSET"};
+    constexpr char TextureAssetPayloadType[]{"MACAW_TEXTURE_ASSET"};
 }
 
 FAssetBrowserPanel::FAssetBrowserPanel(FAssetRegistry& InAssetRegistry, FWorldEditorContext& InEditorContext, FAssetThumbnailRenderer* InThumbnailRenderer, std::function<void(FAssetHandle)> InOpenMaterialEditor)
-    : FEditorWindow("Content Browser###AssetBrowserPanel"),
-      mAssetRegistry(&InAssetRegistry),
-      mEditorContext(InEditorContext),
-      mThumbnailRenderer(InThumbnailRenderer),
-      mOpenMaterialEditor(std::move(InOpenMaterialEditor)) {
+	: FEditorWindow{"Content Browser###AssetBrowserPanel"},
+	  mAssetRegistry{&InAssetRegistry},
+	  mEditorContext{InEditorContext},
+	  mThumbnailRenderer{InThumbnailRenderer},
+	  mOpenMaterialEditor{std::move(InOpenMaterialEditor)} {
 }
 
 void FAssetBrowserPanel::BeginExternalDropFrame() {
@@ -101,16 +79,7 @@ void FAssetBrowserPanel::DrawContents() {
     ImGui::SameLine();
 
     if (ImGui::Button("Import")) {
-        OPENFILENAMEA OpenFileName{0};
-
-        OpenFileName.lStructSize = sizeof(OpenFileName);
-        OpenFileName.hwndOwner = nullptr;
-        OpenFileName.lpstrFilter = "OBJ Files(*.obj)\0*.obj\0All Files(*.*)\0*.*\0";
-        OpenFileName.nMaxFile = MAX_PATH;
-        OpenFileName.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_NOCHANGEDIR;
-        OpenFileName.lpstrDefExt = "obj";
-
-        FString FilePath{OpenFileDialog(FString{"./Content"}, OpenFileName)};
+        const FString FilePath{OpenFileDialog(nullptr, "./Content", "OBJ Files(*.obj)\0*.obj\0All Files(*.*)\0*.*\0", "obj")};
 
         if (!FilePath.empty()) {
             const std::filesystem::path SourcePath{FilePath};

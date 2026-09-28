@@ -17,7 +17,7 @@ public:
 
     virtual void OnUnregister() override;
     void DestroyComponent(bool BPromoteChildren = false) override;
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
     void RemoveChild(USceneComponent* InChild);
 
     JG_DECLARE_DERIVED_TYPEINFO(USceneComponent, UActorComponent)

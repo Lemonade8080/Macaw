@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "PCH.h"
 #include "ImGui/imgui.h"
@@ -39,7 +39,6 @@ private:
     void AddWindow(std::unique_ptr<FEditorWindow> Window);
     void AddViewerWindow(FAssetRegistry& AssetRegistry, FWorldEditorContext& EditorContext, HWND WindowHandle, FAssetThumbnailRenderer* ThumbnailRenderer);
     void AddViewportHostWindow(ID3D11Device* Device, FWorldEditorContext& EditorContext);
-    void AddStatWindow(std::unique_ptr<FStatPanel> Window);
 
 private:
     std::vector<std::unique_ptr<IEditorPanel>> mElements{};
@@ -52,5 +51,4 @@ private:
     FMaterialEditorPanel* mMaterialEditorPanel{};
     bool mFocusMaterialEditor{};
     FStateChannel<FStatDisplayFlags> mStatDisplayChannel{FStatDisplayFlags{false, false, false}};
-    FStatPanel* mStatWindow{};
 };

@@ -16,10 +16,10 @@ public:
     bool BuildBoundsFromMesh();
 
     bool RaycastBounds(const FRay& Ray, float& OutDistance) const override;
-    void DrawEditorBounds(ILineDrawContext& LineContext, ELineDepthMode DepthMode) const override;
+    void DrawEditorBounds(ILineDrawContext* LineContext, ELineDepthMode DepthMode) const override;
     FVector3 GetExtent() const;
     void SetExtent(const FVector3& InExtent);
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
 
     bool ResolveLoadedReferences() override;
     void InitializeComponent() override;

@@ -1,73 +1,64 @@
-struct FModelContext
-{
-    row_major float4x4 World;
-    uint MaterialIndex;
-    uint Flags;
-};
-
-struct FMaterial
-{
-    float4 BaseColor;
-    
-    // Paddings
-    float4 Parameters0;
-    float4 Parameters1;
-    float4 Parameters2;
-    float4 Parameters3;
-    float4 Parameters4;
-    float4 Parameters5;
-    float4 Parameters6;
+struct FModelContext {
+    row_major float4x4 mWorld;
+    uint mMaterialIndex;
+    uint mFlags;
 };
 
 StructuredBuffer<FModelContext> ModelContexts : register(t0);
-StructuredBuffer<FMaterial> MaterialBuffer : register(t1);
 
-cbuffer RootConstants : register(b0)
-{
-    row_major float4x4 View;
-    row_major float4x4 Projection;
-    row_major float4x4 ViewProjection;
+#include "FrameResource.hlsli"
+#include "MeshDraw.hlsli"
 
-    uint ModelContextStart;
+struct FOutlineInput {
+    float3 mPosition : POSITION;
+    float3 mNormal : NORMAL;
 };
 
-struct VS_INPUT
-{
-    float3 Position : POSITION;
-    float3 Normal : NORMAL;
-    float2 UV : TEXCOORD0;
+struct FOutlineVertex {
+    float4 mPosition : SV_POSITION;
 };
 
-struct PS_INPUT
-{
-    float4 Position : SV_POSITION;
-    float3 Normal : NORMAL;
-    float2 UV : TEXCOORD0;
-    nointerpolation uint MaterialIndex : Jungle1;
-    nointerpolation float3 ColorCoefficient : Jungle2;
+struct FOutlineGeometryInput {
+    float4 mPosition : SV_POSITION;
+    float3 mNormal : NORMAL;
 };
 
-PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID)
-{
-    PS_INPUT Output;
+float4 ExpandOutline(float4 ClipPosition, float3 WorldNormal) {
+    const float NormalLengthSquared = {dot(WorldNormal, WorldNormal)};
+    if (!(NormalLengthSquared > 0.0f) || ClipPosition.w <= 0.00001f) {
+        return ClipPosition;
+    }
+    WorldNormal *= rsqrt(NormalLengthSquared);
+    const float4 ClipNormal = {mul(float4(WorldNormal, 0.0f), ViewProjection)};
+    const float2 ProjectedNormal = {(ClipNormal.xy - ClipPosition.xy * (ClipNormal.w / ClipPosition.w)) * Viewport.xy};
+    const float2 Direction = {ProjectedNormal / max(length(ProjectedNormal), 0.01f)};
+    const float OutlineWidth = {2.0f};
+    ClipPosition.xy += Direction * (OutlineWidth * 2.0f * Viewport.zw) * ClipPosition.w;
+    return ClipPosition;
+}
 
-    FModelContext ModelContext = ModelContexts[ModelContextStart + InstanceID];
-
-    const float OutlineWidth = 1.03f;
-    
-    float3 ExpandedPosition = Input.Position * OutlineWidth;
-    
-    float4 WorldPosition = mul(float4(ExpandedPosition, 1.0f), ModelContext.World);
-
-    Output.Position = mul(WorldPosition, ViewProjection);
-    Output.Normal = mul(Input.Normal, (float3x3) ModelContext.World);
-    Output.UV = Input.UV;
-    Output.MaterialIndex = ModelContext.MaterialIndex;
-
+FOutlineVertex MainVS(FOutlineInput Input, uint InstanceId : SV_InstanceID) {
+    FOutlineVertex Output = {0.0f, 0.0f, 0.0f, 0.0f};
+    const FModelContext ModelContext = {ModelContexts[ModelContextStart + InstanceId]};
+    const float3 FirstCofactor = {cross(ModelContext.mWorld[1].xyz, ModelContext.mWorld[2].xyz)};
+    const float3 SecondCofactor = {cross(ModelContext.mWorld[2].xyz, ModelContext.mWorld[0].xyz)};
+    const float3 ThirdCofactor = {cross(ModelContext.mWorld[0].xyz, ModelContext.mWorld[1].xyz)};
+    const float Determinant = {dot(ModelContext.mWorld[0].xyz, FirstCofactor)};
+    const float3 WorldNormal = {(Input.mNormal.x * FirstCofactor + Input.mNormal.y * SecondCofactor + Input.mNormal.z * ThirdCofactor) * (Determinant < 0.0f ? -1.0f : 1.0f)};
+    const float4 WorldPosition = {mul(float4(Input.mPosition, 1.0f), ModelContext.mWorld)};
+    Output.mPosition = ExpandOutline(mul(WorldPosition, ViewProjection), WorldNormal);
     return Output;
 }
 
-float4 mainPS(PS_INPUT Input) : SV_TARGET
-{
+[maxvertexcount(3)]
+void MainGS(triangle FOutlineGeometryInput Input[3], inout TriangleStream<FOutlineVertex> Stream) {
+    for (uint Index = {0}; Index < 3; ++Index) {
+        FOutlineVertex Output = {ExpandOutline(Input[Index].mPosition, Input[Index].mNormal)};
+        Stream.Append(Output);
+    }
+    Stream.RestartStrip();
+}
+
+float4 MainPS() : SV_TARGET {
     return float4(1.0f, 1.0f, 0.0f, 1.0f);
 }

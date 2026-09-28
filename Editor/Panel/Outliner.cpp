@@ -9,7 +9,7 @@
 #include <ranges>
 
 namespace {
-constexpr const char* ActorDragDropPayloadType{"OUTLINER_ACTOR"};
+    constexpr const char* ActorDragDropPayloadType{"OUTLINER_ACTOR"};
 }
 
 FOutlinerPanel::FOutlinerPanel(UWorld& InWorld, FWorldEditorContext& InEditorContext)

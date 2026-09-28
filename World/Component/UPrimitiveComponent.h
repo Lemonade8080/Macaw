@@ -14,7 +14,7 @@ public:
 
     bool IsVisible() const;
     void SetVisible(bool BInVisible);
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
     void OnRegister() override;
     void OnUnregister() override;
 

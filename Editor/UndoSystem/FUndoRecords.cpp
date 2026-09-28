@@ -2,32 +2,36 @@
 #include "FUndoRecords.h"
 #include "IUndoContext.h"
 
-void FRecordObjectState::ApplyUndo(IUndoContext& Context) {
-    Context.NotifyObjectChanged(mTargetGuid, mBeforeData);
+void FRecordObjectState::ApplyUndo(IUndoContext* Context) {
+    Context->NotifyObjectChanged(mTargetGuid, mBeforeData);
 }
 
-void FRecordObjectState::ApplyRedo(IUndoContext& Context) {
-    Context.NotifyObjectChanged(mTargetGuid, mAfterData);
+void FRecordObjectState::ApplyRedo(IUndoContext* Context) {
+    Context->NotifyObjectChanged(mTargetGuid, mAfterData);
 }
 
-void FRecordObjectSpawned::ApplyUndo(IUndoContext& Context) {
+void FRecordObjectSpawned::ApplyUndo(IUndoContext* Context) {
     // 생성의 취소는 곧 삭제
-    Context.NotifyObjectDeleted(mTargetGuid);
+
+    Context->NotifyObjectDeleted(mTargetGuid);
 }
 
-void FRecordObjectSpawned::ApplyRedo(IUndoContext& Context) {
+void FRecordObjectSpawned::ApplyRedo(IUndoContext* Context) {
     // 다시 생성 (저장해둔 데이터로 부활)
-    Context.NotifyObjectSpawned(mTargetGuid, mSavedData, std::move(mTargetTypeName));
+
+    Context->NotifyObjectSpawned(mTargetGuid, mSavedData, std::move(mTargetTypeName));
 }
 
-void FRecordObjectDestroyed::ApplyUndo(IUndoContext& Context) {
+void FRecordObjectDestroyed::ApplyUndo(IUndoContext* Context) {
     // 삭제의 취소는 곧 부활 (저장해둔 죽기 직전 데이터로 부활)
-    Context.NotifyObjectSpawned(mTargetGuid, mSavedData, std::move(mTargetTypeName));
+
+    Context->NotifyObjectSpawned(mTargetGuid, mSavedData, std::move(mTargetTypeName));
 }
 
-void FRecordObjectDestroyed::ApplyRedo(IUndoContext& Context) {
+void FRecordObjectDestroyed::ApplyRedo(IUndoContext* Context) {
     // 다시 삭제
-    Context.NotifyObjectDeleted(mTargetGuid);
+
+    Context->NotifyObjectDeleted(mTargetGuid);
 }
 
 FRecordObjectState::FRecordObjectState(const FGuid& InGuid, const TArray<Uint8>& InBefore, const TArray<Uint8>& InAfter)

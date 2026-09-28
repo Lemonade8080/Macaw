@@ -50,7 +50,7 @@ template <typename T> TObjectRef<T>::TObjectRef(T* Object) noexcept {
 }
 
 template <typename T> TObjectRef<T>::TObjectRef(FObjectHandle InHandle) noexcept
-                          : mHandle(InHandle) {
+    : mHandle(InHandle) {
 }
 
 template <typename T> T* TObjectRef<T>::Get() const noexcept {

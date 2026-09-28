@@ -1,0 +1,71 @@
+{
+  "VertexShader": {
+    "Source": "./Content/Shader/TexturedBase.hlsl",
+    "EntryPoint": "mainVS",
+    "Profile": "vs_5_0"
+  },
+
+  "PixelShader": {
+    "Source": "./Content/Shader/TexturedBase.hlsl",
+    "EntryPoint": "mainPS",
+    "Profile": "ps_5_0"
+  },
+
+  "InputLayout": [
+    {
+      "SemanticName": "POSITION",
+      "SemanticIndex": 0,
+      "Format": "Float3",
+      "InputSlot": 0,
+      "AlignedByteOffset": 0,
+      "InputClassification": "PerVertex",
+      "InstanceDataStepRate": 0
+    },
+    {
+      "SemanticName": "TEXCOORD",
+      "SemanticIndex": 0,
+      "Format": "Float2",
+      "InputSlot": 2,
+      "AlignedByteOffset": 0,
+      "InputClassification": "PerVertex",
+      "InstanceDataStepRate": 0
+    }
+  ],
+
+  "PrimitiveTopology": "TriangleList",
+
+  "Rasterizer": {
+    "FillMode": "Solid",
+    "CullMode": "Back",
+    "FrontCounterClockwise": false,
+    "DepthClipEnable": true,
+    "ScissorEnable": false
+  },
+
+  "DepthStencil": {
+    "DepthEnable": true,
+    "DepthWriteEnable": true,
+    "DepthFunc": "LessEqual",
+
+    "StencilEnable": true,
+    "StencilReadMask": 255,
+    "StencilWriteMask": 255,
+
+    "StencilFunc": "Always",
+    "StencilPassOp": "Replace",
+    "StencilFailOp": "Keep",
+    "StencilDepthFailOp": "Keep",
+
+    "StencilRef": 1
+  },
+
+  "Blend": {
+    "BlendEnable": false,
+    "SrcBlend": "One",
+    "DestBlend": "Zero",
+    "BlendOp": "Add",
+    "SrcBlendAlpha": "One",
+    "DestBlendAlpha": "Zero",
+    "BlendOpAlpha": "Add"
+  }
+}

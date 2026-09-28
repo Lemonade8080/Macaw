@@ -1,18 +1,22 @@
-﻿#pragma once
+#pragma once
 
 #include "ILineRenderer.h"
 
 class FLineRenderer : public ILineRenderer {
 private:
-    struct FQuadVertex { FVector2D mCorner{}; };
+    struct FQuadVertex {
+        FVector2D mCorner{};
+    };
 
-    struct FLineInstance { FVector4 mStartAndWidth{}; FVector4 mEndAndPadding{}; FVector4 mColor{}; };
+    struct FLineInstance {
+        FVector4 mStartAndWidth{};
+        FVector4 mEndAndPadding{};
+        FVector4 mColor{};
+    };
 
-    struct FLineFrameConstants { FMatrix mViewProjection{}; FVector4 mViewport{}; FVector4 mGridFade{}; };
-
-    static_assert(sizeof(FLineFrameConstants) == sizeof(Uint32) * 24);
-
-    struct FLineBatch { TArray<FLineInstance> mInstances{}; FGraphicsBuffer mInstanceBuffer{}; Uint32 mCapacity{0}; };
+    struct FLineBatch {
+        TArray<FLineInstance> mInstances{};
+    };
 
 public:
     FLineRenderer() = default;
@@ -32,7 +36,7 @@ public:
     void AddGridLine(const FVector3& Start, const FVector3& End, const FVector4& Color, float WidthPixels, float GridSpacing, ELineDepthMode DepthMode);
     void AddRay(const FVector3& Origin, const FVector3& Direction, float Length, const FVector4& Color, float WidthPixels = 1.0f, ELineDepthMode DepthMode = ELineDepthMode::DepthTested);
 
-    void Render(ID3D11DeviceContext* Context, const FLineViewData& ViewData);
+    void Render(ID3D11DeviceContext* Context, FFrameResource& FrameResource);
     void Clear();
 
     [[nodiscard]] Uint32 GetLineCount() const;
@@ -41,9 +45,7 @@ public:
 private:
     void AddLineInternal(const FVector3& Start, const FVector3& End, const FVector4& Color, float WidthPixels, ELineDepthMode DepthMode, float GridSpacing);
     bool CreateQuadGeometry(ID3D11Device* Device);
-    bool CreateInstanceBuffer(ID3D11Device* Device, FLineBatch& Batch, Uint32 Capacity);
-    bool EnsureCapacity(ID3D11Device* Device, FLineBatch& Batch, Uint32 RequiredCapacity);
-    bool RenderBatch(ID3D11Device* Device, ID3D11DeviceContext* Context, FLineBatch& Batch, const UPipeline* Pipeline);
+    bool RenderBatch(ID3D11DeviceContext* Context, FFrameResource& FrameResource, FLineBatch& Batch, const UPipeline* Pipeline, EFrameStream Stream);
 
 private:
     ID3D11Device* mDevice{nullptr};
@@ -57,5 +59,4 @@ private:
     FLineBatch mDepthTestedBatch{};
     FLineBatch mOverlayBatch{};
 
-    TGraphicsRootConstants<24> mFrameConstants{};
 };

@@ -1,5 +1,6 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FViewerPanel.h"
+#include "Editor/FileDialog.h"
 
 #include "ImGui/imgui.h"
 #include "Render/Renderer.h"
@@ -15,20 +16,20 @@
 #include <cmath>
 
 namespace {
-constexpr float MinimumDistance{0.10f};
-constexpr float MaximumDistance{1000000.0f};
-constexpr char DefaultMeshPath[]{"/Game/System/Mesh/Cube.bin"};
-constexpr char DefaultMaterialPath[]{"/Game/System/Material/Green.mtl"};
-constexpr char DefaultPipelinePath[]{"/Game/Pipeline/Base"};
-constexpr char TexturedPipelinePath[]{"/Game/Pipeline/TexturedBase.json"};
+    constexpr float MinimumDistance{0.10f};
+    constexpr float MaximumDistance{1000000.0f};
+    constexpr char DefaultMeshPath[]{"/Game/System/Mesh/Cube.bin"};
+    constexpr char DefaultMaterialPath[]{"/Game/System/Material/Green.mtl"};
+    constexpr char DefaultPipelinePath[]{"/Game/Pipeline/Base"};
+    constexpr char TexturedPipelinePath[]{"/Game/Pipeline/TexturedBase"};
 }
 
 FViewerPanel::FViewerPanel(FAssetRegistry& InRegistry, HWND InputWindowHandle, FMessageChannel::FSender InEditorToWorldSender, FWorldEditorContext& InEditorContext, FAssetThumbnailRenderer* InThumbnailRenderer)
-    : FEditorWindow("Viewer", ImGuiWindowFlags_MenuBar),
-      mRegistry(&InRegistry),
-      mEditorToWorldSender(std::move(InEditorToWorldSender)),
-      mWindowHandle(InputWindowHandle),
-      mEditorContext(InEditorContext) {
+	: FEditorWindow{"Viewer", ImGuiWindowFlags_MenuBar},
+	  mRegistry{&InRegistry},
+	  mEditorToWorldSender{std::move(InEditorToWorldSender)},
+	  mWindowHandle{InputWindowHandle},
+	  mEditorContext{InEditorContext} {
     mPropertyEditor.BindAssetRegistry(&InRegistry);
     mPropertyEditor.BindThumbnailRenderer(InThumbnailRenderer);
     SetMesh({});
@@ -122,19 +123,11 @@ void FViewerPanel::DrawMenuBar() {
 #else
         if (ImGui::MenuItem("Import OBJ...")) {
 #endif
-            OPENFILENAMEA OpenFileName{};
-            OpenFileName.lStructSize = sizeof(OpenFileName);
-            OpenFileName.hwndOwner = mWindowHandle;
 #ifdef OBJ_VIEWER
-            OpenFileName.lpstrFilter = "Model and Material Files\0*.bin;*.obj;*.mtl\0All Files\0*.*\0";
+            FString FilePath{OpenFileDialog(mWindowHandle, "./Content/ModelingFiles", "Model and Material Files\0*.bin;*.obj;*.mtl\0All Files\0*.*\0")};
 #else
-            OpenFileName.lpstrFilter = "OBJ Files(*.obj)\0*.obj\0All Files(*.*)\0*.*\0";
-            OpenFileName.lpstrDefExt = "obj";
+            FString FilePath{OpenFileDialog(mWindowHandle, "./Content/ModelingFiles", "OBJ Files(*.obj)\0*.obj\0All Files(*.*)\0*.*\0", "obj")};
 #endif
-            OpenFileName.nMaxFile = MAX_PATH;
-            OpenFileName.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_NOCHANGEDIR;
-
-            FString FilePath{OpenFileDialog(FString{"./Content/ModelingFiles"}, OpenFileName)};
             if (!FilePath.empty()) {
 #ifdef OBJ_VIEWER
                 OpenViewerFile(std::filesystem::path{FilePath.c_str()});
@@ -203,10 +196,10 @@ FMatrix FViewerPanel::MakeCameraWorldMatrix(const FVector3& Eye) const {
     return Result;
 }
 
-FRenderProbe FViewerPanel::BuildPreviewProbe() {
-    FRenderProbe Probe{};
+FSceneRenderData FViewerPanel::BuildPreviewScene() {
+    FSceneRenderData Scene{};
     if (mRegistry == nullptr || mSurfaceWidth == 0 || mSurfaceHeight == 0) {
-        return Probe;
+        return Scene;
     }
 
     if (mRegistry->ResolveAsset<UMesh>(mMeshHandle) == nullptr) {
@@ -228,12 +221,11 @@ FRenderProbe FViewerPanel::BuildPreviewProbe() {
     const FAssetHandle PipelineHandle{mRegistry->FindAsset(FAssetPath{HasTexture ? TexturedPipelinePath : DefaultPipelinePath})};
     UPipeline* Pipeline{mRegistry->ResolveAsset<UPipeline>(PipelineHandle)};
     if (mMeshHandle && mMaterialHandle && Pipeline != nullptr) {
-        Pipeline->SetRenderMode(ERenderMode::Lit);
         FActorProbe ActorProbe{};
         ActorProbe.mMeshHandle = mMeshHandle;
         ActorProbe.mMaterialHandle = mMaterialHandle;
         ActorProbe.mPipelineHandle = PipelineHandle;
-        Probe.mActorProbes.push_back(ActorProbe);
+        Scene.mActorProbes.push_back(ActorProbe);
     }
 
     FLightProbe LightProbe{};
@@ -243,8 +235,8 @@ FRenderProbe FViewerPanel::BuildPreviewProbe() {
     FVector3 LightDirection{-FMatrix::CreateFromQuaternion(mOrbitRotation).TransformDirection(-FVector::UnitX) - FVector::UnitZ * 0.75f};
     LightDirection.Normalize();
     LightProbe.mDirection = LightDirection;
-    Probe.mLightProbes.push_back(LightProbe);
-    return Probe;
+    Scene.mLightProbes.push_back(LightProbe);
+    return Scene;
 }
 
 CameraProbe FViewerPanel::BuildPreviewCamera() const {
@@ -288,22 +280,22 @@ void FViewerPanel::RenderOffscreen(FRenderer& InRenderer, FAssetRegistry&) {
         return;
     }
 
-    if (!mLineRendererInitialized) {
-        mLineRenderer->Initialize(InRenderer.GetDevice());
-        mLineRendererInitialized = true;
-    }
-
-    FRenderProbe PreviewProbe{BuildPreviewProbe()};
+    FSceneRenderData PreviewScene{BuildPreviewScene()};
     FRenderSettings PreviewSettings{};
     PreviewSettings.mClearColor = FVector4{0.12f, 0.13f, 0.15f, 1.0f};
-    InRenderer.RenderScene(mSurface, PreviewProbe, BuildPreviewCamera(), PreviewSettings);
-    RenderOrientationAxis(InRenderer.GetDeviceContext());
+    FRenderView View{};
+    View.mTarget = &mSurface;
+    View.mCamera = BuildPreviewCamera();
+    View.mSettings = PreviewSettings;
+    View.mOrientationAxisSize = 100.0f;
+    View.mPasses.reset();
+    View.SetPassEnabled(ERenderPass::SceneGeometry, true);
+    View.SetPassEnabled(ERenderPass::OrientationAxis, true);
+    InRenderer.RenderView(View, PreviewScene);
 }
 
 void FViewerPanel::ReleaseRenderResources() {
     mSurface.Reset();
-    mLineRenderer->Reset();
-    mLineRendererInitialized = false;
 }
 
 void FViewerPanel::DrawPreview() {
@@ -338,37 +330,4 @@ void FViewerPanel::DrawPreview() {
         ImGui::Text("Triangles: %zu", TriangleCount);
     }
     ImGui::End();
-}
-
-FString FViewerPanel::OpenFileDialog(const FString& FilePath, const OPENFILENAMEA& OFN) const {
-    char FileName[MAX_PATH]{};
-    OPENFILENAMEA OpenFileName{OFN};
-    OpenFileName.lpstrFile = FileName;
-    const std::string InitialDirectoryPath{std::filesystem::absolute(FilePath.c_str()).string()};
-    if (!std::filesystem::exists(InitialDirectoryPath)) {
-        std::filesystem::create_directories(InitialDirectoryPath);
-    }
-    OpenFileName.lpstrInitialDir = InitialDirectoryPath.c_str();
-    return GetOpenFileNameA(&OpenFileName) ? FString{FileName} : FString{};
-}
-
-void FViewerPanel::RenderOrientationAxis(ID3D11DeviceContext* Context) {
-    if (Context == nullptr || !mLineRendererInitialized) {
-        return;
-    }
-
-    FMatrix View{BuildPreviewCamera().mView};
-    View.Translation(FVector3{0.0f, 0.0f, 3.0f});
-    const FMatrix Projection{FMatrix::CreateOrthographic(2.5f, 2.5f, 0.1f, 10.0f)};
-    constexpr float AxisSize{100.0f};
-    const D3D11_VIEWPORT AxisViewport{5.0f, 5.0f, AxisSize, AxisSize, 0.0f, 1.0f};
-    Context->RSSetViewports(1, &AxisViewport);
-
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{1.0f, 0.0f, 0.0f}, 1.0f, FVector4{1.0f, 0.0f, 0.0f, 1.0f}, 3.0f, ELineDepthMode::DepthTested);
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, 1.0f, 0.0f}, 1.0f, FVector4{0.0f, 1.0f, 0.0f, 1.0f}, 3.0f, ELineDepthMode::DepthTested);
-    mLineRenderer->AddRay(FVector3{0.0f, 0.0f, 0.0f}, FVector3{0.0f, 0.0f, 1.0f}, 1.0f, FVector4{0.0f, 0.0f, 1.0f, 1.0f}, 3.0f, ELineDepthMode::DepthTested);
-    mLineRenderer->Render(Context, FLineViewData{.mViewProjection = View * Projection, .mViewportSize = FVector2D{AxisSize, AxisSize}});
-
-    const D3D11_VIEWPORT FullViewport{0.0f, 0.0f, static_cast<float>(mSurfaceWidth), static_cast<float>(mSurfaceHeight), 0.0f, 1.0f};
-    Context->RSSetViewports(1, &FullViewport);
 }

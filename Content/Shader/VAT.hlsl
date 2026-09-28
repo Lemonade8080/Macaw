@@ -8,7 +8,7 @@ struct FModelContext
 struct FMaterial
 {
     float4 BaseColor;
-    
+
     // Paddings
     float4 Parameters0;
     float4 Parameters1;
@@ -29,18 +29,8 @@ Texture2D VATTexture : register(t6);
 SamplerState LinearWrap : register(s0);
 SamplerState PointClamp : register(s2);
 
-cbuffer RootConstants : register(b0)
-{
-    row_major float4x4 View;
-    row_major float4x4 Projection;
-    row_major float4x4 ViewProjection;
-
-    uint ModelContextStart;
-    uint LightCount;
-    
-    uint currentFrame;
-    float padding;
-};
+#include "FrameResource.hlsli"
+#include "MeshDraw.hlsli"
 
 struct VS_INPUT
 {
@@ -65,7 +55,7 @@ struct PS_INPUT
 PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID)
 {
     PS_INPUT Output;
-    
+
     //이전 로컬    
     float3 MinBound = float3(-119.5014, -0.7041, -103.2716);
     float3 MaxBound = float3(142.2604, 181.1934, 90.4448);
@@ -74,26 +64,26 @@ PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID)
            
     
     float TotalFrame = 250.0;
-    
+
     //버텍스 컬러에 0 ~ 1로 저장된 인덱스 값
     float IndexNormalize = Input.Color.r;
-    
+
     //프레임에 따라 y값 산출
-    float FrameNormalize = currentFrame / (TotalFrame - 1);
-    
+    float FrameNormalize = AnimationFrame / (TotalFrame - 1);
+
     //VAT 텍스처 샘플링 할 uv
     float2 VATUV = float2(IndexNormalize, FrameNormalize);   
     
     
     //VATTexture에서 버텍스의 위치값을 산출한다.
     //float3 VATPosition = VATTexture.Sample(LinearWrap, VATUV).rgb;
-    
+
     //그냥 Sample()은 픽셀 셰이더에서 밉맵 레벨을 자동 계산하는데 그건 버텍스 셰이더에는 없다.
     //SampleLevel()로 밉맵을 직접 지정한다.
     float3 VATPositionNomalized = VATTexture.SampleLevel(PointClamp, VATUV, 0).rgb;
-    
+
     float3 BlenderLocalPos = VATPositionNomalized * BoundsSize + MinBound;
-    
+
     //좌표계 변환
     float3 VATPosition = float3(-BlenderLocalPos.z, BlenderLocalPos.x, BlenderLocalPos.y);
     
@@ -111,7 +101,7 @@ PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID)
     Output.MaterialIndex = ModelContext.MaterialIndex;
     Output.Flags = ModelContext.Flags;
     Output.ColorCoefficient = float3(1.0f, 1.0f, 1.0f);
-    
+
     return Output;
 }
 

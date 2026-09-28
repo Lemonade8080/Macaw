@@ -13,7 +13,7 @@ public:
     void SetAttenuationRadius(float InAttenuationRadius);
 
     void MakeLightProbe(FLightProbe& OutProbe) const override;
-    void DrawPanels(IPropertyEditorContext& Context) override;
+    void DrawPanels(IPropertyEditorContext* Context) override;
 
 protected:
     void Serialize(FArchive& Archive) override;

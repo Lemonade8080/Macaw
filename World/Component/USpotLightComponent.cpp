@@ -6,12 +6,12 @@
 #include <numbers>
 
 namespace {
-constexpr float MinimumConeAngle{0.0f};
-constexpr float MaximumConeAngle{89.9f};
+    constexpr float MinimumConeAngle{0.0f};
+    constexpr float MaximumConeAngle{89.9f};
 
-float ToRadians(float Degrees) {
-    return Degrees * (std::numbers::pi_v<float> / 180.0f);
-}
+    float ToRadians(float Degrees) {
+        return Degrees * (std::numbers::pi_v<float> / 180.0f);
+    }
 }
 
 ELightType USpotLightComponent::GetLightType() const {
@@ -51,17 +51,17 @@ void USpotLightComponent::Serialize(FArchive& Archive) {
     }
 }
 
-void USpotLightComponent::DrawPanels(IPropertyEditorContext& Context) {
+void USpotLightComponent::DrawPanels(IPropertyEditorContext* Context) {
     UPointLightComponent::DrawPanels(Context);
 
-    if (!Context.BeginCategory("Spot Light")) {
+    if (!Context->BeginCategory("Spot Light")) {
         return;
     }
 
-    Context.DrawFloat("Inner Cone Angle", GetInnerConeAngle(), 0.1f, MinimumConeAngle, GetOuterConeAngle(), [this](float InInnerConeAngle) {
+    Context->DrawFloat("Inner Cone Angle", GetInnerConeAngle(), 0.1f, MinimumConeAngle, GetOuterConeAngle(), [this](float InInnerConeAngle) {
         SetInnerConeAngle(InInnerConeAngle);
     });
-    Context.DrawFloat("Outer Cone Angle", GetOuterConeAngle(), 0.1f, GetInnerConeAngle(), MaximumConeAngle, [this](float InOuterConeAngle) {
+    Context->DrawFloat("Outer Cone Angle", GetOuterConeAngle(), 0.1f, GetInnerConeAngle(), MaximumConeAngle, [this](float InOuterConeAngle) {
         SetOuterConeAngle(InOuterConeAngle);
     });
 }

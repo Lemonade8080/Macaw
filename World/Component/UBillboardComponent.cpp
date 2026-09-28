@@ -174,16 +174,16 @@ void UBillboardComponent::OnUnregister() {
     UPrimitiveComponent::OnUnregister();
 }
 
-void UBillboardComponent::DrawPanels(IPropertyEditorContext& Context) {
+void UBillboardComponent::DrawPanels(IPropertyEditorContext* Context) {
     UPrimitiveComponent::DrawPanels(Context);
-    Context.DrawColor("Color", GetColor(), [this](const FVector4& NewColor) {
+    Context->DrawColor("Color", GetColor(), [this](const FVector4& NewColor) {
         SetColor(NewColor);
     });
 
-    Context.DrawAssetPicker("Texture", *UTexture::StaticTypeInfo(), GetTextureHandle(), [this](FAssetHandle NewHandle) {
+    Context->DrawAssetPicker("Texture", *UTexture::StaticTypeInfo(), GetTextureHandle(), [this](FAssetHandle NewHandle) {
         SetTextureHandle(NewHandle);
     });
-    Context.DrawAssetPicker("Pipeline", *UPipeline::StaticTypeInfo(), GetPipelineHandle(), [this](FAssetHandle NewHandle) {
+    Context->DrawAssetPicker("Pipeline", *UPipeline::StaticTypeInfo(), GetPipelineHandle(), [this](FAssetHandle NewHandle) {
         SetPipelineHandle(NewHandle);
     });
 }

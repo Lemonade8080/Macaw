@@ -17,10 +17,10 @@ class FArchive;
 class UObject;
 
 namespace UObjectSystem {
-FObjectHandle Register(UObject* Object);
-FObjectHandle RegisterWithGuid(UObject* Object, const FGuid& InGuid);
-bool TryGet(Uint32 Index, FObjectHandle& Out);
-Uint32 GetItemCount();
+    FObjectHandle Register(UObject* Object);
+    FObjectHandle RegisterWithGuid(UObject* Object, const FGuid& InGuid);
+    bool TryGet(Uint32 Index, FObjectHandle& Out);
+    Uint32 GetItemCount();
 }
 
 class UObject {

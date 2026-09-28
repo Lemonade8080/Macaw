@@ -2,7 +2,7 @@
 #include "TypeRegistry.h"
 
 namespace {
-TMap<std::string_view, const FTypeInfo*> TypeMap{};
+    TMap<std::string_view, const FTypeInfo*> TypeMap{};
 }
 
 void TypeRegistry::Register(const FTypeInfo* Type) {
