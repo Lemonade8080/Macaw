@@ -40,7 +40,7 @@ bool FAssetRegistry::Initialize(ID3D11Device* Device, Uint32 MaxMaterialCount, c
         return false;
     }
 
-    this->mDevice = mDevice;
+    mDevice = Device;
     if (ProgressCallback) {
         ProgressCallback(0.0f, "Discovering assets");
     }

@@ -95,6 +95,8 @@ public:
     AActor* FindActorByName(FName InName) const;
 
 private:
+    friend class FTemporarySceneLoader;
+
     void ClearActors();
     void InitializeSubsystems();
     void DeinitializeSubsystems();
