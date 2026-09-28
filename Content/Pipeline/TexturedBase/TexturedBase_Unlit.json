@@ -22,6 +22,15 @@
       "InstanceDataStepRate": 0
     },
     {
+      "SemanticName": "NORMAL",
+      "SemanticIndex": 0,
+      "Format": "Float3",
+      "InputSlot": 1,
+      "AlignedByteOffset": 0,
+      "InputClassification": "PerVertex",
+      "InstanceDataStepRate": 0
+    },
+    {
       "SemanticName": "TEXCOORD",
       "SemanticIndex": 0,
       "Format": "Float2",

@@ -151,7 +151,7 @@ bool FApplication::InitializeApplication(FLoadingProgress& Progress, HWND Window
     InitializeMode(mContext, WindowHandle);
 
     Progress.SetProgress(0.86f, "Loading scene");
-    const bool SceneLoaded{mContext.mWorld->LoadScene("./scenes/MainScene1.json")};
+    const bool SceneLoaded{mContext.mWorld->LoadScene("./scenes/Default.scene")};
     if (!SceneLoaded) {
         Console::AddLog(Console::STDOutHandle, ELogLevel::Warning, ELogCategory::Etc, "The startup scene failed to load. Initialization will continue with an empty world.");
     }

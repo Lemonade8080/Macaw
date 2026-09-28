@@ -20,6 +20,7 @@ struct FSurfaceOpaqueMaterial {
 
 StructuredBuffer<FModelContext> ModelContexts : register(t0);
 StructuredBuffer<FSurfaceOpaqueMaterial> MaterialBuffer : register(t1);
+#include "Lighting.hlsli"
 
 Texture2D AmbientTexture : register(t3);
 Texture2D DiffuseTexture : register(t4);
@@ -41,13 +42,17 @@ SamplerState LinearWrap : register(s0);
 
 struct VS_INPUT {
     float3 Position : POSITION;
+    float3 Normal : NORMAL;
     float2 UV : TEXCOORD0;
 };
 
 struct PS_INPUT {
     float4 Position : SV_POSITION;
+    float3 Normal : NORMAL;
     float2 UV : TEXCOORD0;
+    float3 WorldPosition : TEXCOORD1;
     nointerpolation uint MaterialIndex : Jungle1;
+    nointerpolation uint Flags : Jungle2;
 };
 
 PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID) {
@@ -55,21 +60,23 @@ PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID) {
     FModelContext ModelContext = ModelContexts[ModelContextStart + InstanceID];
     float4 WorldPosition = mul(float4(Input.Position, 1.0f), ModelContext.World);
     Output.Position = mul(WorldPosition, ViewProjection);
+    Output.Normal = mul(Input.Normal, (float3x3) ModelContext.World);
     Output.UV = Input.UV;
+    Output.WorldPosition = WorldPosition.xyz;
     Output.MaterialIndex = ModelContext.MaterialIndex;
+    Output.Flags = ModelContext.Flags;
     return Output;
 }
 
 float4 mainPS(PS_INPUT Input) : SV_TARGET {
     FSurfaceOpaqueMaterial Material = MaterialBuffer[Input.MaterialIndex];
-    float4 TextureColor = float4(1.0f, 1.0f, 1.0f, 1.0f);
-    uint Width;
-    uint Height;
-    DiffuseTexture.GetDimensions(Width, Height);
 
-    if (Width > 0u && Height > 0u) {
-        TextureColor = DiffuseTexture.Sample(LinearWrap, Input.UV);
+    float4 BaseColor = DiffuseTexture.Sample(LinearWrap, Input.UV) * Material.DiffuseColorAndOpacity;
+    
+    if ((Input.Flags & 2u) == 0)
+    {
+        BaseColor.rgb *= CalculateDirectLighting(Input.WorldPosition, Input.Normal, LightCount);
     }
 
-    return TextureColor * Material.DiffuseColorAndOpacity;
+    return BaseColor;
 }
