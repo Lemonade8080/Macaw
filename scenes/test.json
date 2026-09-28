@@ -45,7 +45,7 @@
                     "Guid": "355BE912-4043-FA13-7AEB-41A7F702A38C",
                     "TypeName": "UNameTagComponent",
                     "Name": "",
-                    "bActive": false,
+                    "bActive": true,
                     "Transform": {
                         "Position": [
                             0.0,
