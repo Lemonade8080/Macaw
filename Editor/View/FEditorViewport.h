@@ -41,8 +41,6 @@ public:
     void SetOrthographicView(EOrthographicView InView);
     void SetCameraParameter(const FVector3& InPosition, const FQuat& InRotation, float InFieldOfView, float InOrthographicWidth, float InNearPlane, float InFarPlane);
 
-    const FFrustum& GetViewFrustum() const;
-    void UpdateViewFrustum(const CameraProbe& InCamera);
 
 private:
     bool DrawMenuBar();
@@ -75,7 +73,6 @@ private:
     float mNearPlane{0.1f};
     float mFarPlane{1000.0f};
 
-    FFrustum mViewFrustum{};
 
     FRect mDisplayRect{};
     Uint32 mWidth{0};
