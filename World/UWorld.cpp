@@ -3,6 +3,7 @@
 #include "FTemporarySceneLoader.h"
 
 #include <algorithm>
+#include <cmath>
 #include <random>
 
 #include "AActor.h"
@@ -489,33 +490,22 @@ void UWorld::HandleMouseCameraRotateRequest(const FMouseCameraRotateRequestMessa
 
     const FEditorSettings Settings{mEditorContext != nullptr ? mEditorContext->GetEditorSettings() : FEditorSettings{}};
     const float RotationSensitivity{Settings.mRotationSensitivity * 0.001f};
-    constexpr float MaximumPitch{0.99f};
+    constexpr float MaximumForwardUp{0.99f};
     FTransform& CameraTransform{Camera->GetRelativeTransform()};
-    const FQuat CurrentRotation{CameraTransform.GetRotationQuaternion()};
-    FQuat YawDelta{FQuat::CreateFromAxisAngle(FVector3::UnitZ, Message.DeltaX * RotationSensitivity)};
-    YawDelta.Normalize();
-
-    FQuat YawedRotation{FQuat::Concatenate(YawDelta, CurrentRotation)};
-    YawedRotation.Normalize();
-    FTransform YawedTransform{};
-    YawedTransform.SetRotation(YawedRotation);
-    const FMatrix YawMatrix{YawedTransform.ToMatrixWithScale()};
-    FVector3 Right{YawMatrix.Right()};
-    FVector3 Forward{YawMatrix.Forward()};
-    Right.Normalize();
+    FVector3 Forward{CameraTransform.ToMatrixNoScale().Forward()};
     Forward.Normalize();
 
-    float PitchAngle{Message.DeltaY * RotationSensitivity};
-    const float ForwardUp{Forward.Dot(FVector3::UnitZ)};
-    if ((ForwardUp > MaximumPitch && Message.DeltaY > 0.0f) || (ForwardUp < -MaximumPitch && Message.DeltaY < 0.0f)) {
-        PitchAngle = 0.0f;
-    }
+    const float CurrentYaw{std::atan2(Forward.mY, Forward.mX)};
+    const float CurrentElevation{std::asin(std::clamp(Forward.mZ, -1.0f, 1.0f))};
+    const float MaximumElevation{std::asin(MaximumForwardUp)};
+    const float NewYaw{CurrentYaw + Message.DeltaX * RotationSensitivity};
+    const float NewElevation{std::clamp(CurrentElevation + Message.DeltaY * RotationSensitivity, -MaximumElevation, MaximumElevation)};
 
-    FQuat PitchDelta{FQuat::CreateFromAxisAngle(Right, PitchAngle)};
-    PitchDelta.Normalize();
-    FQuat WorldDelta{FQuat::Concatenate(PitchDelta, YawDelta)};
-    WorldDelta.Normalize();
-    CameraTransform.SetRotation(FQuat::Concatenate(WorldDelta, CurrentRotation));
+    const FQuat YawRotation{FQuat::CreateFromAxisAngle(FVector3::UnitZ, NewYaw)};
+    const FQuat PitchRotation{FQuat::CreateFromAxisAngle(FVector3::UnitY, -NewElevation)};
+    FQuat NewRotation{FQuat::Concatenate(YawRotation, PitchRotation)};
+    NewRotation.Normalize();
+    CameraTransform.SetRotation(NewRotation);
 }
 
 void UWorld::HandleKeyboardCameraMoveRequest(const FKeyboardCameraMoveRequestMessage& Message) {
@@ -525,7 +515,7 @@ void UWorld::HandleKeyboardCameraMoveRequest(const FKeyboardCameraMoveRequestMes
     }
 
     const FMatrix CameraWorldMatrix{Camera->GetComponentToWorld()};
-    FVector3 MoveDirection{CameraWorldMatrix.Forward() * Message.ForwardAxis - CameraWorldMatrix.Right() * Message.RightAxis};
+    FVector3 MoveDirection{CameraWorldMatrix.Forward() * Message.ForwardAxis + CameraWorldMatrix.Right() * Message.RightAxis};
     if (MoveDirection.LengthSquared() <= 0.0f) {
         return;
     }
