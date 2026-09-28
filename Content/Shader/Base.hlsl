@@ -67,5 +67,6 @@ float4 mainPS(PS_INPUT Input) : SV_TARGET {
     else {
         BaseColor.rgb *= Input.ColorCoefficient * CalculateDirectLighting(Input.WorldPosition, Input.Normal, LightCount);
     }
+    
     return BaseColor;
 }
