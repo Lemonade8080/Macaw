@@ -114,9 +114,9 @@ void FPropertyEditorContext::DrawTransform(const char* Label, const FTransform& 
     UpdateTransformFields(Value);
 
     bool BChanged{false};
-    BChanged |= ImGui::DragFloat3("Position", &mEditPosition.mX, 0.1f);
-    BChanged |= ImGui::DragFloat3("Rotation", &mEditRotation.mX, 0.5f);
-    BChanged |= ImGui::DragFloat3("Scale", &mEditScale.mX, 0.05f, 0.001f, FLT_MAX);
+    BChanged |= ImGui::DragFloat3("Position", &mEditPosition.X, 0.1f);
+    BChanged |= ImGui::DragFloat3("Rotation", &mEditRotation.Pitch, 0.5f);
+    BChanged |= ImGui::DragFloat3("Scale", &mEditScale.X, 0.05f, 0.001f, FLT_MAX);
     BChanged |= ImGui::Checkbox("Absolute Location", &mBAbsoluteLocation);
     BChanged |= ImGui::Checkbox("Absolute Rotation", &mBAbsoluteRotation);
     BChanged |= ImGui::Checkbox("Absolute Scale", &mBAbsoluteScale);

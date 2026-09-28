@@ -45,7 +45,7 @@
                     "Guid": "355BE912-4043-FA13-7AEB-41A7F702A38C",
                     "TypeName": "UNameTagComponent",
                     "Name": "",
-                    "bActive": false,
+                    "bActive": true,
                     "Transform": {
                         "Position": [
                             0.0,
@@ -92,6 +92,190 @@
                 }
             ],
             "GuidRootComponent": "05584E92-427A-2633-F527-1884258E8D21"
+        },
+        {
+            "Guid": "FC7A4A60-4875-A12A-6AB8-11ADCE73222A",
+            "TypeName": "AActor",
+            "Name": "AActor_1",
+            "Components": [
+                {
+                    "Guid": "D891A070-43D7-F96E-BA88-D695CCB4F8FD",
+                    "TypeName": "UStaticMeshComponent",
+                    "Name": "",
+                    "bActive": true,
+                    "Transform": {
+                        "Position": [
+                            -5.640012741088867,
+                            -5.461460590362549,
+                            4.664999961853027
+                        ],
+                        "Rotation": [
+                            -0.45813706517219543,
+                            0.15967421233654022,
+                            0.28778374195098877,
+                            0.8257088661193848
+                        ],
+                        "Scale": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "bAbsoluteLocation": false,
+                        "bAbsoluteRotation": false,
+                        "bAbsoluteScale": false
+                    },
+                    "Parent": "00000000-0000-0000-0000-000000000000",
+                    "bVisible": true,
+                    "MeshAssetGuid": "CAF1F0CC-4CA3-EFD0-DB52-3F82B1373EC5",
+                    "MeshAssetPath": "/Game/ModelingFiles/Cube_Quad.bin",
+                    "MaterialAssetGuid": "DD9BDB32-4B7B-2EA3-ADB3-E4889C4651BE",
+                    "MaterialAssetPath": "/Game/Models/EnderD/Untitled.mtl",
+                    "PipelineAssetGuid": "653C7285-C0DE-4239-808E-015A9EF47624",
+                    "PipelineAssetPath": "/Game/Pipeline/TexturedBase"
+                },
+                {
+                    "Guid": "5204F0B4-44F6-BD7C-5F03-1AA832546506",
+                    "TypeName": "UNameTagComponent",
+                    "Name": "",
+                    "bActive": false,
+                    "Transform": {
+                        "Position": [
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "Rotation": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
+                        ],
+                        "Scale": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "bAbsoluteLocation": false,
+                        "bAbsoluteRotation": false,
+                        "bAbsoluteScale": false
+                    },
+                    "Parent": "D891A070-43D7-F96E-BA88-D695CCB4F8FD",
+                    "bVisible": true,
+                    "FontAssetGuid": "0C6D5C06-6626-4BCF-A653-83ED3FF5280F",
+                    "FontAssetPath": "/Game/Font/NotoSansKR-Medium.ttf",
+                    "PipelineAssetGuid": "E41C36DD-3CF1-4FC0-9C14-7F7C20714597",
+                    "PipelineAssetPath": "/Game/Pipeline/Text.json",
+                    "Text": "FC7A4A60-4875-A12A-6AB8-11ADCE73222A",
+                    "Color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "CharacterHeight": 1.0,
+                    "LetterSpacing": 0.0,
+                    "LineSpacing": 0.0,
+                    "TargetActorGuid": "00000000-0000-0000-0000-000000000000",
+                    "TargetLocalOffset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            ],
+            "GuidRootComponent": "D891A070-43D7-F96E-BA88-D695CCB4F8FD"
+        },
+        {
+            "Guid": "B5617C60-40F3-2841-D620-3C9763A4D383",
+            "TypeName": "AActor",
+            "Name": "AActor_2",
+            "Components": [
+                {
+                    "Guid": "49A26C12-4EF7-5166-2084-ACA6A0F4B33A",
+                    "TypeName": "UStaticMeshComponent",
+                    "Name": "",
+                    "bActive": true,
+                    "Transform": {
+                        "Position": [
+                            9.004587173461914,
+                            0.1708526611328125,
+                            0.0
+                        ],
+                        "Rotation": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
+                        ],
+                        "Scale": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "bAbsoluteLocation": false,
+                        "bAbsoluteRotation": false,
+                        "bAbsoluteScale": false
+                    },
+                    "Parent": "00000000-0000-0000-0000-000000000000",
+                    "bVisible": true,
+                    "MeshAssetGuid": "95933102-44D6-8DD5-B144-58B4E8D412C9",
+                    "MeshAssetPath": "/Game/Models/Mimikyu/Untitled.bin",
+                    "MaterialAssetGuid": "21AD3FCE-4B41-113E-AFAC-1EA18000D81D",
+                    "MaterialAssetPath": "/Game/Models/Mimikyu/Untitled.mtl",
+                    "PipelineAssetGuid": "653C7285-C0DE-4239-808E-015A9EF47624",
+                    "PipelineAssetPath": "/Game/Pipeline/TexturedBase"
+                },
+                {
+                    "Guid": "170CAA99-4922-B47E-847C-8DBD84CD8C7F",
+                    "TypeName": "UNameTagComponent",
+                    "Name": "",
+                    "bActive": false,
+                    "Transform": {
+                        "Position": [
+                            0.0,
+                            0.0,
+                            0.0
+                        ],
+                        "Rotation": [
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
+                        ],
+                        "Scale": [
+                            1.0,
+                            1.0,
+                            1.0
+                        ],
+                        "bAbsoluteLocation": false,
+                        "bAbsoluteRotation": false,
+                        "bAbsoluteScale": false
+                    },
+                    "Parent": "49A26C12-4EF7-5166-2084-ACA6A0F4B33A",
+                    "bVisible": true,
+                    "FontAssetGuid": "0C6D5C06-6626-4BCF-A653-83ED3FF5280F",
+                    "FontAssetPath": "/Game/Font/NotoSansKR-Medium.ttf",
+                    "PipelineAssetGuid": "E41C36DD-3CF1-4FC0-9C14-7F7C20714597",
+                    "PipelineAssetPath": "/Game/Pipeline/Text.json",
+                    "Text": "B5617C60-40F3-2841-D620-3C9763A4D383",
+                    "Color": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                    ],
+                    "CharacterHeight": 1.0,
+                    "LetterSpacing": 0.0,
+                    "LineSpacing": 0.0,
+                    "TargetActorGuid": "00000000-0000-0000-0000-000000000000",
+                    "TargetLocalOffset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            ],
+            "GuidRootComponent": "49A26C12-4EF7-5166-2084-ACA6A0F4B33A"
         }
     ]
 }
