@@ -1,4 +1,5 @@
-﻿#include "pch.h"
+﻿#include "UMesh.h"
+#include "pch.h"
 #include "UMesh.h"
 
 #include "Core/Console/Console.h"
@@ -12,6 +13,25 @@ std::size_t UMesh::GetAttributeIndex(EVertexAttribute Attribute) {
 
 std::size_t UMesh::GetAttributeCount() {
     return static_cast<std::size_t>(EVertexAttribute::MAX);
+}
+
+bool UMesh::BuildBoundingBoxFromMesh()
+{
+    const auto Positions{ GetVertexAttributeData<EVertexAttribute::Position>() };
+    if (Positions.empty()) {
+        return false;
+    }
+
+    std::vector<DirectX::XMFLOAT3> Points{};
+    Points.reserve(Positions.size());
+    for (const FVector3& Position : Positions) {
+        Points.emplace_back(Position.mX, Position.mY, Position.mZ);
+    }
+
+    DirectX::BoundingBox Bounds{};
+    DirectX::BoundingBox::CreateFromPoints(Bounds, Points.size(), Points.data(), sizeof(DirectX::XMFLOAT3));
+    DirectX::BoundingOrientedBox::CreateFromBoundingBox(mBoundingBox, Bounds);
+    return true;
 }
 
 bool UMesh::Initialize(ID3D11Device* Device, const std::filesystem::path& SourceObjPath, const std::filesystem::path& BinaryPath, const FMaterialResolver& MaterialResolver, const FMaterialGroupResolver& MaterialGroupResolver, bool FlipUV) {
@@ -124,6 +144,10 @@ bool UMesh::Initialize(ID3D11Device* Device, const std::filesystem::path& Source
                                                         MakeVertexAttribute<EVertexAttribute::Color>(Geometry.mColors))) {
         Console::AddLog(Console::STDOutHandle, ELogLevel::Error, ELogCategory::Etc, "Failed to create GPU buffers for model: %s", AssetPath.generic_string().c_str());
         return false;
+    }
+
+    if (!BuildBoundingBoxFromMesh()) {
+        Console::AddLog(Console::STDOutHandle, ELogLevel::Warning, ELogCategory::Etc, "Failed to create a Bounding Box for model: %s", AssetPath.generic_string().c_str());
     }
 
     mSubMeshes = std::move(ImportedSubMeshes);

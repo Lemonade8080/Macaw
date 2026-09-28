@@ -39,22 +39,7 @@ bool UMeshComponent::BuildPickingBoxFromMesh() {
         return false;
     }
 
-    const auto Positions{Mesh->GetVertexAttributeData<EVertexAttribute::Position>()};
-    if (Positions.empty()) {
-        return false;
-    }
-
-    std::vector<DirectX::XMFLOAT3> Points{};
-    Points.reserve(Positions.size());
-    for (const FVector3& Position : Positions) {
-        Points.emplace_back(Position.mX, Position.mY, Position.mZ);
-    }
-
-    DirectX::BoundingBox Bounds{};
-    DirectX::BoundingBox::CreateFromPoints(Bounds, Points.size(), Points.data(), sizeof(DirectX::XMFLOAT3));
-    DirectX::BoundingOrientedBox Box{};
-    DirectX::BoundingOrientedBox::CreateFromBoundingBox(Box, Bounds);
-    SetPickingBox(Box);
+    SetPickingBox(Mesh->GetBoundingBox());
     return true;
 }
 

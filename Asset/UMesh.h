@@ -68,6 +68,8 @@ public:
 
     void SetSubMeshes(const std::span<FSubMesh>& InSubMeshes);
 
+    const inline DirectX::BoundingOrientedBox GetBoundingBox() const { return mBoundingBox; }
+
 protected:
     virtual void Serialize(FArchive& Ar) override;
 
@@ -84,6 +86,8 @@ private:
 
     static std::size_t GetAttributeCount();
 
+    bool BuildBoundingBoxFromMesh();
+
 private:
     TFixedArray<Microsoft::WRL::ComPtr<ID3D11Buffer>, static_cast<std::size_t>(EVertexAttribute::MAX)> mVertexBuffers{};
     TFixedArray<std::unique_ptr<FVertexAttributeStorageBase>, static_cast<std::size_t>(EVertexAttribute::MAX)> mAttributeStorage{};
@@ -93,6 +97,8 @@ private:
     TArray<Uint32> mIndices{};
 
     TArray<FSubMesh> mSubMeshes{};
+
+    DirectX::BoundingOrientedBox mBoundingBox{ DirectX::XMFLOAT3{0.f, 0.f, 0.f}, DirectX::XMFLOAT3{0.f, 0.f, 0.f}, DirectX::XMFLOAT4{0.f, 0.f, 0.f, 1.f} };
 };
 
 template <typename T> UMesh::TVertexAttributeStorage<T>::TVertexAttributeStorage(std::span<const T> InData)
