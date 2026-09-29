@@ -105,19 +105,20 @@ void FRenderQueue::AddItems(const IAssetRegistry* Registry, const TArray<FActorP
 void FRenderQueue::FrustumCulling(const TArray<FActorProbe>& BeforeCullingProbes, const FFrustum& Frustum)
 {
     mVisibleProbes.clear();
+    mVisibleProbes.reserve(BeforeCullingProbes.size());
 
-    for (const auto& Probe : BeforeCullingProbes) {
-        DirectX::BoundingSphere WorldBounds{};
-
-        if (!Frustum.Intersects(Probe.mWorldSphereBounds)) {
-            continue;
-        }
-
-        if (!Frustum.Intersects(Probe.mWorldOBB))
-        {
-            continue;
-        }
-
-        mVisibleProbes.push_back(Probe);
+    if (BeforeCullingProbes.empty())
+    {
+        return;
     }
+
+    const bool bNeedsRebuiled = mBVHTree.GetNodes().empty() || (mCachedProbeCount != BeforeCullingProbes.size());
+
+    if (bNeedsRebuiled)
+    {
+        mBVHTree.Build(BeforeCullingProbes);
+        mCachedProbeCount = BeforeCullingProbes.size();
+    }
+    
+    mBVHTree.FrustumCull(Frustum, BeforeCullingProbes, mVisibleProbes);
 }

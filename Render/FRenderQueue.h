@@ -2,6 +2,7 @@
 
 #include "FRenderView.h"
 #include "Asset/FMaterialChunkSignature.h"
+#include "FBVHTree.h"
 
 class IAssetRegistry;
 
@@ -34,4 +35,6 @@ private:
     
     // ÄÃ¸µµÈ ActorProbes 
     TArray<FActorProbe> mVisibleProbes{};
+    FBVHTree mBVHTree;  
+    size_t mCachedProbeCount{ 0 };
 };

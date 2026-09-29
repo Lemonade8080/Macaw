@@ -57,6 +57,7 @@ struct FActorProbe {
     FObjectHandle mOwnerHandle{};
     DirectX::BoundingSphere mWorldSphereBounds{};
     DirectX::BoundingOrientedBox mWorldOBB{};
+    DirectX::BoundingBox mWorldAABB{};
 };
 
 struct CameraProbe {
