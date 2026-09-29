@@ -22,6 +22,11 @@ void FTextRenderer::Render(ID3D11DeviceContext* Context, FFrameResource& FrameRe
     if (Context == nullptr || mDevice == nullptr || AssetRegistry == nullptr || TextProbes.empty() || !FrameResource.HasCameraWorld() || !FrameResource.BindCommon(Context)) {
         return;
     }
+    mTextContexts.clear();
+    mVertices.clear();
+    mDraws.clear();
+    constexpr std::size_t MaxVertexCount{UINT32_MAX / sizeof(FGlyphVertex)};
+    constexpr std::size_t MaxTextCount{UINT32_MAX / sizeof(FTextContext)};
     for (const FTextProbe& Probe : TextProbes) {
         if (Probe.mVertices.empty()) {
             continue;
@@ -33,28 +38,40 @@ void FTextRenderer::Render(ID3D11DeviceContext* Context, FFrameResource& FrameRe
         AssetRegistry->FlushFontAtlas(Probe.mFontHandle, Context);
         ID3D11ShaderResourceView* AtlasSRV{Font->GetAtlasSRV()};
         if (AtlasSRV == nullptr) {
-            if (AtlasSRV == nullptr) {
-                continue;
-            }
+            continue;
         }
         const UPipeline* PipeLine{AssetRegistry->ResolveAsset<UPipeline>(Probe.mPipelineHandle)};
         if (PipeLine == nullptr) {
             continue;
         }
-        const std::uint32_t VertexCount{static_cast<std::uint32_t>(Probe.mVertices.size())};
-        if (!FrameResource.UploadStream(mDevice, Context, EFrameStream::Text, Probe.mVertices.data(), VertexCount, sizeof(FTextVertex), D3D11_BIND_VERTEX_BUFFER)) {
-            continue;
+        if (Probe.mVertices.size() > MaxVertexCount - mVertices.size() || mTextContexts.size() >= MaxTextCount) {
+            return;
         }
-        PipeLine->Bind(Context);
-        ID3D11Buffer* Buffer{FrameResource.GetStreamBuffer(EFrameStream::Text)};
-        UINT Stride{sizeof(FTextVertex)};
-        UINT Offset{0};
-        Context->IASetVertexBuffers(0, 1, &Buffer, &Stride, &Offset);
-        Context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
-        Context->PSSetShaderResources(3, 1, &AtlasSRV);
-        if (!FrameResource.BindTextDraw(Context, Probe)) {
-            continue;
+        const Uint32 TextIndex{static_cast<Uint32>(mTextContexts.size())};
+        mTextContexts.push_back(FTextContext{Probe.mWorld, Probe.mColor, Probe.mScreenBoundsExtent, Probe.mScreenUpPadding});
+        mDraws.push_back(FTextDraw{PipeLine, AtlasSRV, static_cast<Uint32>(mVertices.size()), static_cast<Uint32>(Probe.mVertices.size())});
+        for (const FTextVertex& Vertex : Probe.mVertices) {
+            mVertices.push_back(FGlyphVertex{Vertex, TextIndex});
         }
-        Context->Draw(VertexCount, 0);
+    }
+    if (mDraws.empty()) {
+        return;
+    }
+    ID3D11ShaderResourceView* NullResource{};
+    Context->GSSetShaderResources(0, 1, &NullResource);
+    if (!FrameResource.UploadStream(mDevice, Context, EFrameStream::Text, mVertices.data(), static_cast<Uint32>(mVertices.size()), sizeof(FGlyphVertex), D3D11_BIND_VERTEX_BUFFER) || !FrameResource.UploadStream(mDevice, Context, EFrameStream::TextContext, mTextContexts.data(), static_cast<Uint32>(mTextContexts.size()), sizeof(FTextContext), D3D11_BIND_SHADER_RESOURCE)) {
+        return;
+    }
+    ID3D11Buffer* Buffer{FrameResource.GetStreamBuffer(EFrameStream::Text)};
+    ID3D11ShaderResourceView* TextContexts{FrameResource.GetStreamResourceView(EFrameStream::TextContext)};
+    const UINT Stride{sizeof(FGlyphVertex)};
+    const UINT Offset{};
+    Context->IASetVertexBuffers(0, 1, &Buffer, &Stride, &Offset);
+    Context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+    Context->GSSetShaderResources(0, 1, &TextContexts);
+    for (const FTextDraw& Draw : mDraws) {
+        Draw.mPipeline->Bind(Context);
+        Context->PSSetShaderResources(3, 1, &Draw.mAtlas);
+        Context->Draw(Draw.mVertexCount, Draw.mFirstVertex);
     }
 }

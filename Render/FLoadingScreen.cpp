@@ -87,7 +87,7 @@ bool FLoadingScreen::LoadLogo(ID3D11Device* Device) {
     return true;
 }
 
-bool FLoadingScreen::Run(FRenderer& Renderer, HACCEL AcceleratorTable, const FLoadingTask& LoadingTask) {
+bool FLoadingScreen::Run(FRenderer& Renderer, HACCEL AcceleratorTable, const FLoadingTask& LoadingTask, const FLoadingFrameTask& LoadingFrameTask) {
     LoadLogo(Renderer.GetDevice());
 
     FLoadingProgress Progress{};
@@ -113,9 +113,9 @@ bool FLoadingScreen::Run(FRenderer& Renderer, HACCEL AcceleratorTable, const FLo
     }};
 
     bool QuitRequested{};
-    bool FirstFrame{true};
+    bool FrameTaskFinished{};
 
-    while (FirstFrame || !Finished.load(std::memory_order_acquire)) {
+    while (true) {
         MSG Message{};
         while (PeekMessage(&Message, nullptr, 0, 0, PM_REMOVE)) {
             if (Message.message == WM_QUIT) {
@@ -129,11 +129,23 @@ bool FLoadingScreen::Run(FRenderer& Renderer, HACCEL AcceleratorTable, const FLo
             }
         }
 
+        const bool LoadingFinished{Finished.load(std::memory_order_acquire)};
         if (!QuitRequested) {
+            if (LoadingFinished && Succeeded.load(std::memory_order_acquire)) {
+                try {
+                    Renderer.BeginFrame(0.0f);
+                    FrameTaskFinished = LoadingFrameTask(Progress);
+                } catch (...) {
+                    Progress.SetProgress(Progress.GetProgress(), "Loading failed");
+                    Succeeded.store(false, std::memory_order_release);
+                }
+            }
             Render(Renderer, Progress);
         }
 
-        FirstFrame = false;
+        if (LoadingFinished && (QuitRequested || !Succeeded.load(std::memory_order_acquire) || FrameTaskFinished)) {
+            break;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds{8});
     }
 

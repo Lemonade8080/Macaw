@@ -73,14 +73,22 @@ void FLineRenderer::AddRay(const FVector3& Origin, const FVector3& Direction, fl
 }
 
 void FLineRenderer::Render(ID3D11DeviceContext* Context, FFrameResource& FrameResource) {
+    RenderLines(Context, FrameResource, false);
+}
+
+void FLineRenderer::RenderOrientationAxis(ID3D11DeviceContext* Context, FFrameResource& FrameResource) {
+    RenderLines(Context, FrameResource, true);
+}
+
+void FLineRenderer::RenderLines(ID3D11DeviceContext* Context, FFrameResource& FrameResource, bool OrientationAxis) {
     ErrorHandler::Report(mDevice == nullptr, "[ FLineRenderer ]", "Invalid device pointer.", ErrorHandler::EErrorLevel::Critical);
     ErrorHandler::Report(Context == nullptr, "[ FLineRenderer ]", "Invalid device context pointer.", ErrorHandler::EErrorLevel::Critical);
     ErrorHandler::Report(mDepthTestedPipeline == nullptr, "[ FLineRenderer ]", "Depth-tested pipeline is not initialized.", ErrorHandler::EErrorLevel::Critical);
 
-    ErrorHandler::Report(not FrameResource.BindCommon(Context), "[ FLineRenderer ]", "Failed to bind frame constants.", ErrorHandler::EErrorLevel::Critical);
+    ErrorHandler::Report(not FrameResource.BindCommon(Context, OrientationAxis), "[ FLineRenderer ]", "Failed to bind frame constants.", ErrorHandler::EErrorLevel::Critical);
 
-    ErrorHandler::Report(not RenderBatch(Context, FrameResource, mDepthTestedBatch, mDepthTestedPipeline.get(), EFrameStream::LineDepth), "[ FLineRenderer ]", "Failed to render depth-tested lines.", ErrorHandler::EErrorLevel::Critical);
-    ErrorHandler::Report(not RenderBatch(Context, FrameResource, mOverlayBatch, mOverlayPipeline.get(), EFrameStream::LineOverlay), "[ FLineRenderer ]", "Failed to render overlay lines.", ErrorHandler::EErrorLevel::Critical);
+    ErrorHandler::Report(not RenderBatch(Context, FrameResource, mDepthTestedBatch, mDepthTestedPipeline.get(), OrientationAxis ? EFrameStream::OrientationAxisLineDepth : EFrameStream::LineDepth), "[ FLineRenderer ]", "Failed to render depth-tested lines.", ErrorHandler::EErrorLevel::Critical);
+    ErrorHandler::Report(not RenderBatch(Context, FrameResource, mOverlayBatch, mOverlayPipeline.get(), OrientationAxis ? EFrameStream::OrientationAxisLineOverlay : EFrameStream::LineOverlay), "[ FLineRenderer ]", "Failed to render overlay lines.", ErrorHandler::EErrorLevel::Critical);
 
     Clear();
 }
