@@ -15,6 +15,7 @@
 
 using FPlane = DirectX::SimpleMath::Plane;
 using FRay = DirectX::SimpleMath::Ray;
+using FFrustum = DirectX::BoundingFrustum;
 
 namespace FMath
 {
