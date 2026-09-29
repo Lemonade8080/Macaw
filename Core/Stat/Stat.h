@@ -33,36 +33,22 @@ namespace Stat {
     };
 
     enum class ESystemStatStage : std::size_t {
-        Frame,
-        Thumbnails,
-        Offscreen,
+        FrameSetup,
+        PreviewRender,
         EditorUi,
-        Input,
-        WorldCommands,
-        WorldTick,
-        EditorDispatch,
-        SceneRender,
+        WorldUpdate,
+        RenderPreparation,
+        Geometry,
+        EditorOverlays,
         UiRender,
         Present,
-        RenderBeginFrame,
-        RenderFenceWait,
-        RenderView,
-        RenderTarget,
-        RenderMaterials,
-        RenderQueue,
-        RenderViewUpload,
-        RenderGeometry,
-        RenderSelectionOutline,
-        RenderSceneGuides,
-        RenderGizmo,
-        RenderText,
-        RenderBillboard,
-        RenderOrientationAxis,
+        Other,
         Count
     };
 
     struct FSystemStatSample {
         double mTotalMilliseconds{};
+        double mExclusiveMilliseconds{};
         std::uint64_t mCallCount{};
     };
 
@@ -103,6 +89,7 @@ namespace Stat {
 
     struct FSystemStatAverage {
         double mTotalMilliseconds{};
+        double mExclusiveMilliseconds{};
         double mCallCount{};
     };
 
@@ -140,7 +127,7 @@ namespace Stat {
         std::uint64_t mFrameCount{};
     };
 
-    void BeginFrame(double DeltaSeconds = 0.0);
+    void BeginFrame();
     void EndFrame();
     void ResetFrameStats();
 
@@ -175,6 +162,7 @@ namespace Stat {
 
     private:
         ESystemStatStage mStage{};
+        ESystemStatStage mPreviousStage{};
         std::chrono::steady_clock::time_point mStartTime{};
         std::uint64_t mFrameId{};
         bool mActive{};
