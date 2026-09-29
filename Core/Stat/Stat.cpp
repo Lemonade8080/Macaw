@@ -39,6 +39,10 @@ namespace {
         }
         Totals.mObjects.mObjectCount += static_cast<double>(State.mStats.mObjects.mObjectCount);
         Totals.mObjects.mActorCount += static_cast<double>(State.mStats.mObjects.mActorCount);
+        Totals.mLOD.mLevel = State.mStats.mLOD.mLevel;
+        Totals.mLOD.mRenderedTriangleCount += static_cast<double>(State.mStats.mLOD.mRenderedTriangleCount);
+        Totals.mLOD.mOriginalTriangleCount += static_cast<double>(State.mStats.mLOD.mOriginalTriangleCount);
+        Totals.mLOD.mDrawCallCount += static_cast<double>(State.mStats.mLOD.mDrawCallCount);
         const FMemoryStats& Memory{State.mStats.mMemory};
         Totals.mMemory.mAllocatedBytes += static_cast<double>(Memory.mAllocatedBytes);
         Totals.mMemory.mActiveAllocationCount += static_cast<double>(Memory.mActiveAllocationCount);
@@ -63,6 +67,9 @@ namespace {
         }
         Averages.mObjects.mObjectCount /= FrameCount;
         Averages.mObjects.mActorCount /= FrameCount;
+        Averages.mLOD.mRenderedTriangleCount /= FrameCount;
+        Averages.mLOD.mOriginalTriangleCount /= FrameCount;
+        Averages.mLOD.mDrawCallCount /= FrameCount;
         Averages.mMemory.mAllocatedBytes /= FrameCount;
         Averages.mMemory.mActiveAllocationCount /= FrameCount;
         for (FTagStatAverage& Tag : Averages.mMemory.mTagStats) {
@@ -124,6 +131,7 @@ void Stat::BeginFrame() {
         }
     }
     State.mCurrentSamples = {};
+    State.mStats.mLOD = {};
     State.mFrameStartTime = CurrentTime;
     State.mLastSampleTime = CurrentTime;
     State.mCurrentStage = ESystemStatStage::Other;
@@ -156,6 +164,7 @@ void Stat::ResetFrameStats() {
     State.mStats.mSystem = {};
     State.mStats.mFrame = {};
     State.mStats.mPicking = {};
+    State.mStats.mLOD = {};
     State.mFrameWindowSeconds = 0.0;
     State.mFrameWindowCount = 0;
     ++State.mActiveFrameId;
@@ -281,6 +290,14 @@ void Stat::RecordPickingTime(double Milliseconds, double NarrowPhaseMilliseconds
     ++State.mPickingWindowCount;
 }
 
+void Stat::RecordLODStats(std::uint32_t Level, std::uint64_t RenderedTriangleCount, std::uint64_t OriginalTriangleCount, std::uint64_t DrawCallCount) {
+    FLODStats& Stats{GetStatState().mStats.mLOD};
+    Stats.mLevel = (std::max)(Stats.mLevel, Level);
+    Stats.mRenderedTriangleCount += RenderedTriangleCount;
+    Stats.mOriginalTriangleCount += OriginalTriangleCount;
+    Stats.mDrawCallCount += DrawCallCount;
+}
+
 Stat::FStats Stat::GetStats() {
     return GetStatState().mStats;
 }
@@ -303,6 +320,10 @@ Stat::FObjectStats Stat::GetObjectStats() {
 
 Stat::FPickingStats Stat::GetPickingStats() {
     return GetStatState().mStats.mPicking;
+}
+
+Stat::FLODStats Stat::GetLODStats() {
+    return GetStatState().mStats.mLOD;
 }
 
 const char* Stat::GetMemoryTagName(EMemoryTag Tag) {

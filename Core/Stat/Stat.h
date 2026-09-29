@@ -79,12 +79,20 @@ namespace Stat {
         std::uint64_t mAttemptCount{};
     };
 
+    struct FLODStats {
+        std::uint32_t mLevel{};
+        std::uint64_t mRenderedTriangleCount{};
+        std::uint64_t mOriginalTriangleCount{};
+        std::uint64_t mDrawCallCount{};
+    };
+
     struct FStats {
         FFrameStats mFrame{};
         FSystemStats mSystem{};
         FMemoryStats mMemory{};
         FObjectStats mObjects{};
         FPickingStats mPicking{};
+        FLODStats mLOD{};
     };
 
     struct FSystemStatAverage {
@@ -118,12 +126,20 @@ namespace Stat {
         double mAttemptsPerFrame{};
     };
 
+    struct FLODStatAverage {
+        std::uint32_t mLevel{};
+        double mRenderedTriangleCount{};
+        double mOriginalTriangleCount{};
+        double mDrawCallCount{};
+    };
+
     struct FStatAverages {
         FFrameStats mFrame{};
         std::array<FSystemStatAverage, static_cast<std::size_t>(ESystemStatStage::Count)> mSystemSamples{};
         FMemoryStatAverage mMemory{};
         FObjectStatAverage mObjects{};
         FPickingStatAverage mPicking{};
+        FLODStatAverage mLOD{};
         std::uint64_t mFrameCount{};
     };
 
@@ -137,6 +153,7 @@ namespace Stat {
     void RecordObjectCounts(std::size_t ObjectCount, std::size_t ActorCount);
     // A negative narrow-phase value means the optional breakdown was not measured.
     void RecordPickingTime(double Milliseconds, double NarrowPhaseMilliseconds = -1.0);
+    void RecordLODStats(std::uint32_t Level, std::uint64_t RenderedTriangleCount, std::uint64_t OriginalTriangleCount, std::uint64_t DrawCallCount);
 
     FStats GetStats();
     FStatAverages GetStatAverages();
@@ -146,6 +163,7 @@ namespace Stat {
     FMemoryStats GetMemoryStats();
     FObjectStats GetObjectStats();
     FPickingStats GetPickingStats();
+    FLODStats GetLODStats();
 
     const char* GetSystemStageName(ESystemStatStage Stage);
     // 태그 이름을 문자열로 반환하는 헬퍼 함수

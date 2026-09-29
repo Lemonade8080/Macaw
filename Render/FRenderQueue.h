@@ -12,6 +12,7 @@ struct FMeshDrawItem {
     Uint32 mMaterialGroupIndex{};
     Uint32 mFirstIndex{};
     Uint32 mIndexCount{};
+    Uint32 mLODLevel{};
     Uint32 mModelIndex{};
     bool HasSameBatch(const FMeshDrawItem& Other) const;
 };
@@ -22,8 +23,8 @@ public:
     const TArray<FMeshDrawItem>& GetItems(ERenderPass Pass) const;
 
 private:
-    void BuildItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, TArray<FMeshDrawItem>& Items, bool RenderSky);
-    void AddItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, std::size_t Begin, std::size_t End, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, TArray<FMeshDrawItem>& Items);
+    void BuildItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, TArray<FMeshDrawItem>& Items, bool RenderSky, const CameraProbe& Camera, bool BUseLOD);
+    void AddItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, std::size_t Begin, std::size_t End, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, Uint32 LODLevel, TArray<FMeshDrawItem>& Items);
 
 private:
     TArray<FMeshDrawItem> mSceneItems{};

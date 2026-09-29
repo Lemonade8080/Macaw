@@ -226,7 +226,7 @@ void FRenderer::DrawOrientationAxis(const FRenderView& View) {
     mDeviceContext->RSSetViewports(1, &AxisViewport);
     FMatrix AxisView{View.mCamera.mView};
     AxisView.Translation(FVector3{0.0f, 0.0f, 3.0f});
-    const FMatrix Projection{FMatrix::CreateOrthographic(2.5f, 2.5f, 0.1f, 10.0f)};
+    const FMatrix Projection{FMatrix::CreateOrthographic(2.5f, 2.5f, 0.5f, 10.0f)};
     mLineRenderer.Clear();
     mLineRenderer.AddRay(FVector3{}, FVector3{1.0f, 0.0f, 0.0f}, 1.0f, FVector4{1.0f, 0.0f, 0.0f, 1.0f}, 3.0f);
     mLineRenderer.AddRay(FVector3{}, FVector3{0.0f, 1.0f, 0.0f}, 1.0f, FVector4{0.0f, 1.0f, 0.0f, 1.0f}, 3.0f);

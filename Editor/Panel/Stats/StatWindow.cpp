@@ -78,7 +78,7 @@ namespace {
 }
 
 void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags StatFlags) {
-    if (!StatFlags.mBShowFps && !StatFlags.mBShowMemory && !StatFlags.mBObjectSystem && !StatFlags.mBShowPicking && !StatFlags.mBShowRender) {
+    if (!StatFlags.mBShowFps && !StatFlags.mBShowMemory && !StatFlags.mBObjectSystem && !StatFlags.mBShowPicking && !StatFlags.mBShowRender && !StatFlags.mBShowLOD) {
         return;
     }
 
@@ -119,6 +119,16 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
         const ImU32 FpsColor{FPS >= 60.0 ? IM_COL32(123, 235, 133, 255) : FPS >= 30.0 ? HeadingColor : IM_COL32(255, 112, 103, 255)};
         AddRow(Rows, RowCount, "STAT FPS", 0, FpsColor, "%.1f FPS", FPS);
         AddRow(Rows, RowCount, "Frame time", 0, TextColor, "%.3f ms", Snapshot.mFrame.mAverageFrameMilliseconds);
+    }
+
+    if (StatFlags.mBShowLOD) {
+        const Stat::FLODStatAverage& LOD{Snapshot.mLOD};
+        const double Reduction{LOD.mOriginalTriangleCount > 0.0 ? (1.0 - LOD.mRenderedTriangleCount / LOD.mOriginalTriangleCount) * 100.0 : 0.0};
+        AddRow(Rows, RowCount, "STAT LOD", 0, HeadingColor, "0.5 s average");
+        AddRow(Rows, RowCount, "LOD Level", 0, TextColor, "%u", LOD.mLevel);
+        AddRow(Rows, RowCount, "LOD Triangles", 0, TextColor, "%.0f", LOD.mRenderedTriangleCount);
+        AddRow(Rows, RowCount, "LOD Reduction", 0, TextColor, "%.1f%%", Reduction);
+        AddRow(Rows, RowCount, "LOD Draw Calls", 0, TextColor, "%.1f", LOD.mDrawCallCount);
     }
 
     if (StatFlags.mBShowPicking) {

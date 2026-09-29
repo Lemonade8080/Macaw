@@ -15,7 +15,7 @@ class UWorld;
 
 struct FWorldEditorSharedState {
     FEditorSettings mEditorSettings{};
-    std::size_t mModeIndex{0};
+    std::size_t mModeIndex{2};
 };
 
 class FWorldEditorContext {

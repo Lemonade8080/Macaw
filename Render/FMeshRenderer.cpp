@@ -4,6 +4,7 @@
 #include "Asset/UMesh.h"
 #include "Asset/UTexture.h"
 #include "FFrameResource.h"
+#include "Core/Stat/Stat.h"
 
 
 #define ENABLE_INSTANCE 
@@ -41,21 +42,25 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
             DeviceContext->VSSetShaderResources(3, static_cast<UINT>(TextureResources.size()), TextureResources.data());
             DeviceContext->PSSetShaderResources(3, static_cast<UINT>(TextureResources.size()), TextureResources.data());
 
-            //test
-            constexpr int RenderLOD{1};
+            const int LODLevel{static_cast<int>(First.mLODLevel)};
 
-            ID3D11Buffer* VertexBuffers[]{Mesh->GetVertexBuffer(EVertexAttribute::Position, RenderLOD), Mesh->GetVertexBuffer(EVertexAttribute::Normal, RenderLOD), Mesh->GetVertexBuffer(EVertexAttribute::UV, RenderLOD), Mesh->GetVertexBuffer(EVertexAttribute::Color, RenderLOD)};
+            ID3D11Buffer* VertexBuffers[]{Mesh->GetVertexBuffer(EVertexAttribute::Position, LODLevel), Mesh->GetVertexBuffer(EVertexAttribute::Normal, LODLevel), Mesh->GetVertexBuffer(EVertexAttribute::UV, LODLevel), Mesh->GetVertexBuffer(EVertexAttribute::Color, LODLevel)};
             const Uint32 Strides[]{Mesh->GetVertexStride(EVertexAttribute::Position), Mesh->GetVertexStride(EVertexAttribute::Normal), Mesh->GetVertexStride(EVertexAttribute::UV), Mesh->GetVertexStride(EVertexAttribute::Color)};
             const Uint32 Offsets[]{0, 0, 0, 0};
 
             DeviceContext->IASetVertexBuffers(0, _countof(VertexBuffers), VertexBuffers, Strides, Offsets);
-            DeviceContext->IASetIndexBuffer(Mesh->GetIndexBuffer(RenderLOD), DXGI_FORMAT_R32_UINT, 0);
+            DeviceContext->IASetIndexBuffer(Mesh->GetIndexBuffer(LODLevel), DXGI_FORMAT_R32_UINT, 0);
 #ifdef ENABLE_INSTANCE
-            DeviceContext->DrawIndexedInstanced(First.mIndexCount, static_cast<Uint32>(End - Begin), First.mFirstIndex, 0, First.mModelIndex);
+            const Uint32 InstanceCount{static_cast<Uint32>(End - Begin)};
+            DeviceContext->DrawIndexedInstanced(First.mIndexCount, InstanceCount, First.mFirstIndex, 0, First.mModelIndex);
+            const Uint32 OriginalIndexCount{LODLevel > 0 ? Mesh->GetIndexCount(0) : First.mIndexCount};
+            Stat::RecordLODStats(static_cast<Uint32>(LODLevel), static_cast<std::uint64_t>(First.mIndexCount / 3) * InstanceCount, static_cast<std::uint64_t>(OriginalIndexCount / 3) * InstanceCount, 1);
 #else
             for (std::size_t Index{Begin}; Index < End; ++Index) {
                 if (Context.mFrameResource->BindMeshDraw(DeviceContext, Items[Index].mModelIndex)) {
                     DeviceContext->DrawIndexed(First.mIndexCount, First.mFirstIndex, 0);
+                    const Uint32 OriginalIndexCount{LODLevel > 0 ? Mesh->GetIndexCount(0) : First.mIndexCount};
+                    Stat::RecordLODStats(static_cast<Uint32>(LODLevel), First.mIndexCount / 3, OriginalIndexCount / 3, 1);
                 }
             }
 #endif

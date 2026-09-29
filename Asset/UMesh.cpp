@@ -1,6 +1,5 @@
 #include "UMesh.h"
 #include "pch.h"
-#include "UMesh.h"
 
 #include "Core/Console/Console.h"
 #include "Core/Base/FGuid.h"
@@ -9,6 +8,8 @@
 #include "Asset/Importer/FObjSerializer.h"
 #include <ranges>
 #include <windows.h>
+#include <map>
+#include <tuple>
 
 std::size_t UMesh::GetAttributeIndex(EVertexAttribute Attribute) {
     return static_cast<std::size_t>(Attribute);
@@ -306,46 +307,92 @@ const void* UMesh::GetVertexData(EVertexAttribute Attribute) const {
 
 bool UMesh::GenerateLOD(ID3D11Device* Device, Uint32 Level, float TargetRatio) {
 
-    if (Level == 0)
-        return false;
+    if (Device == nullptr || Level == 0 || TargetRatio <= 0.0f || TargetRatio >= 1.0f) { return false; }
 
+    const auto SourcePositions{ GetVertexAttributeData<EVertexAttribute::Position>() };
+
+    // 단순화할 수 없는 빈 메시 제외.
+    if (SourcePositions.empty() || mIndices.size() < 3) { return false; }
+
+    // 생성할 LOD 레벨의 저장 공간 확보.
     if (mGeneratedLODs.size() < Level)
         mGeneratedLODs.resize(Level);
 
     FGeneratedLOD& OutputLOD{ mGeneratedLODs[Level - 1] };
     OutputLOD.Reset();
 
-    const auto PositionData{ GetVertexAttributeData<EVertexAttribute::Position>() };
+    // 같은 위치의 렌더 정점을 하나의 기하 정점으로 묶는다.
+    std::map<std::tuple<float, float, float>, Uint32> PositionMap{};
 
-	// Pos, Indices를 복사
-    TArray<FVector3> LODPositions(PositionData.begin(), PositionData.end());
-    TArray<Uint32> LODIndices{mIndices};
+    TArray<FVector3> LODPositions{};
+    LODPositions.reserve(SourcePositions.size());
 
+    // 각 렌더 정점이 가리키는 기하 정점 인덱스를 저장한다.
+    TArray<Uint32> RenderToGeometry{};
+    RenderToGeometry.resize(SourcePositions.size());
+
+    for (Uint32 RenderVertex{}; RenderVertex < SourcePositions.size(); ++RenderVertex)
+    {
+        const FVector3& Position{ SourcePositions[RenderVertex] };
+        const auto Key{ std::make_tuple(Position.X, Position.Y, Position.Z) };
+
+        auto [It, BInserted] { PositionMap.try_emplace( Key, static_cast<Uint32>(LODPositions.size()) ) };
+
+        // 처음 발견한 위치만 기하 정점 배열에 추가한다.
+        if (BInserted) { LODPositions.push_back(Position); }
+
+		// 렌더 정점이 가리키는 LODPositions 위치를 기록한다.
+        RenderToGeometry[RenderVertex] = It->second;
+    }
+
+    TArray<Uint32> LODIndices{};
+    LODIndices.reserve(mIndices.size());
+
+    // Normal과 UV가 연결된 원본 렌더 인덱스를 유지한다.
+    TArray<Uint32> LODRenderIndices{ mIndices };
+
+    for (Uint32 RenderIndex : mIndices)
+    {
+        // 손상된 원본 인덱스 접근을 방지한다.
+        if (RenderIndex >= RenderToGeometry.size())
+        {
+            OutputLOD.Reset();
+            return false;
+        }
+
+        LODIndices.push_back(RenderToGeometry[RenderIndex]);
+    }
+
+    // LOD0의 삼각형 수를 기준으로 목표 개수를 계산한다.
     const Uint32 OriginalTriangleCount{static_cast<Uint32>(LODIndices.size() / 3)};
     const Uint32 TargetTriangleCount{(std::max)(1u, static_cast<Uint32>(OriginalTriangleCount * TargetRatio))};
 
     while (LODIndices.size() / 3 > TargetTriangleCount) 
     {
+        // 현재 삼각형을 기준으로 중복 없는 Edge 목록을 만든다.
         TArray<FEdge> Edges{BuildEdges(LODIndices)};
         if (Edges.empty()) { break; }
 
-        std::unordered_set<Uint32> ProtectedVertices{};
-
+        // 한 개의 삼각형에만 연결된 실제 외곽선 정점을 보호한다.
+        std::unordered_set<Uint32> BoundaryVertices{};
         for (const FEdge& Edge : Edges)
         {
             if (Edge.FaceCount != 2)
             {
-                ProtectedVertices.insert(Edge.V0);
-                ProtectedVertices.insert(Edge.V1);
+                BoundaryVertices.insert(Edge.V0);
+                BoundaryVertices.insert(Edge.V1);
             }
         }
 
-        for (FEdge& Edge : Edges) {
+        // 짧은 Edge부터 검사할 수 있도록 비용을 계산한다.
+        for (FEdge& Edge : Edges)
+        {
             Edge.NewPosition = (LODPositions[Edge.V0] + LODPositions[Edge.V1]) * 0.5f;
             Edge.Cost = (LODPositions[Edge.V1] - LODPositions[Edge.V0]).LengthSquared();
         }
 
         const auto CompareCost{[](const FEdge& Left, const FEdge& Right) { return Left.Cost > Right.Cost; }};
+
         std::ranges::make_heap(Edges, CompareCost);
 
 		// 가장 짧은 Edge를 찾고 Collapse 가능 여부 확인(무한 루프 방지)
@@ -356,7 +403,10 @@ bool UMesh::GenerateLOD(ID3D11Device* Device, Uint32 Level, float TargetRatio) {
             FEdge Candidate{Edges.back()};
             Edges.pop_back();
 
-            if (Candidate.FaceCount != 2) { continue; }
+            if (Candidate.FaceCount != 2 ||
+                BoundaryVertices.contains(Candidate.V0) ||
+                BoundaryVertices.contains(Candidate.V1))
+            { continue; }
 
             if (CanCollapseEdge(Candidate, LODPositions, LODIndices)) {
                 SelectedEdge = Candidate;
@@ -365,39 +415,77 @@ bool UMesh::GenerateLOD(ID3D11Device* Device, Uint32 Level, float TargetRatio) {
             }
         }
 
-        // 더 줄일 수 없다.
+        // 더 줄일 수 없음
         if (!BFoundCollapsibleEdge) { break; }
 
-		// Collapse Edge
+        // V0를 새 위치로 옮기고 V1을 V0로 합친다.
         LODPositions[SelectedEdge.V0] = SelectedEdge.NewPosition;
-        for (Uint32& Index : LODIndices) {
-            if (Index == SelectedEdge.V1) {
-                Index = SelectedEdge.V0;
+
+        for (Uint32& VertexIndex : LODIndices)
+        {
+            if (VertexIndex == SelectedEdge.V1)
+            {
+                VertexIndex = SelectedEdge.V0;
             }
         }
 
-        // Degenerate Triangle 제거
+        // Collapse된 Edge에 붙어 있던 삼각형만 제거한다.
         TArray<Uint32> CollapsedIndices{};
+        TArray<Uint32> CollapsedRenderIndices{};
+
         CollapsedIndices.reserve(LODIndices.size());
-        for (std::size_t Index{}; Index + 2 < LODIndices.size(); Index += 3) {
-            const Uint32 I0{LODIndices[Index]};
-            const Uint32 I1{LODIndices[Index + 1]};
-            const Uint32 I2{LODIndices[Index + 2]};
+        CollapsedRenderIndices.reserve(LODRenderIndices.size());
+
+        for (std::size_t Index{}; Index + 2 < LODIndices.size(); Index += 3)
+        {
+            const Uint32 I0{ LODIndices[Index] };
+            const Uint32 I1{ LODIndices[Index + 1] };
+            const Uint32 I2{ LODIndices[Index + 2] };
 
             if (I0 == I1 || I1 == I2 || I2 == I0) { continue; }
 
+            // Collapse 계산용 기하 인덱스를 유지한다.
             CollapsedIndices.push_back(I0);
             CollapsedIndices.push_back(I1);
             CollapsedIndices.push_back(I2);
+
+            // 같은 삼각형의 원본 Normal과 UV 인덱스를 유지한다.
+            CollapsedRenderIndices.push_back(LODRenderIndices[Index]);
+            CollapsedRenderIndices.push_back(LODRenderIndices[Index + 1]);
+            CollapsedRenderIndices.push_back(LODRenderIndices[Index + 2]);
         }
 
         LODIndices = std::move(CollapsedIndices);
+        LODRenderIndices = std::move(CollapsedRenderIndices);
     }
 
-    OutputLOD.mPositions = std::move(LODPositions);
-    OutputLOD.mIndices = std::move(LODIndices);
+    // 단순화된 기하 위치를 원본 렌더 정점에 반영한다.
+    TArray<FVector3> RenderPositions{
+        SourcePositions.begin(),
+        SourcePositions.end()
+    };
 
-    if (!CreateLODVertexBuffer(Device, OutputLOD) || !CreateLODIndexBuffer(Device, OutputLOD))
+    for (std::size_t Index{}; Index < LODIndices.size(); ++Index)
+    {
+        const Uint32 GeometryIndex{ LODIndices[Index] };
+        const Uint32 RenderIndex{ LODRenderIndices[Index] };
+
+        if (GeometryIndex >= LODPositions.size() ||
+            RenderIndex >= RenderPositions.size())
+        {
+            OutputLOD.Reset();
+            return false;
+        }
+
+        RenderPositions[RenderIndex] = LODPositions[GeometryIndex];
+    }
+
+    // Position과 Index는 렌더 정점 기준으로 저장한다.
+    OutputLOD.mPositions = std::move(RenderPositions);
+    OutputLOD.mIndices = std::move(LODRenderIndices);
+
+    if (!CreateLODVertexBuffer(Device, OutputLOD) ||
+        !CreateLODIndexBuffer(Device, OutputLOD))
     {
         OutputLOD.Reset();
         return false;
@@ -476,39 +564,86 @@ FEdge UMesh::FindShortestEdge(const TArray<FEdge>& Edges, const TArray<FVector3>
 
 bool UMesh::CanCollapseEdge(const FEdge& Edge, TArray<FVector3>& LODPositions, TArray<Uint32>& LODIndices)
 {
-	constexpr float Epsilon = 1e-8f;
+    constexpr float Epsilon{ 1e-8f };
+
     if (Edge.FaceCount != 2) { return false; }
 
-	for (size_t i = 0; i + 2 < LODIndices.size(); i += 3)
+    std::unordered_set<Uint32> NeighborsV0{};
+    std::unordered_set<Uint32> NeighborsV1{};
+    std::unordered_set<Uint32> OppositeVertices{};
+
+    // 양쪽 정점의 이웃과 Edge를 공유하는 삼각형의 반대 정점을 찾는다.
+    for (std::size_t Index{}; Index + 2 < LODIndices.size(); Index += 3)
 	{
-        Uint32 I0 = LODIndices[i];
-        Uint32 I1 = LODIndices[i + 1];
-        Uint32 I2 = LODIndices[i + 2];
+        const Uint32 I0{ LODIndices[Index] };
+        const Uint32 I1{ LODIndices[Index + 1] };
+        const Uint32 I2{ LODIndices[Index + 2] };
 
-        bool bHasV0 = I0 == Edge.V0 || I1 == Edge.V0 || I2 == Edge.V0;
-        bool bHasV1 = I0 == Edge.V1 || I1 == Edge.V1 || I2 == Edge.V1;
+        const bool BHasV0{ I0 == Edge.V0 || I1 == Edge.V0 || I2 == Edge.V0 };
+        const bool BHasV1{ I0 == Edge.V1 || I1 == Edge.V1 || I2 == Edge.V1 };
 
-        if (!bHasV0 && !bHasV1) continue;
-        if (bHasV0 && bHasV1) continue; // 어차피 제거될 Triangle
+        if (BHasV0)
+        {
+            if (I0 != Edge.V0 && I0 != Edge.V1) { NeighborsV0.insert(I0); }
+            if (I1 != Edge.V0 && I1 != Edge.V1) { NeighborsV0.insert(I1); }
+            if (I2 != Edge.V0 && I2 != Edge.V1) { NeighborsV0.insert(I2); }
+        }
 
-        FVector3 P0 = LODPositions[I0];
-        FVector3 P1 = LODPositions[I1];
-        FVector3 P2 = LODPositions[I2];
+        if (BHasV1)
+        {
+            if (I0 != Edge.V0 && I0 != Edge.V1) { NeighborsV1.insert(I0); }
+            if (I1 != Edge.V0 && I1 != Edge.V1) { NeighborsV1.insert(I1); }
+            if (I2 != Edge.V0 && I2 != Edge.V1) { NeighborsV1.insert(I2); }
+        }
 
-		FVector3 OldNormal = (P1 - P0).Cross(P2 - P0);
-
-        if (I0 == Edge.V0 || I0 == Edge.V1) P0 = Edge.NewPosition;
-        if (I1 == Edge.V0 || I1 == Edge.V1) P1 = Edge.NewPosition;
-        if (I2 == Edge.V0 || I2 == Edge.V1) P2 = Edge.NewPosition;
-
-        FVector3 NewNormal = (P1 - P0).Cross(P2 - P0);
-
-        if (NewNormal.Dot(NewNormal) <= Epsilon)
-            return false;
-
-        if (OldNormal.Dot(NewNormal) <= 0.0f)
-            return false;
+        if (BHasV0 && BHasV1)
+        {
+            if (I0 != Edge.V0 && I0 != Edge.V1) { OppositeVertices.insert(I0); }
+            if (I1 != Edge.V0 && I1 != Edge.V1) { OppositeVertices.insert(I1); }
+            if (I2 != Edge.V0 && I2 != Edge.V1) { OppositeVertices.insert(I2); }
+        }
 	}
+
+    // 내부 Edge는 정확히 두 개의 삼각형과 반대 정점을 가져야 한다.
+    if (OppositeVertices.size() != 2) { return false; }
+
+    // 두 정점이 추가 이웃을 공유하면 Collapse 후 연결 구조가 겹친다.
+    for (Uint32 Neighbor : NeighborsV0)
+    {
+        if (NeighborsV1.contains(Neighbor) && !OppositeVertices.contains(Neighbor))
+        {
+            return false;
+        }
+    }
+
+    // Collapse로 영향을 받는 삼각형이 뒤집히거나 사라지는지 확인한다.
+    for (std::size_t Index{}; Index + 2 < LODIndices.size(); Index += 3)
+    {
+        const Uint32 I0{ LODIndices[Index] };
+        const Uint32 I1{ LODIndices[Index + 1] };
+        const Uint32 I2{ LODIndices[Index + 2] };
+
+        const bool BHasV0{ I0 == Edge.V0 || I1 == Edge.V0 || I2 == Edge.V0 };
+        const bool BHasV1{ I0 == Edge.V1 || I1 == Edge.V1 || I2 == Edge.V1 };
+
+        if (!BHasV0 && !BHasV1) { continue; }
+        if (BHasV0 && BHasV1) { continue; }
+
+        FVector3 P0{ LODPositions[I0] };
+        FVector3 P1{ LODPositions[I1] };
+        FVector3 P2{ LODPositions[I2] };
+
+        const FVector3 OldNormal{ (P1 - P0).Cross(P2 - P0) };
+
+        if (I0 == Edge.V0 || I0 == Edge.V1) { P0 = Edge.NewPosition; }
+        if (I1 == Edge.V0 || I1 == Edge.V1) { P1 = Edge.NewPosition; }
+        if (I2 == Edge.V0 || I2 == Edge.V1) { P2 = Edge.NewPosition; }
+
+        const FVector3 NewNormal{ (P1 - P0).Cross(P2 - P0) };
+
+        if (NewNormal.LengthSquared() <= Epsilon) { return false; }
+        if (OldNormal.Dot(NewNormal) <= 0.0f) { return false; }
+    }
 
     return true;
 }
