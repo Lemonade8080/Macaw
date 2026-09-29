@@ -45,7 +45,6 @@ private:
     void RebuildHierarchy();
     void RebuildVisibleItems();
     void AddVisibleActor(AActor* ParentActor, uint32 Depth);
-    void ToggleExpanded(AActor* Actor);
 
     uint64 mCachedRevision = 0;
     bool bHierarchyDirty = true;

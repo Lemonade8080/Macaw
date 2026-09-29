@@ -22,6 +22,7 @@ void FOutlinerPanel::DrawContents() {
 
     // Dirty 구현
     const uint64 WorldRevision = mWorld->GetOutlinerRevision();
+
     if (mCachedRevision != WorldRevision){ bHierarchyDirty = true;}
 
     if (bHierarchyDirty)
@@ -33,15 +34,15 @@ void FOutlinerPanel::DrawContents() {
         bVisibleDirty = true;
     }
 
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    if (ImGui::InputTextWithHint("##ActorFilter", "Search", mActorFilter.InputBuf, IM_ARRAYSIZE(mActorFilter.InputBuf))) {
+        mActorFilter.Build();
+    }
+
     if (bVisibleDirty)
     {
         RebuildVisibleItems();
         bVisibleDirty = false;
-    }
-
-    ImGui::SetNextItemWidth(-FLT_MIN);
-    if (ImGui::InputTextWithHint("##ActorFilter", "Search", mActorFilter.InputBuf, IM_ARRAYSIZE(mActorFilter.InputBuf))) {
-        mActorFilter.Build();
     }
 
     const ImGuiTableFlags TableFlags{ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY};
@@ -73,15 +74,26 @@ void FOutlinerPanel::PopWindowStyle() {
 }
 
 bool FOutlinerPanel::MatchesActor(const AActor& Actor) const {
-    const FString Label{Actor.GetGuid().ToString()};
+    const FString Label{Actor.GetName().ToString()};
     const std::string_view TypeName{Actor.GetTypeInfo()->mTypeName};
+
     if (mActorFilter.PassFilter(Label.c_str()) || mActorFilter.PassFilter(TypeName.data(), TypeName.data() + TypeName.size())) {
         return true;
     }
 
-    return std::ranges::any_of(mWorld->GetActors(), [this, &Actor](const std::unique_ptr<AActor>& ChildActor) {
-        return IsActorAttachedTo(*ChildActor, Actor) && MatchesActor(*ChildActor);
-    });
+     auto It = mChildrenByParent.find(const_cast<AActor*>(&Actor));
+
+    if (It == mChildrenByParent.end()){
+        return false;
+    }
+
+    //return std::ranges::any_of(mWorld->GetActors(), [this, &Actor](const std::unique_ptr<AActor>& ChildActor) {
+    //    return IsActorAttachedTo(*ChildActor, Actor) && MatchesActor(*ChildActor);
+    //});
+
+    return std::ranges::any_of(It->second, [this](const AActor* ChildActor) {
+            return ChildActor != nullptr && MatchesActor(*ChildActor);
+        });
 }
 
 bool FOutlinerPanel::IsActorAttachedTo(const AActor& Actor, const AActor& ParentActor) const {
@@ -171,32 +183,45 @@ void FOutlinerPanel::HandleDeleteShortcut() {
     }
 }
 
-void FOutlinerPanel::DrawActor(AActor& Actor) {
-    if (!MatchesActor(Actor)) {
-        return;
-    }
-
+void FOutlinerPanel::DrawActor(AActor& Actor) 
+{
     const FString Label{Actor.GetName().ToString()};
     const std::string_view TypeName{Actor.GetTypeInfo()->mTypeName};
     const bool BHasChildren{HasActorChildren(Actor)};
+    const bool BExpanded{ mExpandedActors.contains(&Actor) };
+
     ImGui::TableNextRow();
     ImGui::TableSetColumnIndex(0);
-    ImGui::PushID(Label.c_str());
 
-    ImGuiTreeNodeFlags Flags{ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAllColumns};
+    ImGui::PushID(Label.c_str());
+    // ImGui::PushID(&Actor);
+
+    ImGuiTreeNodeFlags Flags{
+        ImGuiTreeNodeFlags_OpenOnArrow |
+        ImGuiTreeNodeFlags_SpanAllColumns |
+        ImGuiTreeNodeFlags_NoTreePushOnOpen
+    };
+
     if (!BHasChildren) {
-        Flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+        Flags |= ImGuiTreeNodeFlags_Leaf;
     }
     if (mEditorContext->GetSelectedActor() == &Actor) {
         Flags |= ImGuiTreeNodeFlags_Selected;
+    }
+    if (BHasChildren)
+    {
+        ImGui::SetNextItemOpen(BExpanded, ImGuiCond_Always);
     }
 
     const bool BOpen{ImGui::TreeNodeEx("Actor", Flags, "%s", Label.c_str())};
 
     /* Outliner Visible Items */
-    if (ImGui::IsItemToggledOpen())
+    if (BHasChildren && ImGui::IsItemToggledOpen())
     {
-        ToggleExpanded(&Actor);
+        if (BOpen) { mExpandedActors.insert(&Actor); }
+        else { mExpandedActors.erase(&Actor); }
+
+        bVisibleDirty = true;
     }
 
     if (ImGui::IsItemClicked()) {
@@ -220,51 +245,11 @@ void FOutlinerPanel::DrawActor(AActor& Actor) {
 
     ImGui::TableSetColumnIndex(1);
     ImGui::TextDisabled("%.*s", static_cast<int>(TypeName.size()), TypeName.data());
-
-    //if (BHasChildren && BOpen) {
-    //    //for (const std::unique_ptr<AActor>& ChildActor : mWorld->GetActors()) {
-    //    //    if (IsActorAttachedTo(*ChildActor, Actor)) {
-    //    //        DrawActor(*ChildActor);
-    //    //    }
-    //    //}
-    //    auto It = mChildrenByParent.find(&Actor);
-
-    //    if (It != mChildrenByParent.end())
-    //    {
-    //        for (AActor* Child : It->second)
-    //        {
-    //            if (Child != nullptr)
-    //            {
-    //                DrawActor(*Child);
-    //            }
-    //        }
-    //    }
-    //    ImGui::TreePop();
-    //}
     
     ImGui::PopID();
 }
 
 void FOutlinerPanel::DrawRootActors() {
-    //for (const std::unique_ptr<AActor>& Actor : mWorld->GetActors()) {
-    //    if (IsRootActor(*Actor)) {
-    //        DrawActor(*Actor);
-    //    }
-    //}
-    //auto It = mChildrenByParent.find(nullptr);
-
-    //if (It == mChildrenByParent.end())
-    //{
-    //    return;
-    //}
-
-    //for (AActor* Actor : It->second)
-    //{
-    //    if (Actor != nullptr)
-    //    {
-    //        DrawActor(*Actor);
-    //    }
-    //}
 
     ImGuiListClipper Clipper;
     Clipper.Begin(static_cast<int>(mVisibleItems.size()));
@@ -288,7 +273,6 @@ void FOutlinerPanel::DrawRootActors() {
         }
     }
 }
-
 
 void FOutlinerPanel::RebuildHierarchy()
 {
@@ -335,7 +319,7 @@ void FOutlinerPanel::RebuildVisibleItems()
 
 void FOutlinerPanel::AddVisibleActor(AActor* Actor, uint32 Depth)
 {
-    if (Actor == nullptr) { return; }
+    if (Actor == nullptr || !MatchesActor(*Actor)) { return; }
 
     mVisibleItems.push_back({ Actor, Depth });
 
@@ -348,18 +332,4 @@ void FOutlinerPanel::AddVisibleActor(AActor* Actor, uint32 Depth)
     {
         AddVisibleActor(ChildActor, Depth + 1);
     }
-}
-
-void FOutlinerPanel::ToggleExpanded(AActor* Actor)
-{
-    if (mExpandedActors.contains(Actor))
-    {
-        mExpandedActors.erase(Actor);
-    }
-    else
-    {
-        mExpandedActors.insert(Actor);
-    }
-
-    bVisibleDirty = true;
 }
