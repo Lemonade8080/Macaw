@@ -24,10 +24,14 @@ public:
 
     const DirectX::BoundingOrientedBox& GetPickingBox() const;
 
+    void BuildBoundingSphereFromOBB();
+    const DirectX::BoundingSphere& GetBoundingSphere() const;
+
 protected:
     void Serialize(FArchive& Archive) override;
 
 private:
     bool mBVisible{true};
     DirectX::BoundingOrientedBox mPickingBox{DirectX::XMFLOAT3{0.f, 0.f, 0.f}, DirectX::XMFLOAT3{0.f, 0.f, 0.f}, DirectX::XMFLOAT4{0.f, 0.f, 0.f, 1.f}};
+    DirectX::BoundingSphere mBoundingSphere{};
 };

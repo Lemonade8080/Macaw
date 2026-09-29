@@ -30,4 +30,7 @@ private:
     TArray<FMeshDrawItem> mOutlineItems{};
     TArray<FMeshDrawItem> mGizmoItems{};
     TArray<FMeshDrawItem> mEmptyItems{};
+    
+    // ÄÃ¸µµÈ ActorProbes 
+    TArray<FActorProbe> mVisibleProbes{};
 };

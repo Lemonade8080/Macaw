@@ -55,7 +55,7 @@ struct FActorProbe {
     FAssetHandle mPipelineHandle{};
     Uint32 mFlags{0x0000'0000};
     FObjectHandle mOwnerHandle{};
-    DirectX::BoundingOrientedBox mLocalBounds{};
+    DirectX::BoundingSphere mLocalBounds{};
 };
 
 struct CameraProbe {

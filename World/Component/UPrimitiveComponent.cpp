@@ -43,10 +43,22 @@ void UPrimitiveComponent::Serialize(FArchive& Archive) {
 
 void UPrimitiveComponent::SetPickingBox(const DirectX::BoundingOrientedBox& Box) {
     mPickingBox = Box;
+
+    BuildBoundingSphereFromOBB();
 }
 
 const DirectX::BoundingOrientedBox& UPrimitiveComponent::GetPickingBox() const {
     return mPickingBox;
+}
+
+void UPrimitiveComponent::BuildBoundingSphereFromOBB()
+{
+    DirectX::BoundingSphere::CreateFromBoundingBox(mBoundingSphere, mPickingBox);
+}
+
+const DirectX::BoundingSphere& UPrimitiveComponent::GetBoundingSphere() const
+{
+    return mBoundingSphere;
 }
 
 void UPrimitiveComponent::DrawPanels(IPropertyEditorContext* Context) {

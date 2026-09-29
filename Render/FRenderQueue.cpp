@@ -12,21 +12,19 @@ void FRenderQueue::Build(const IAssetRegistry* Registry, const FSceneRenderData&
     mSceneItems.clear();
     mOutlineItems.clear();
     mGizmoItems.clear();
+    mVisibleProbes.clear();
     if (View.IsPassEnabled(ERenderPass::SceneGeometry)) {
-        TArray<FActorProbe> PassProbes;
-        PassProbes.reserve(Scene.mActorProbes.size());
-
         for (const auto& Probe : Scene.mActorProbes) {
-            DirectX::BoundingOrientedBox WorldBounds{};
+            DirectX::BoundingSphere WorldBounds{};
             Probe.mLocalBounds.Transform(WorldBounds, Probe.mWorld.ToSimpleMath());
 
             if (!View.mCamera.mViewFrustum.Intersects(WorldBounds)) {
                 continue;
             }
-            PassProbes.push_back(Probe);
+            mVisibleProbes.push_back(Probe);
         }
 
-        BuildItems(Registry, PassProbes, mSceneItems, View.mSettings.mBRenderSky);
+        BuildItems(Registry, mVisibleProbes, mSceneItems, View.mSettings.mBRenderSky);
     }
     if (View.mSelectedActorHandle.IsValid()) {
         for (FMeshDrawItem& Item : mSceneItems) {
