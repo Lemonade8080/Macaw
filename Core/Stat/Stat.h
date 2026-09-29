@@ -44,6 +44,20 @@ namespace Stat {
         SceneRender,
         UiRender,
         Present,
+        RenderBeginFrame,
+        RenderFenceWait,
+        RenderView,
+        RenderTarget,
+        RenderMaterials,
+        RenderQueue,
+        RenderViewUpload,
+        RenderGeometry,
+        RenderSelectionOutline,
+        RenderSceneGuides,
+        RenderGizmo,
+        RenderText,
+        RenderBillboard,
+        RenderOrientationAxis,
         Count
     };
 
@@ -84,6 +98,45 @@ namespace Stat {
         FPickingStats mPicking{};
     };
 
+    struct FSystemStatAverage {
+        double mTotalMilliseconds{};
+        double mCallCount{};
+    };
+
+    struct FTagStatAverage {
+        double mAllocatedBytes{};
+        double mActiveAllocationCount{};
+    };
+
+    struct FMemoryStatAverage {
+        double mAllocatedBytes{};
+        double mActiveAllocationCount{};
+        std::size_t mPeakAllocatedBytes{};
+        std::size_t mTotalAllocationCount{};
+        std::size_t mTotalDeallocationCount{};
+        std::array<FTagStatAverage, static_cast<std::size_t>(EMemoryTag::Count)> mTagStats{};
+    };
+
+    struct FObjectStatAverage {
+        double mObjectCount{};
+        double mActorCount{};
+    };
+
+    struct FPickingStatAverage {
+        double mAverageMilliseconds{};
+        double mMillisecondsPerFrame{};
+        double mAttemptsPerFrame{};
+    };
+
+    struct FStatAverages {
+        FFrameStats mFrame{};
+        std::array<FSystemStatAverage, static_cast<std::size_t>(ESystemStatStage::Count)> mSystemSamples{};
+        FMemoryStatAverage mMemory{};
+        FObjectStatAverage mObjects{};
+        FPickingStatAverage mPicking{};
+        std::uint64_t mFrameCount{};
+    };
+
     void BeginFrame(double DeltaSeconds = 0.0);
     void EndFrame();
     void ResetFrameStats();
@@ -95,6 +148,7 @@ namespace Stat {
     void RecordPickingTime(double Milliseconds);
 
     FStats GetStats();
+    FStatAverages GetStatAverages();
     FFrameStats GetFrameStats();
     FSystemStats GetSystemStats();
     FSystemStatSample GetSystemSample(ESystemStatStage Stage);

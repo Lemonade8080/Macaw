@@ -37,8 +37,7 @@ struct FBillboardProbe {
 
 enum class ERenderObjectFlags : Uint32 {
     None = 0,
-    Selected = 1u << 0,
-    Unlit = 1u << 1
+    Selected = 1u << 0
 };
 
 enum class ELightType : Uint32 {

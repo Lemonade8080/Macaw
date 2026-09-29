@@ -30,5 +30,4 @@ struct FRenderView {
     TArray<FActorProbe> mGizmoProbes{};
     FLineRenderData mSceneGuides{};
     FVector4 mGridFade{};
-    bool mBForceUnlit{false};
 };
