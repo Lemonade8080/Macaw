@@ -17,7 +17,53 @@
     "Profile": "ps_5_0"
   },
 
-  "InputLayout": [],
+  "InputLayout": [
+    {
+      "SemanticName": "POSITION",
+      "SemanticIndex": 0,
+      "Format": "Float3",
+      "InputSlot": 0,
+      "AlignedByteOffset": 48,
+      "InputClassification": "PerInstance",
+      "InstanceDataStepRate": 1
+    },
+    {
+      "SemanticName": "SIZE",
+      "SemanticIndex": 0,
+      "Format": "Float2",
+      "InputSlot": 0,
+      "AlignedByteOffset": 64,
+      "InputClassification": "PerInstance",
+      "InstanceDataStepRate": 1
+    },
+    {
+      "SemanticName": "TEXCOORD",
+      "SemanticIndex": 0,
+      "Format": "Float2",
+      "InputSlot": 0,
+      "AlignedByteOffset": 72,
+      "InputClassification": "PerInstance",
+      "InstanceDataStepRate": 1
+    },
+    {
+      "SemanticName": "TEXCOORD",
+      "SemanticIndex": 1,
+      "Format": "Float2",
+      "InputSlot": 0,
+      "AlignedByteOffset": 80,
+      "InputClassification": "PerInstance",
+      "InstanceDataStepRate": 1
+    },
+    {
+      "SemanticName": "COLOR",
+      "SemanticIndex": 0,
+      "Format": "Float4",
+      "InputSlot": 0,
+      "AlignedByteOffset": 96,
+      "InputClassification": "PerInstance",
+      "InstanceDataStepRate": 1
+    }
+  ],
 
   "PrimitiveTopology": "PointList",
 

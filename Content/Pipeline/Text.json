@@ -53,6 +53,15 @@
       "AlignedByteOffset": 24,
       "InputClassification": "PerVertex",
       "InstanceDataStepRate": 0
+    },
+    {
+      "SemanticName": "TEXT_INDEX",
+      "SemanticIndex": 0,
+      "Format": "Uint",
+      "InputSlot": 0,
+      "AlignedByteOffset": 32,
+      "InputClassification": "PerVertex",
+      "InstanceDataStepRate": 0
     }
   ],
 

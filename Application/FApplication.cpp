@@ -51,6 +51,12 @@ int FApplication::Run(HINSTANCE Instance, int ShowCommand) {
     const HWND WindowHandle{mWindowState.mWindowHandle};
     const bool Loaded{LoadingScreen.Run(mContext.mRenderer, AcceleratorTable, [this, WindowHandle](FLoadingProgress& Progress) {
         return InitializeApplication(Progress, WindowHandle);
+    }, [this](FLoadingProgress& Progress) {
+        mContext.mThumbnailRenderer->Tick();
+        const float ThumbnailProgress{mContext.mThumbnailRenderer->GetGenerationProgress()};
+        const bool Finished{ThumbnailProgress >= 1.0f};
+        Progress.SetProgress(0.96f + ThumbnailProgress * 0.04f, Finished ? "Ready" : "Generating thumbnails");
+        return Finished;
     })};
     mEditorLogo = LoadingScreen.TakeLogoShaderResourceView();
     if (!Loaded) {
@@ -159,7 +165,7 @@ bool FApplication::InitializeApplication(FLoadingProgress& Progress, HWND Window
     Progress.SetProgress(0.96f, "Finalizing assets");
     mContext.mAssetRegistry->Finalize();
     mContext.mThumbnailRenderer->Create(&mContext.mRenderer, mContext.mAssetRegistry.get());
-    Progress.SetProgress(1.0f, "Ready");
+    Progress.SetProgress(0.96f, "Generating thumbnails");
     return true;
 }
 
@@ -191,10 +197,6 @@ void FApplication::RenderFrame() {
         const Stat::FScopedSystemStatTimer FrameStat{Stat::ESystemStatStage::Frame};
         Stat::RecordObjectCounts(UObjectSystem::GetObjectCount(), mContext.mWorld->GetActors().size());
         mContext.mRenderer.BeginFrame(DeltaTime);
-        {
-            const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::Thumbnails};
-            mContext.mThumbnailRenderer->Tick();
-        }
         {
             const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::Offscreen};
             mContext.mEditorUIManager->RenderOffscreen(mContext.mRenderer, *mContext.mAssetRegistry);

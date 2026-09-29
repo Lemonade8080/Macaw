@@ -56,6 +56,7 @@ function ConfigureExecutableLinks()
         "Core",
         "Math",
         "DirectXTex",
+        "nvapi64",
         "d3d11",
         "dxgi",
         "d3dcompiler",
