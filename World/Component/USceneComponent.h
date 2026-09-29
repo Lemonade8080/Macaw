@@ -50,9 +50,15 @@ public:
     USceneComponent* GetParent() const;
     const std::vector<TObjectRef<USceneComponent>>& GetChildren() const;
 
+    // PrimitiveComponent 에서 호출될 world bound 업데이트 위한 함수
+    virtual void OnTransformUpdate() {};
+
 protected:
     void Serialize(FArchive& Archive) override;
     bool ResolveLoadedReferences() override;
+
+private:
+    void MarkTarnsformDirty();
 
 private:
     FTransform mTransform{};

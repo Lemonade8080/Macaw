@@ -115,8 +115,8 @@ void UStaticMeshComponent::MakeRender(FActorProbe& OutProbe) const {
     }
 
     OutProbe = FActorProbe{ GetComponentToWorld(), GetMeshHandle(), mMaterialHandle, mPipelineHandle, 0x0000'0000};
-    OutProbe.mLocalSphereBounds = GetBoundingSphere();
-    OutProbe.mLocalOBB = GetPickingBox();
+    OutProbe.mWorldSphereBounds = GetWorldSphere();
+    OutProbe.mWorldOBB = GetWorldOBB();
 }
 
 void UStaticMeshComponent::Serialize(FArchive& Archive) {

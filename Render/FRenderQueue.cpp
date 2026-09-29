@@ -108,15 +108,12 @@ void FRenderQueue::FrustumCulling(const TArray<FActorProbe>& BeforeCullingProbes
 
     for (const auto& Probe : BeforeCullingProbes) {
         DirectX::BoundingSphere WorldBounds{};
-        Probe.mLocalSphereBounds.Transform(WorldBounds, Probe.mWorld.ToSimpleMath());
 
-        if (!Frustum.Intersects(WorldBounds)) {
+        if (!Frustum.Intersects(Probe.mWorldSphereBounds)) {
             continue;
         }
 
-        DirectX::BoundingOrientedBox WorldOBB{};
-        Probe.mLocalOBB.Transform(WorldOBB, Probe.mWorld.ToSimpleMath());
-        if (!Frustum.Intersects(WorldOBB))
+        if (!Frustum.Intersects(Probe.mWorldOBB))
         {
             continue;
         }
