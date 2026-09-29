@@ -6,7 +6,7 @@
 #include "FFrameResource.h"
 
 
-// #define ENABLE_INSTANCE 
+#define ENABLE_INSTANCE 
 
 void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawItem>& Items, ERenderMode Mode) {
     if (Items.empty() || Context.mAssetRegistry == nullptr || Context.mFrameResource == nullptr) {

@@ -29,13 +29,14 @@ private:
 class FLoadingScreen {
 public:
     using FLoadingTask = std::function<bool(FLoadingProgress&)>;
+    using FLoadingFrameTask = std::function<bool(FLoadingProgress&)>;
 
 public:
     FLoadingScreen();
     ~FLoadingScreen();
 
 public:
-    bool Run(FRenderer& Renderer, HACCEL AcceleratorTable, const FLoadingTask& LoadingTask);
+    bool Run(FRenderer& Renderer, HACCEL AcceleratorTable, const FLoadingTask& LoadingTask, const FLoadingFrameTask& LoadingFrameTask);
     Microsoft::WRL::ComPtr<ID3D11ShaderResourceView> TakeLogoShaderResourceView();
 
 private:

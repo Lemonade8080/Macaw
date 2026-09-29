@@ -8,6 +8,14 @@
 #include <algorithm>
 #include <unordered_map>
 
+bool FBillboardRenderer::FBatchKey::operator==(const FBatchKey& Other) const {
+    return mPipelineHandle == Other.mPipelineHandle && mTextureHandle == Other.mTextureHandle;
+}
+
+std::size_t FBillboardRenderer::FBatchKeyHash::operator()(const FBatchKey& Key) const noexcept {
+    return std::hash<std::uint32_t>{}(Key.mPipelineHandle.mId) ^ (std::hash<std::uint32_t>{}(Key.mTextureHandle.mId) << 1);
+}
+
 bool FBillboardRenderer::Initialize(ID3D11Device* InDevice, std::uint32_t InitialCapacity) {
     if (InDevice == nullptr || InitialCapacity == 0) {
         return false;
@@ -22,51 +30,54 @@ void FBillboardRenderer::Render(ID3D11DeviceContext* Context, FFrameResource& Fr
         return;
     }
 
-    // Release Vertex buffer, Index buffer
-    UINT Stride{0};
-    UINT Offset{0};
-    ID3D11Buffer* NullBuffer{nullptr};
-    Context->IASetVertexBuffers(0, 1, &NullBuffer, &Stride, &Offset);
-    Context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
-
-    // Pipeline, Texture Batch
-    struct FBatchKey {
-        FAssetHandle mPipelineHandle{};
-        FAssetHandle mTextureHandle{};
-        bool operator==(const FBatchKey& Other) const = default;
-    };
-
-    struct FBatchKeyHash {
-        std::size_t operator()(const FBatchKey& Key) const noexcept {
-            return std::hash<std::uint32_t>{}(Key.mPipelineHandle.mId) ^ (std::hash<std::uint32_t>{}(Key.mTextureHandle.mId) << 1);
-        }
-    };
-
-    std::unordered_map<FBatchKey, TArray<FBillboardData>, FBatchKeyHash> Batches{};
+    mInstances.clear();
+    mDraws.clear();
+    if (BillboardProbe.size() > UINT32_MAX / sizeof(FBillboardData)) {
+        return;
+    }
+    std::unordered_map<FBatchKey, FBillboardBatch, FBatchKeyHash> Batches{};
     for (const FBillboardProbe& Probe : BillboardProbe) {
         if (!Probe.mPipelineHandle || !Probe.mTextureHandle) {
             continue;
         }
-        Batches[{Probe.mPipelineHandle, Probe.mTextureHandle}].push_back(FBillboardData{ .mWorld = Probe.mWorld, .mSize = Probe.mSize, .mUvMin = Probe.mUvMin, .mUvMax = Probe.mUvMax, .mPad = FVector2{0.0f, 0.0f}, .mColor = Probe.mColor});
+        ++Batches[FBatchKey{Probe.mPipelineHandle, Probe.mTextureHandle}].mDraw.mInstanceCount;
     }
 
-    for (auto& [Key, InstanceArray] : Batches) {
+    Uint32 InstanceCount{};
+    for (auto& [Key, Batch] : Batches) {
         const UPipeline* Pipeline{AssetRegistry->ResolveAsset<UPipeline>(Key.mPipelineHandle)};
         const UTexture* Texture{AssetRegistry->ResolveAsset<UTexture>(Key.mTextureHandle)};
-        if (Pipeline == nullptr || Texture == nullptr || InstanceArray.empty()) {
+        if (Pipeline == nullptr || Texture == nullptr) {
             continue;
         }
-        const std::uint32_t InstanceCount{static_cast<std::uint32_t>(InstanceArray.size())};
-        if (!FrameResource.UploadStream(mDevice, Context, EFrameStream::Billboard, InstanceArray.data(), InstanceCount, sizeof(FBillboardData), D3D11_BIND_SHADER_RESOURCE)) {
+        Batch.mDraw.mPipeline = Pipeline;
+        Batch.mDraw.mTexture = Texture;
+        Batch.mDraw.mFirstInstance = InstanceCount;
+        InstanceCount += Batch.mDraw.mInstanceCount;
+        mDraws.push_back(Batch.mDraw);
+    }
+    mInstances.resize(InstanceCount);
+    for (const FBillboardProbe& Probe : BillboardProbe) {
+        const auto Iterator{Batches.find(FBatchKey{Probe.mPipelineHandle, Probe.mTextureHandle})};
+        if (Iterator == Batches.end() || Iterator->second.mDraw.mPipeline == nullptr) {
             continue;
         }
-
-        Pipeline->Bind(Context, Pipeline->ResolveRenderMode(Mode));
-
-        ID3D11ShaderResourceView* BufferSRV{FrameResource.GetStreamResourceView(EFrameStream::Billboard)};
-        Context->GSSetShaderResources(0, 1, &BufferSRV);
-        ID3D11ShaderResourceView* TextureSRV{Texture->GetSRV()};
+        FBillboardBatch& Batch{Iterator->second};
+        mInstances[Batch.mDraw.mFirstInstance + Batch.mWriteCount] = FBillboardData{Probe.mWorld, Probe.mSize, Probe.mUvMin, Probe.mUvMax, FVector2{}, Probe.mColor};
+        ++Batch.mWriteCount;
+    }
+    if (mDraws.empty() || !FrameResource.UploadStream(mDevice, Context, EFrameStream::Billboard, mInstances.data(), static_cast<Uint32>(mInstances.size()), sizeof(FBillboardData), D3D11_BIND_VERTEX_BUFFER)) {
+        return;
+    }
+    ID3D11Buffer* Buffer{FrameResource.GetStreamBuffer(EFrameStream::Billboard)};
+    const UINT Stride{sizeof(FBillboardData)};
+    const UINT Offset{};
+    Context->IASetVertexBuffers(0, 1, &Buffer, &Stride, &Offset);
+    Context->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+    for (const FBillboardDraw& Draw : mDraws) {
+        Draw.mPipeline->Bind(Context, Draw.mPipeline->ResolveRenderMode(Mode));
+        ID3D11ShaderResourceView* TextureSRV{Draw.mTexture->GetSRV()};
         Context->PSSetShaderResources(3, 1, &TextureSRV);
-        Context->DrawInstanced(1, InstanceCount, 0, 0);
+        Context->DrawInstanced(1, Draw.mInstanceCount, 0, Draw.mFirstInstance);
     }
 }

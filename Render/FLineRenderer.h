@@ -37,12 +37,14 @@ public:
     void AddRay(const FVector3& Origin, const FVector3& Direction, float Length, const FVector4& Color, float WidthPixels = 1.0f, ELineDepthMode DepthMode = ELineDepthMode::DepthTested);
 
     void Render(ID3D11DeviceContext* Context, FFrameResource& FrameResource);
+    void RenderOrientationAxis(ID3D11DeviceContext* Context, FFrameResource& FrameResource);
     void Clear();
 
     [[nodiscard]] Uint32 GetLineCount() const;
     [[nodiscard]] bool IsEmpty() const;
 
 private:
+    void RenderLines(ID3D11DeviceContext* Context, FFrameResource& FrameResource, bool OrientationAxis);
     void AddLineInternal(const FVector3& Start, const FVector3& End, const FVector4& Color, float WidthPixels, ELineDepthMode DepthMode, float GridSpacing);
     bool CreateQuadGeometry(ID3D11Device* Device);
     bool RenderBatch(ID3D11DeviceContext* Context, FFrameResource& FrameResource, FLineBatch& Batch, const UPipeline* Pipeline, EFrameStream Stream);

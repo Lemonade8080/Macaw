@@ -56,6 +56,10 @@ void FAssetThumbnailRenderer::Tick(Uint32 MaxThumbnailCount) {
     }
 }
 
+float FAssetThumbnailRenderer::GetGenerationProgress() const {
+    return mPendingAssetHandles.empty() ? 1.0f : static_cast<float>(mPendingAssetIndex) / static_cast<float>(mPendingAssetHandles.size());
+}
+
 void FAssetThumbnailRenderer::RenderThumbnail(FAssetHandle AssetHandle) {
     const FAssetEntry* Entry{FindAssetEntry(AssetHandle)};
 
