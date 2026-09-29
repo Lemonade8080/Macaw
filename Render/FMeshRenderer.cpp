@@ -41,12 +41,15 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
             DeviceContext->VSSetShaderResources(3, static_cast<UINT>(TextureResources.size()), TextureResources.data());
             DeviceContext->PSSetShaderResources(3, static_cast<UINT>(TextureResources.size()), TextureResources.data());
 
-            ID3D11Buffer* VertexBuffers[]{Mesh->GetVertexBuffer(EVertexAttribute::Position), Mesh->GetVertexBuffer(EVertexAttribute::Normal), Mesh->GetVertexBuffer(EVertexAttribute::UV), Mesh->GetVertexBuffer(EVertexAttribute::Color)};
+            //test
+            constexpr int RenderLOD{1};
+
+            ID3D11Buffer* VertexBuffers[]{Mesh->GetVertexBuffer(EVertexAttribute::Position, RenderLOD), Mesh->GetVertexBuffer(EVertexAttribute::Normal, RenderLOD), Mesh->GetVertexBuffer(EVertexAttribute::UV, RenderLOD), Mesh->GetVertexBuffer(EVertexAttribute::Color, RenderLOD)};
             const Uint32 Strides[]{Mesh->GetVertexStride(EVertexAttribute::Position), Mesh->GetVertexStride(EVertexAttribute::Normal), Mesh->GetVertexStride(EVertexAttribute::UV), Mesh->GetVertexStride(EVertexAttribute::Color)};
             const Uint32 Offsets[]{0, 0, 0, 0};
 
             DeviceContext->IASetVertexBuffers(0, _countof(VertexBuffers), VertexBuffers, Strides, Offsets);
-            DeviceContext->IASetIndexBuffer(Mesh->GetIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
+            DeviceContext->IASetIndexBuffer(Mesh->GetIndexBuffer(RenderLOD), DXGI_FORMAT_R32_UINT, 0);
 #ifdef ENABLE_INSTANCE
             DeviceContext->DrawIndexedInstanced(First.mIndexCount, static_cast<Uint32>(End - Begin), First.mFirstIndex, 0, First.mModelIndex);
 #else

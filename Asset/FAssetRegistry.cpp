@@ -585,6 +585,13 @@ bool FAssetRegistry::LoadMesh(FAssetEntry& Entry, ID3D11Device* Device) {
         return false;
     }
 
+    // Temporary LOD1 test: generate a 50% triangle-count mesh while loading.
+    if (!Mesh->GenerateLOD1(Device, 0.01f)) {
+        Console::AddLog(Console::STDOutHandle, ELogLevel::Warning, ELogCategory::Etc, "Failed to generate LOD1; using LOD0: %s", Entry.mPhysicalPath.generic_string().c_str());
+    } else {
+        Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "Generated LOD1: %s (%u -> %u triangles)", Entry.mPhysicalPath.generic_string().c_str(), Mesh->GetIndexCount(0) / 3, Mesh->GetIndexCount(1) / 3);
+    }
+
     Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "Loaded model: %s", Entry.mPhysicalPath.generic_string().c_str());
     Entry.mAsset = std::move(Mesh);
 

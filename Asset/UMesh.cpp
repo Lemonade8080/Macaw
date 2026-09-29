@@ -167,10 +167,10 @@ bool UMesh::Initialize(ID3D11Device* Device, const std::filesystem::path& Source
     }
 
     if (FirstIndex != Geometry.mIndices.size() || !Make(Device, Geometry.mIndices,
-                                                        MakeVertexAttribute<EVertexAttribute::Position>(Geometry.mPositions),
-                                                        MakeVertexAttribute<EVertexAttribute::Normal>(Geometry.mNormals),
-                                                        MakeVertexAttribute<EVertexAttribute::UV>(Geometry.mTexCoords),
-                                                        MakeVertexAttribute<EVertexAttribute::Color>(Geometry.mColors))) {
+            MakeVertexAttribute<EVertexAttribute::Position>(Geometry.mPositions),
+            MakeVertexAttribute<EVertexAttribute::Normal>(Geometry.mNormals),
+            MakeVertexAttribute<EVertexAttribute::UV>(Geometry.mTexCoords),
+            MakeVertexAttribute<EVertexAttribute::Color>(Geometry.mColors))) {
         Console::AddLog(Console::STDOutHandle, ELogLevel::Error, ELogCategory::Etc, "Failed to create GPU buffers for model: %s", AssetPath.generic_string().c_str());
         return false;
     }
@@ -198,8 +198,33 @@ ID3D11Buffer* UMesh::GetVertexBuffer(EVertexAttribute Attribute) const {
     return mVertexBuffers[Index].Get();
 }
 
+ID3D11Buffer* UMesh::GetVertexBuffer(EVertexAttribute Attribute, int Level) const {
+    if (Level == 1 && Attribute == EVertexAttribute::Position && HasLOD(Level)) {
+        return mLOD1VertexBuffer.Get();
+    }
+
+    return GetVertexBuffer(Attribute);
+}
+
 ID3D11Buffer* UMesh::GetIndexBuffer() const {
     return mIndexBuffer.Get();
+}
+
+ID3D11Buffer* UMesh::GetIndexBuffer(int Level) const {
+    return Level == 1 && HasLOD(Level) ? mLOD1IndexBuffer.Get() : GetIndexBuffer();
+}
+
+Uint32 UMesh::GetIndexCount(int Level) const {
+    const std::size_t IndexCount{Level == 1 && HasLOD(Level) ? mLOD1Indices.size() : mIndices.size()};
+    return static_cast<Uint32>((std::min)(IndexCount, static_cast<std::size_t>(UINT32_MAX)));
+}
+
+bool UMesh::HasLOD(int Level) const {
+    if (Level == 0) {
+        return mIndexBuffer != nullptr && !mIndices.empty();
+    }
+
+    return Level == 1 && mLOD1VertexBuffer != nullptr && mLOD1IndexBuffer != nullptr && !mLOD1Indices.empty();
 }
 
 bool UMesh::HasVertexAttribute(EVertexAttribute Attribute) const {
@@ -241,6 +266,255 @@ const void* UMesh::GetVertexData(EVertexAttribute Attribute) const {
 
     return mAttributeStorage[Index]->GetData();
 }
+
+bool UMesh::GenerateLOD1(ID3D11Device* Device, float TargetRatio) {
+
+    mLOD1VertexBuffer.Reset();
+    mLOD1IndexBuffer.Reset();
+    mLOD1Positions.clear();
+    mLOD1Indices.clear();
+
+    const auto PositionData{GetVertexAttributeData<EVertexAttribute::Position>()};
+    if (Device == nullptr || PositionData.empty() || mIndices.empty() || mIndices.size() % 3 != 0 || TargetRatio <= 0.0f || TargetRatio >= 1.0f) {
+        return false;
+    }
+
+	// Pos, Indices를 복사
+    TArray<FVector3> LODPositions(PositionData.begin(), PositionData.end());
+    TArray<Uint32> LODIndices{mIndices};
+
+    const Uint32 OriginalTriangleCount{static_cast<Uint32>(LODIndices.size() / 3)};
+    const Uint32 TargetTriangleCount{(std::max)(1u, static_cast<Uint32>(OriginalTriangleCount * TargetRatio))};
+
+    while (LODIndices.size() / 3 > TargetTriangleCount) 
+    {
+        TArray<FEdge> Edges{BuildEdges(LODIndices)};
+        if (Edges.empty()) { break; }
+
+        for (FEdge& Edge : Edges) {
+            Edge.NewPosition = (LODPositions[Edge.V0] + LODPositions[Edge.V1]) * 0.5f;
+            Edge.Cost = (LODPositions[Edge.V1] - LODPositions[Edge.V0]).LengthSquared();
+        }
+
+        const auto CompareCost{[](const FEdge& Left, const FEdge& Right) { return Left.Cost > Right.Cost; }};
+        std::ranges::make_heap(Edges, CompareCost);
+
+		// 가장 짧은 Edge를 찾고 Collapse 가능 여부 확인(무한 루프 방지)
+        FEdge SelectedEdge{};
+        bool BFoundCollapsibleEdge{false};
+        while (!Edges.empty()) {
+            std::ranges::pop_heap(Edges, CompareCost);
+            FEdge Candidate{Edges.back()};
+            Edges.pop_back();
+
+            if (CanCollapseEdge(Candidate, LODPositions, LODIndices)) {
+                SelectedEdge = Candidate;
+                BFoundCollapsibleEdge = true;
+                break;
+            }
+        }
+
+        // 더 줄일 수 없다.
+        if (!BFoundCollapsibleEdge) { break; }
+
+		// Collapse Edge
+        LODPositions[SelectedEdge.V0] = SelectedEdge.NewPosition;
+        for (Uint32& Index : LODIndices) {
+            if (Index == SelectedEdge.V1) {
+                Index = SelectedEdge.V0;
+            }
+        }
+
+        // Degenerate Triangle 제거
+        TArray<Uint32> CollapsedIndices{};
+        CollapsedIndices.reserve(LODIndices.size());
+        for (std::size_t Index{}; Index + 2 < LODIndices.size(); Index += 3) {
+            const Uint32 I0{LODIndices[Index]};
+            const Uint32 I1{LODIndices[Index + 1]};
+            const Uint32 I2{LODIndices[Index + 2]};
+
+            if (I0 == I1 || I1 == I2 || I2 == I0) { continue; }
+
+            CollapsedIndices.push_back(I0);
+            CollapsedIndices.push_back(I1);
+            CollapsedIndices.push_back(I2);
+        }
+
+        LODIndices = std::move(CollapsedIndices);
+    }
+
+    mLOD1Positions = std::move(LODPositions);
+    mLOD1Indices = std::move(LODIndices);
+
+    if (!CreateLOD1VertexBuffer(Device) || !CreateLOD1IndexBuffer(Device)) {
+        mLOD1VertexBuffer.Reset();
+        mLOD1IndexBuffer.Reset();
+        mLOD1Positions.clear();
+        mLOD1Indices.clear();
+        return false;
+    }
+
+    return true;
+}
+
+TArray<FEdge> UMesh::BuildEdges(const TArray<Uint32>& Indices)
+{
+    TArray<FEdge> Edges;
+    std::unordered_set<uint64_t> EdgeSet;
+
+    auto AddEdge = [&](Uint32 A, Uint32 B)
+        {
+            // 1-3과 3-1을 같은 Edge로 취급
+            if (A > B) { std::swap(A, B); }
+
+            // 두 uint32를 하나의 uint64 key로 만듦
+            uint64_t Key = (static_cast<uint64_t>(A) << 32) | static_cast<uint64_t>(B);
+
+            // 처음 발견된 Edge만 추가
+            if (EdgeSet.insert(Key).second)
+            {
+                Edges.push_back({ A, B });
+            }
+        };
+
+    for (size_t i = 0; i + 2 < Indices.size(); i += 3)
+    {
+        Uint32 V0 = Indices[i];
+        Uint32 V1 = Indices[i + 1];
+        Uint32 V2 = Indices[i + 2];
+
+        AddEdge(V0, V1);
+        AddEdge(V1, V2);
+        AddEdge(V2, V0);
+    }
+
+    return Edges;
+}
+
+FEdge UMesh::FindShortestEdge(const TArray<FEdge>& Edges, const TArray<FVector3>& Positions)
+{
+    FEdge ShortestEdge;
+    float MinLengthSq = FLT_MAX;
+
+	for (const FEdge& Edge : Edges)
+	{
+        const FVector3& V0 = Positions[Edge.V0];
+        const FVector3& V1 = Positions[Edge.V1];
+
+		float LengthSq = (V1 - V0).LengthSquared();
+
+		if (LengthSq < MinLengthSq)
+		{
+			MinLengthSq = LengthSq;
+			ShortestEdge = Edge;
+		}
+	}
+
+    ShortestEdge.Cost = MinLengthSq;
+    return ShortestEdge;
+}
+
+bool UMesh::CanCollapseEdge(const FEdge& Edge, TArray<FVector3>& LODPositions, TArray<Uint32>& LODIndices)
+{
+	constexpr float Epsilon = 1e-8f;
+
+	for (size_t i = 0; i + 2 < LODIndices.size(); i += 3)
+	{
+        Uint32 I0 = LODIndices[i];
+        Uint32 I1 = LODIndices[i + 1];
+        Uint32 I2 = LODIndices[i + 2];
+
+        bool bHasV0 = I0 == Edge.V0 || I1 == Edge.V0 || I2 == Edge.V0;
+        bool bHasV1 = I0 == Edge.V1 || I1 == Edge.V1 || I2 == Edge.V1;
+
+        if (!bHasV0 && !bHasV1) continue;
+        if (bHasV0 && bHasV1) continue; // 어차피 제거될 Triangle
+
+        FVector3 P0 = LODPositions[I0];
+        FVector3 P1 = LODPositions[I1];
+        FVector3 P2 = LODPositions[I2];
+
+		FVector3 OldNormal = (P1 - P0).Cross(P2 - P0);
+
+        if (I0 == Edge.V0 || I0 == Edge.V1) P0 = Edge.NewPosition;
+        if (I1 == Edge.V0 || I1 == Edge.V1) P1 = Edge.NewPosition;
+        if (I2 == Edge.V0 || I2 == Edge.V1) P2 = Edge.NewPosition;
+
+        FVector3 NewNormal = (P1 - P0).Cross(P2 - P0);
+
+        if (NewNormal.Dot(NewNormal) <= Epsilon)
+            return false;
+
+        if (OldNormal.Dot(NewNormal) <= 0.0f)
+            return false;
+	}
+
+    return true;
+}
+
+bool UMesh::CreateLOD1VertexBuffer(ID3D11Device* Device)
+{
+    if (Device == nullptr || mLOD1Positions.empty())
+        return false;
+
+    D3D11_BUFFER_DESC BufferDesc{};
+    BufferDesc.ByteWidth =
+        static_cast<UINT>(mLOD1Positions.size() * sizeof(FVector3));
+
+    BufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    BufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA InitialData{};
+    InitialData.pSysMem = mLOD1Positions.data();
+
+    Microsoft::WRL::ComPtr<ID3D11Buffer> Buffer;
+
+    HRESULT Result = Device->CreateBuffer(
+        &BufferDesc,
+        &InitialData,
+        Buffer.GetAddressOf()
+    );
+
+    if (FAILED(Result))
+        return false;
+
+    mLOD1VertexBuffer = std::move(Buffer);
+
+    return true;
+}
+
+bool UMesh::CreateLOD1IndexBuffer(ID3D11Device* Device)
+{
+    if (Device == nullptr || mLOD1Indices.empty())
+        return false;
+
+    D3D11_BUFFER_DESC BufferDesc{};
+    BufferDesc.ByteWidth =
+        static_cast<UINT>(mLOD1Indices.size() * sizeof(Uint32));
+
+    BufferDesc.Usage = D3D11_USAGE_DEFAULT;
+    BufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA InitialData{};
+    InitialData.pSysMem = mLOD1Indices.data();
+
+    Microsoft::WRL::ComPtr<ID3D11Buffer> Buffer;
+
+    HRESULT Result = Device->CreateBuffer(
+        &BufferDesc,
+        &InitialData,
+        Buffer.GetAddressOf()
+    );
+
+    if (FAILED(Result))
+        return false;
+
+    mLOD1IndexBuffer = std::move(Buffer);
+
+    return true;
+}
+
+
 
 void UMesh::Serialize(FArchive& Ar) {
     UAsset::Serialize(Ar);
@@ -296,6 +570,11 @@ void UMesh::Reset() {
     mIndexBuffer.Reset();
     mIndices.clear();
     mSubMeshes.clear();
+
+    mLOD1VertexBuffer.Reset();
+    mLOD1IndexBuffer.Reset();
+    mLOD1Positions.clear();
+    mLOD1Indices.clear();
 }
 
 const TArray<Uint32>& UMesh::GetIndices() const {

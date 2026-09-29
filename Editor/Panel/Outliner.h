@@ -38,6 +38,7 @@ private:
 
     /* Outliner */
 
+    // 계층 확인용 캐시
     TMap<AActor*, TArray<AActor*>> mChildrenByParent;
     TArray<FOutlinerVisibleItem> mVisibleItems;
     TSet<AActor*> mExpandedActors;

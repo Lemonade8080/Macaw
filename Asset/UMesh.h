@@ -23,6 +23,7 @@
 
 class UMesh;
 
+
 class FRaycastAccelerationStructure {
 private:
     // BVH Build Parameters - DO: Benchmark
@@ -105,6 +106,16 @@ private:
     TArray<FNode> Nodes;
 };
 
+/* LOD */
+struct FEdge
+{
+    Uint32 V0;
+    Uint32 V1;
+
+    float Cost = 0.0f;
+    FVector3 NewPosition;
+};
+
 class UMesh : public UAsset {
 private:
     struct FVertexAttributeStorageBase { virtual ~FVertexAttributeStorageBase() = default; virtual const void* GetData() const = 0; virtual Uint32 GetCount() const = 0; virtual Uint32 GetStride() const = 0; };
@@ -135,7 +146,11 @@ public:
     template <CVertexAttributeView... TAttributes> bool Make(ID3D11Device* Device, const std::span<const Uint32>& InIndices, const TAttributes&... InAttributes);
 
     ID3D11Buffer* GetVertexBuffer(EVertexAttribute Attribute) const;
+    ID3D11Buffer* GetVertexBuffer(EVertexAttribute Attribute, int Level) const;
     ID3D11Buffer* GetIndexBuffer() const;
+    ID3D11Buffer* GetIndexBuffer(int Level) const;
+    Uint32 GetIndexCount(int Level = 0) const;
+    bool HasLOD(int Level) const;
 
     bool HasVertexAttribute(EVertexAttribute Attribute) const;
 
@@ -155,6 +170,23 @@ public:
     bool Raycast(const FRay& Ray, float& OutDistance) const;
 
     const inline DirectX::BoundingOrientedBox GetBoundingBox() const { return mBoundingBox; }
+
+    /* LOD */
+    bool GenerateLOD1(ID3D11Device* Device, float TargetRatio);
+
+    TArray<FEdge> BuildEdges(const TArray<Uint32>& Indices);
+	FEdge FindShortestEdge(const TArray<FEdge>& Edges, const TArray<FVector3>& Positions);
+	bool CanCollapseEdge(const FEdge& Edge, TArray<FVector3>& LODPositions, TArray<Uint32>& LODIndices);
+
+private:
+    bool CreateLOD1VertexBuffer(ID3D11Device* Device);
+    bool CreateLOD1IndexBuffer(ID3D11Device* Device);
+
+    TArray<FVector3> mLOD1Positions;
+    TArray<Uint32> mLOD1Indices;
+
+    Microsoft::WRL::ComPtr<ID3D11Buffer> mLOD1VertexBuffer;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> mLOD1IndexBuffer;
 
 protected:
     virtual void Serialize(FArchive& Ar) override;

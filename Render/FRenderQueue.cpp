@@ -81,6 +81,14 @@ void FRenderQueue::BuildItems(const IAssetRegistry* Registry, const TArray<FActo
 
         const UMesh* Mesh{Registry->ResolveAsset<UMesh>(Source.mMeshHandle)};
         if ((RenderSky || Source.mPipelineHandle != SkyPipelineHandle) && Mesh != nullptr && Registry->ResolveAsset<UPipeline>(Source.mPipelineHandle) != nullptr) {
+            // Temporary LOD1 test. The prototype simplifies the whole mesh, so the
+            // original submesh index ranges are no longer valid for its index buffer.
+            if (Mesh->HasLOD(1)) {
+                AddItems(Registry, Probes, Begin, End, 0, 0, Mesh->GetIndexCount(1), Items);
+                Begin = End;
+                continue;
+            }
+
             const TArray<UMesh::FSubMesh>& SubMeshes{Mesh->GetSubMeshes()};
             if (SubMeshes.empty()) {
                 AddItems(Registry, Probes, Begin, End, 0, 0, static_cast<Uint32>(Mesh->GetIndices().size()), Items);
