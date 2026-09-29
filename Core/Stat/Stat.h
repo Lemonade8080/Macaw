@@ -44,6 +44,20 @@ namespace Stat {
         SceneRender,
         UiRender,
         Present,
+        RenderBeginFrame,
+        RenderFenceWait,
+        RenderView,
+        RenderTarget,
+        RenderMaterials,
+        RenderQueue,
+        RenderViewUpload,
+        RenderGeometry,
+        RenderSelectionOutline,
+        RenderSceneGuides,
+        RenderGizmo,
+        RenderText,
+        RenderBillboard,
+        RenderOrientationAxis,
         Count
     };
 
@@ -72,6 +86,9 @@ namespace Stat {
 
     struct FPickingStats {
         double mLastMilliseconds{};
+        double mLastBroadPhaseMilliseconds{};
+        double mLastNarrowPhaseMilliseconds{};
+        bool mHasPhaseTiming{};
         double mTotalMilliseconds{};
         std::uint64_t mAttemptCount{};
     };
@@ -84,6 +101,45 @@ namespace Stat {
         FPickingStats mPicking{};
     };
 
+    struct FSystemStatAverage {
+        double mTotalMilliseconds{};
+        double mCallCount{};
+    };
+
+    struct FTagStatAverage {
+        double mAllocatedBytes{};
+        double mActiveAllocationCount{};
+    };
+
+    struct FMemoryStatAverage {
+        double mAllocatedBytes{};
+        double mActiveAllocationCount{};
+        std::size_t mPeakAllocatedBytes{};
+        std::size_t mTotalAllocationCount{};
+        std::size_t mTotalDeallocationCount{};
+        std::array<FTagStatAverage, static_cast<std::size_t>(EMemoryTag::Count)> mTagStats{};
+    };
+
+    struct FObjectStatAverage {
+        double mObjectCount{};
+        double mActorCount{};
+    };
+
+    struct FPickingStatAverage {
+        double mAverageMilliseconds{};
+        double mMillisecondsPerFrame{};
+        double mAttemptsPerFrame{};
+    };
+
+    struct FStatAverages {
+        FFrameStats mFrame{};
+        std::array<FSystemStatAverage, static_cast<std::size_t>(ESystemStatStage::Count)> mSystemSamples{};
+        FMemoryStatAverage mMemory{};
+        FObjectStatAverage mObjects{};
+        FPickingStatAverage mPicking{};
+        std::uint64_t mFrameCount{};
+    };
+
     void BeginFrame(double DeltaSeconds = 0.0);
     void EndFrame();
     void ResetFrameStats();
@@ -92,9 +148,11 @@ namespace Stat {
     void RecordAllocation(std::size_t Size, EMemoryTag Tag);
     void RecordDeallocation(std::size_t Size, EMemoryTag Tag);
     void RecordObjectCounts(std::size_t ObjectCount, std::size_t ActorCount);
-    void RecordPickingTime(double Milliseconds);
+    // A negative narrow-phase value means the optional breakdown was not measured.
+    void RecordPickingTime(double Milliseconds, double NarrowPhaseMilliseconds = -1.0);
 
     FStats GetStats();
+    FStatAverages GetStatAverages();
     FFrameStats GetFrameStats();
     FSystemStats GetSystemStats();
     FSystemStatSample GetSystemSample(ESystemStatStage Stage);

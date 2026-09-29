@@ -22,8 +22,8 @@ public:
     const TArray<FMeshDrawItem>& GetItems(ERenderPass Pass) const;
 
 private:
-    void BuildItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, TArray<FMeshDrawItem>& Items, bool RenderSky, bool ForceUnlit, const FFrustum& Frustum);
-    void AddItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, std::size_t Begin, std::size_t End, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, TArray<FMeshDrawItem>& Items, bool ForceUnlit, const FFrustum& Frustum);
+    void BuildItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, TArray<FMeshDrawItem>& Items, bool RenderSky, const FFrustum& Frustum);
+    void AddItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, std::size_t Begin, std::size_t End, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, TArray<FMeshDrawItem>& Items, const FFrustum& Frustum);
 
 private:
     TArray<FMeshDrawItem> mSceneItems{};

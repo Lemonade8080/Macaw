@@ -49,7 +49,6 @@ struct PS_INPUT
     float3 WorldPosition : TEXCOORD1;
     nointerpolation uint MaterialIndex : Jungle1;
     nointerpolation float3 ColorCoefficient : Jungle2;
-    nointerpolation uint Flags : Jungle3;
 };
 
 PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID)
@@ -99,7 +98,6 @@ PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID)
     Output.Color = Input.Color;
     Output.WorldPosition = WorldPosition.xyz;
     Output.MaterialIndex = ModelContext.MaterialIndex;
-    Output.Flags = ModelContext.Flags;
     Output.ColorCoefficient = float3(1.0f, 1.0f, 1.0f);
 
     return Output;

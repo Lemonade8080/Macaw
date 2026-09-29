@@ -13,7 +13,7 @@ void FRenderQueue::Build(const IAssetRegistry* Registry, const FSceneRenderData&
     mOutlineItems.clear();
     mGizmoItems.clear();
     if (View.IsPassEnabled(ERenderPass::SceneGeometry)) {
-        BuildItems(Registry, Scene.mActorProbes, mSceneItems, View.mSettings.mBRenderSky, View.mBForceUnlit || View.mRenderMode == ERenderMode::Unlit || View.mRenderMode == ERenderMode::Wireframe, View.mCamera.mViewFrustum);
+        BuildItems(Registry, Scene.mActorProbes, mSceneItems, View.mSettings.mBRenderSky, View.mCamera.mViewFrustum);
     }
     if (View.mSelectedActorHandle.IsValid()) {
         for (FMeshDrawItem& Item : mSceneItems) {
@@ -33,7 +33,7 @@ void FRenderQueue::Build(const IAssetRegistry* Registry, const FSceneRenderData&
         }
     }
     if (View.IsPassEnabled(ERenderPass::Gizmo)) {
-        BuildItems(Registry, View.mGizmoProbes, mGizmoItems, true, true, View.mCamera.mViewFrustum);
+        BuildItems(Registry, View.mGizmoProbes, mGizmoItems, true, View.mCamera.mViewFrustum);
         for (std::size_t Index{}; Index < mGizmoItems.size(); ++Index) {
             mGizmoItems[Index].mModelIndex = static_cast<Uint32>(mSceneItems.size() + Index);
         }
@@ -53,7 +53,7 @@ const TArray<FMeshDrawItem>& FRenderQueue::GetItems(ERenderPass Pass) const {
     }
 }
 
-void FRenderQueue::BuildItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, TArray<FMeshDrawItem>& Items, bool RenderSky, bool ForceUnlit, const FFrustum& Frustum) {
+void FRenderQueue::BuildItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, TArray<FMeshDrawItem>& Items, bool RenderSky, const FFrustum& Frustum) {
     if (Registry == nullptr) {
         return;
     }
@@ -70,10 +70,10 @@ void FRenderQueue::BuildItems(const IAssetRegistry* Registry, const TArray<FActo
         if ((RenderSky || Source.mPipelineHandle != SkyPipelineHandle) && Mesh != nullptr && Registry->ResolveAsset<UPipeline>(Source.mPipelineHandle) != nullptr) {
             const TArray<UMesh::FSubMesh>& SubMeshes{Mesh->GetSubMeshes()};
             if (SubMeshes.empty()) {
-                AddItems(Registry, Probes, Begin, End, 0, 0, static_cast<Uint32>(Mesh->GetIndices().size()), Items, ForceUnlit, Frustum);
+                AddItems(Registry, Probes, Begin, End, 0, 0, static_cast<Uint32>(Mesh->GetIndices().size()), Items, Frustum);
             } else {
                 for (const UMesh::FSubMesh& SubMesh : SubMeshes) {
-                    AddItems(Registry, Probes, Begin, End, SubMesh.mMaterialGroupIndex, SubMesh.mFirstIndex, SubMesh.mIndexCount, Items, ForceUnlit, Frustum);
+                    AddItems(Registry, Probes, Begin, End, SubMesh.mMaterialGroupIndex, SubMesh.mFirstIndex, SubMesh.mIndexCount, Items, Frustum);
                 }
             }
         }
@@ -81,7 +81,7 @@ void FRenderQueue::BuildItems(const IAssetRegistry* Registry, const TArray<FActo
     }
 }
 
-void FRenderQueue::AddItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, std::size_t Begin, std::size_t End, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, TArray<FMeshDrawItem>& Items, bool ForceUnlit, const FFrustum& Frustum) {
+void FRenderQueue::AddItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, std::size_t Begin, std::size_t End, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, TArray<FMeshDrawItem>& Items, const FFrustum& Frustum) {
     const UMaterial* Material{Registry->ResolveAsset<UMaterial>(Probes[Begin].mMaterialHandle)};
     if (Material == nullptr || IndexCount == 0) {
         return;
@@ -94,7 +94,7 @@ void FRenderQueue::AddItems(const IAssetRegistry* Registry, const TArray<FActorP
 
     const FMaterialChunkSignature TextureSignature{Material->BuildChunkSignature(GroupIndex)};
     for (std::size_t Index{Begin}; Index < End; ++Index) {
-        FActorProbe Probe{Probes[Index]};
+        const FActorProbe& Probe{Probes[Index]};
         DirectX::BoundingOrientedBox WorldBounds{};
         Probe.mLocalBounds.Transform(WorldBounds, Probe.mWorld.ToSimpleMath());
 
@@ -102,9 +102,6 @@ void FRenderQueue::AddItems(const IAssetRegistry* Registry, const TArray<FActorP
             continue;
         }
 
-        if (ForceUnlit) {
-            Probe.mFlags |= static_cast<Uint32>(ERenderObjectFlags::Unlit);
-        }
         Items.push_back(FMeshDrawItem{Probe, TextureSignature, MaterialIndex, GroupIndex, FirstIndex, IndexCount});
     }
 }

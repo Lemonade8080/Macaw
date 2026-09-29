@@ -36,7 +36,7 @@ namespace {
         if (Command == "clear") {
             Console::Clear(Handle);
         } else if (Command == "help") {
-            Console::AddLog(Handle, Log, Core, "Commands: clear, echo, error, stat fps, stat picking, stat memory, stat object system, stat none");
+            Console::AddLog(Handle, Log, Core, "Commands: clear, echo, error, stat fps, stat render, stat picking, stat memory, stat object system, stat none");
         } else if (Command == "error") {
             FString Text{};
             std::getline(Stream >> std::ws, Text);
@@ -51,6 +51,10 @@ namespace {
             Writer.Modify([](FStatDisplayFlags& Flags) {
                 Flags.mBShowFps = !Flags.mBShowFps;
             });
+        } else if (Command == "stat render") {
+            Writer.Modify([](FStatDisplayFlags& Flags) {
+                Flags.mBShowRender = !Flags.mBShowRender;
+            });
         } else if (Command == "stat memory") {
             Writer.Modify([](FStatDisplayFlags& Flags) {
                 Flags.mBShowMemory = !Flags.mBShowMemory;
@@ -64,6 +68,9 @@ namespace {
                 Flags.mBShowPicking = !Flags.mBShowPicking;
             });
         } else if (Command == "stat none") {
+            Writer.Modify([](FStatDisplayFlags& Flags) {
+                Flags.mBShowRender = false;
+            });
             Writer.Modify([](FStatDisplayFlags& Flags) {
                 Flags.mBShowFps = false;
             });

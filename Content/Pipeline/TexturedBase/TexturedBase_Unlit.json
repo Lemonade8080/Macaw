@@ -1,12 +1,12 @@
 {
   "VertexShader": {
-    "Source": "./Content/Shader/TexturedBase.hlsl",
+    "Source": "./Content/Shader/TexturedBase_Unlit.hlsl",
     "EntryPoint": "mainVS",
     "Profile": "vs_5_0"
   },
 
   "PixelShader": {
-    "Source": "./Content/Shader/TexturedBase.hlsl",
+    "Source": "./Content/Shader/TexturedBase_Unlit.hlsl",
     "EntryPoint": "mainPS",
     "Profile": "ps_5_0"
   },

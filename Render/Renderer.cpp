@@ -2,9 +2,12 @@
 
 #include "Renderer.h"
 #include "Core/Base/ErrorHandler.h"
+#include "Core/Stat/Stat.h"
 
 #include <ranges>
 #include <cmath>
+#include <utility>
+#include <dxgi1_6.h>
 
 FRenderer::~FRenderer() {
     if (mFrameFenceEvent != nullptr) {
@@ -89,15 +92,20 @@ void FRenderer::BeginFrame(float DeltaTime) {
     if (mCurrentFrameResource != nullptr) {
         return;
     }
+
+    const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::RenderBeginFrame};
     if (std::isfinite(DeltaTime) && DeltaTime > 0.0f) {
         mAnimationTime = std::fmod(mAnimationTime + DeltaTime, 25.0f);
     }
+    
     FFrameResource& FrameResource{mFrameResources[mNextFrameResourceIndex]};
+    
     const Uint64 CompletionValue{FrameResource.GetCompletionValue()};
     if (CompletionValue != 0 && mFrameFence->GetCompletedValue() < CompletionValue) {
         const HRESULT Result{mFrameFence->SetEventOnCompletion(CompletionValue, mFrameFenceEvent)};
         ErrorHandler::ReportHRESULT(Result, "[ FRenderer ]", "Failed to register the frame fence event.", ErrorHandler::EErrorLevel::Critical);
         mDeviceContext->Flush();
+        const Stat::FScopedSystemStatTimer WaitStat{Stat::ESystemStatStage::RenderFenceWait};
         for (;;) {
             const DWORD WaitResult{WaitForSingleObject(mFrameFenceEvent, 1000)};
             if (WaitResult == WAIT_OBJECT_0) {
@@ -109,6 +117,7 @@ void FRenderer::BeginFrame(float DeltaTime) {
             }
         }
     }
+
     if (!FrameResource.BeginFrame(mDeviceContext.Get(), mAnimationTime)) {
         ErrorHandler::Report("[ FRenderer ]", "Failed to begin a frame resource.", ErrorHandler::EErrorLevel::Critical);
         return;
@@ -121,23 +130,37 @@ void FRenderer::RenderView(const FRenderView& View, const FSceneRenderData& Scen
     if (View.mTarget == nullptr || !View.mTarget->IsValid() || mDeviceContext == nullptr || mCurrentFrameResource == nullptr) {
         return;
     }
-    ID3D11ShaderResourceView* NullResource{nullptr};
-    mDeviceContext->PSSetShaderResources(0, 1, &NullResource);
-    View.mTarget->Bind(mDeviceContext.Get());
-    const float ClearColor[]{View.mSettings.mClearColor.mX, View.mSettings.mClearColor.mY, View.mSettings.mClearColor.mZ, View.mSettings.mClearColor.mW};
-    View.mTarget->Clear(mDeviceContext.Get(), ClearColor);
+    const Stat::FScopedSystemStatTimer RenderStat{Stat::ESystemStatStage::RenderView};
+    {
+        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::RenderTarget};
+        ID3D11ShaderResourceView* NullResource{nullptr};
+        mDeviceContext->PSSetShaderResources(0, 1, &NullResource);
+        View.mTarget->Bind(mDeviceContext.Get());
+        const float ClearColor[]{View.mSettings.mClearColor.mX, View.mSettings.mClearColor.mY, View.mSettings.mClearColor.mZ, View.mSettings.mClearColor.mW};
+        View.mTarget->Clear(mDeviceContext.Get(), ClearColor);
+    }
     if (mAssetRegistry == nullptr) {
         return;
     }
-    mAssetRegistry->FlushMaterialBuffer(mDeviceContext.Get());
-    mRenderQueue.Build(mAssetRegistry, Scene, View);
-    if (!mCurrentFrameResource->PrepareView(mDevice.Get(), mDeviceContext.Get(), View, Scene, mRenderQueue)) {
-        return;
+    {
+        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::RenderMaterials};
+        mAssetRegistry->FlushMaterialBuffer(mDeviceContext.Get());
+    }
+    {
+        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::RenderQueue};
+        mRenderQueue.Build(mAssetRegistry, Scene, View);
+    }
+    {
+        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::RenderViewUpload};
+        if (!mCurrentFrameResource->PrepareView(mDevice.Get(), mDeviceContext.Get(), View, Scene, mRenderQueue)) {
+            return;
+        }
     }
     const FRenderContext Context{mDeviceContext.Get(), mAssetRegistry, mAssetRegistry->GetMaterialBufferSRV(), mCurrentFrameResource};
-    constexpr std::array Passes{ERenderPass::SceneGeometry, ERenderPass::SelectionOutline, ERenderPass::SceneGuides, ERenderPass::Gizmo, ERenderPass::Text, ERenderPass::Billboard, ERenderPass::OrientationAxis};
-    for (const ERenderPass Pass : Passes) {
+    constexpr std::array Passes{std::pair{ERenderPass::SceneGeometry, Stat::ESystemStatStage::RenderGeometry}, std::pair{ERenderPass::SelectionOutline, Stat::ESystemStatStage::RenderSelectionOutline}, std::pair{ERenderPass::SceneGuides, Stat::ESystemStatStage::RenderSceneGuides}, std::pair{ERenderPass::Gizmo, Stat::ESystemStatStage::RenderGizmo}, std::pair{ERenderPass::Text, Stat::ESystemStatStage::RenderText}, std::pair{ERenderPass::Billboard, Stat::ESystemStatStage::RenderBillboard}, std::pair{ERenderPass::OrientationAxis, Stat::ESystemStatStage::RenderOrientationAxis}};
+    for (const auto& [Pass, Stage] : Passes) {
         if (View.IsPassEnabled(Pass)) {
+            const Stat::FScopedSystemStatTimer StageStat{Stage};
             ExecutePass(Pass, Context, View, Scene);
         }
     }
@@ -267,11 +290,27 @@ void FRenderer::CreateDeviceAndSwapChain(HWND WindowHandle) {
     SwapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     SwapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
 
+    UINT DeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifdef _DEBUG
-    ErrorHandler::ReportHRESULT(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_DEBUG, FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION, &SwapChainDesc, &mSwapChain, &mDevice, nullptr, &mDeviceContext), "[ FRenderer ]", "Failed to create Direct3D device and swap chain.", ErrorHandler::EErrorLevel::Critical);
-#else
-    ErrorHandler::ReportHRESULT(D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION, &SwapChainDesc, &mSwapChain, &mDevice, nullptr, &mDeviceContext), "[ FRenderer ]", "Failed to create Direct3D device and swap chain.", ErrorHandler::EErrorLevel::Critical);
+    DeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
+    //디바이스 생성이 복잡해진 이유: 외장그래픽 선택 코드
+    HRESULT Result = E_FAIL;
+    Microsoft::WRL::ComPtr<IDXGIFactory6> Factory;
+    if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(Factory.GetAddressOf())))) {
+        for (UINT Index = 0; ; ++Index) {
+            Microsoft::WRL::ComPtr<IDXGIAdapter1> Adapter;
+            if (FAILED(Factory->EnumAdapterByGpuPreference(Index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(Adapter.GetAddressOf())))) break;
+            DXGI_ADAPTER_DESC1 Description{};
+            if (FAILED(Adapter->GetDesc1(&Description)) || (Description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) continue;
+            Result = D3D11CreateDeviceAndSwapChain(Adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, DeviceFlags, FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION, &SwapChainDesc, mSwapChain.ReleaseAndGetAddressOf(), mDevice.ReleaseAndGetAddressOf(), nullptr, mDeviceContext.ReleaseAndGetAddressOf());
+            if (SUCCEEDED(Result)) break;
+        }
+    }
+    if (FAILED(Result)) {
+        Result = D3D11CreateDeviceAndSwapChain(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, DeviceFlags, FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION, &SwapChainDesc, mSwapChain.ReleaseAndGetAddressOf(), mDevice.ReleaseAndGetAddressOf(), nullptr, mDeviceContext.ReleaseAndGetAddressOf());
+    }
+    ErrorHandler::ReportHRESULT(Result, "[ FRenderer ]", "Failed to create Direct3D device and swap chain.", ErrorHandler::EErrorLevel::Critical);
     mSwapChain->GetDesc(&SwapChainDesc);
 }
 
