@@ -17,32 +17,25 @@ void FEditorApplication::InitializeMode(FApplicationContext& Context, HWND Windo
 }
 
 void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime) {
-    FViewportHostWindow* ViewportHostWindow{Context.mEditorUIManager->GetViewportHostWindow()};
-    if (ViewportHostWindow != nullptr) {
-        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::Input};
-        ViewportHostWindow->ProcessInput(*Context.mEditorView, Context.mKeyboardInput, Context.mMouseInput, DeltaTime);
-    }
+    FViewportHostWindow* ViewportHostWindow{ Context.mEditorUIManager->GetViewportHostWindow() };
     {
-        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::WorldCommands};
+        const Stat::FScopedSystemStatTimer StageStat{ Stat::ESystemStatStage::WorldUpdate };
+        if (ViewportHostWindow != nullptr) {
+            ViewportHostWindow->ProcessInput(*Context.mEditorView, Context.mKeyboardInput, Context.mMouseInput, DeltaTime);
+        }
         Context.mWorldCommandChannel->Dispatch();
-    }
-    {
-        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::WorldTick};
         Context.mWorld->Tick(DeltaTime);
-    }
-    {
-        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::EditorDispatch};
         Context.mEditorContext->Dispatch();
     }
 
     if (ViewportHostWindow == nullptr) {
         return;
     }
-
+    const Stat::FScopedSystemStatTimer RenderStat{ Stat::ESystemStatStage::RenderPreparation };
     FSceneRenderData Scene{};
+    const AActor* SelectedActor{ Context.mEditorContext->GetSelectedActor() };
+    const FObjectHandle SelectedActorHandle{ SelectedActor != nullptr ? SelectedActor->GetHandle() : FObjectHandle{} };
     Context.mWorld->BuildSceneRenderData(Scene);
-    const AActor* SelectedActor{Context.mEditorContext->GetSelectedActor()};
-    const FObjectHandle SelectedActorHandle{SelectedActor != nullptr ? SelectedActor->GetHandle() : FObjectHandle{}};
 
     for (FViewportId Id{}; Id < FViewportHostWindow::MaximumViewportCount; ++Id) {
         FEditorViewport* Viewport{ViewportHostWindow->PrepareViewportForRender(Id)};
@@ -50,7 +43,6 @@ void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime)
             continue;
         }
 
-        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::SceneRender};
         CameraProbe Camera{};
         if (!Viewport->BuildCameraProbe(Camera)) {
             continue;

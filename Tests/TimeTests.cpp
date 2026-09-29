@@ -118,35 +118,37 @@ void TestWorldIntegration() {
 
 void TestStatSnapshots() {
     Stat::ResetFrameStats();
-    Stat::RecordSystemTime(Stat::ESystemStatStage::SceneRender, 100.0);
+    Stat::RecordSystemTime(Stat::ESystemStatStage::RenderPreparation, 100.0);
     Stat::BeginFrame();
-    Stat::RecordSystemTime(Stat::ESystemStatStage::SceneRender, 1.25);
-    Stat::RecordSystemTime(Stat::ESystemStatStage::SceneRender, 2.5);
-    Stat::RecordSystemTime(Stat::ESystemStatStage::SceneRender, -1.0);
-    Stat::RecordSystemTime(Stat::ESystemStatStage::SceneRender, std::numeric_limits<double>::quiet_NaN());
-    Stat::RecordSystemTime(Stat::ESystemStatStage::SceneRender, std::numeric_limits<double>::infinity());
+    Stat::RecordSystemTime(Stat::ESystemStatStage::RenderPreparation, 1.25);
+    Stat::RecordSystemTime(Stat::ESystemStatStage::RenderPreparation, 2.5);
+    Stat::RecordSystemTime(Stat::ESystemStatStage::RenderPreparation, -1.0);
+    Stat::RecordSystemTime(Stat::ESystemStatStage::RenderPreparation, std::numeric_limits<double>::quiet_NaN());
+    Stat::RecordSystemTime(Stat::ESystemStatStage::RenderPreparation, std::numeric_limits<double>::infinity());
     Stat::RecordSystemTime(Stat::ESystemStatStage::Count, 1.0);
     Stat::BeginFrame();
-    assert(Stat::GetFrameStats().mFrameCount == 1);
-    assert(Stat::GetSystemSample(Stat::ESystemStatStage::SceneRender).mCallCount == 0);
+    assert(Stat::GetFrameStats().mFrameCount == 0);
+    assert(Stat::GetSystemSample(Stat::ESystemStatStage::RenderPreparation).mCallCount == 0);
     Stat::EndFrame();
     Stat::EndFrame();
+    Stat::BeginFrame();
     Stat::FStats Snapshot{Stat::GetStats()};
     assert(Snapshot.mSystem.mFrameCount == 1);
-    assert(Stat::GetSystemSample(Stat::ESystemStatStage::SceneRender).mTotalMilliseconds == 3.75);
-    assert(Stat::GetSystemSample(Stat::ESystemStatStage::SceneRender).mCallCount == 2);
-    Snapshot.mSystem.mSamples[static_cast<std::size_t>(Stat::ESystemStatStage::SceneRender)].mTotalMilliseconds = 500.0;
-    assert(Stat::GetSystemSample(Stat::ESystemStatStage::SceneRender).mTotalMilliseconds == 3.75);
+    assert(Stat::GetSystemSample(Stat::ESystemStatStage::RenderPreparation).mTotalMilliseconds == 3.75);
+    assert(Stat::GetSystemSample(Stat::ESystemStatStage::RenderPreparation).mCallCount == 2);
+    Snapshot.mSystem.mSamples[static_cast<std::size_t>(Stat::ESystemStatStage::RenderPreparation)].mTotalMilliseconds = 500.0;
+    assert(Stat::GetSystemSample(Stat::ESystemStatStage::RenderPreparation).mTotalMilliseconds == 3.75);
     Stat::BeginFrame();
-    assert(Stat::GetSystemSample(Stat::ESystemStatStage::SceneRender).mTotalMilliseconds == 3.75);
+    assert(Stat::GetSystemSample(Stat::ESystemStatStage::RenderPreparation).mTotalMilliseconds == 3.75);
     Stat::EndFrame();
-    assert(Stat::GetSystemSample(Stat::ESystemStatStage::SceneRender).mCallCount == 0);
+    Stat::BeginFrame();
+    assert(Stat::GetSystemSample(Stat::ESystemStatStage::RenderPreparation).mCallCount == 0);
     assert(Stat::GetSystemSample(Stat::ESystemStatStage::Count).mCallCount == 0);
     assert(Snapshot.mSystem.mFrameCount == 1);
 }
 
 void MeasureEarlyReturn() {
-    const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::Input};
+    const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::EditorUi};
     return;
 }
 
@@ -157,57 +159,62 @@ void TestStatScopes() {
         Stat::BeginFrame();
     }
     {
-        const Stat::FScopedSystemStatTimer FrameStat{Stat::ESystemStatStage::Frame};
+        const Stat::FScopedSystemStatTimer FrameStat{Stat::ESystemStatStage::Other};
         MeasureEarlyReturn();
         try {
-            const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::WorldTick};
+            const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::WorldUpdate};
             throw std::runtime_error{"Test"};
         } catch (const std::runtime_error&) {
         }
     }
     Stat::EndFrame();
+    Stat::BeginFrame();
     assert(Stat::GetSystemSample(Stat::ESystemStatStage::Present).mCallCount == 0);
-    assert(Stat::GetSystemSample(Stat::ESystemStatStage::Input).mCallCount == 1);
-    assert(Stat::GetSystemSample(Stat::ESystemStatStage::WorldTick).mCallCount == 1);
-    assert(Stat::GetSystemSample(Stat::ESystemStatStage::Frame).mCallCount == 1);
-    assert(Stat::GetSystemSample(Stat::ESystemStatStage::Frame).mTotalMilliseconds >= Stat::GetSystemSample(Stat::ESystemStatStage::WorldTick).mTotalMilliseconds);
+    assert(Stat::GetSystemSample(Stat::ESystemStatStage::EditorUi).mCallCount == 1);
+    assert(Stat::GetSystemSample(Stat::ESystemStatStage::WorldUpdate).mCallCount == 1);
+    assert(Stat::GetSystemSample(Stat::ESystemStatStage::Other).mCallCount == 2);
+    assert(Stat::GetSystemSample(Stat::ESystemStatStage::Other).mTotalMilliseconds >= Stat::GetSystemSample(Stat::ESystemStatStage::WorldUpdate).mTotalMilliseconds);
     Stat::BeginFrame();
     {
-        const Stat::FScopedSystemStatTimer StaleStat{Stat::ESystemStatStage::WorldTick};
+        const Stat::FScopedSystemStatTimer StaleStat{Stat::ESystemStatStage::WorldUpdate};
         Stat::ResetFrameStats();
         Stat::BeginFrame();
     }
     Stat::EndFrame();
-    assert(Stat::GetSystemSample(Stat::ESystemStatStage::WorldTick).mCallCount == 0);
+    Stat::BeginFrame();
+    assert(Stat::GetSystemSample(Stat::ESystemStatStage::WorldUpdate).mCallCount == 0);
     assert(Stat::GetSystemStats().mFrameCount == 1);
     Stat::BeginFrame();
     {
-        const Stat::FScopedSystemStatTimer StaleStat{Stat::ESystemStatStage::WorldTick};
+        const Stat::FScopedSystemStatTimer StaleStat{Stat::ESystemStatStage::WorldUpdate};
         Stat::EndFrame();
         Stat::BeginFrame();
     }
     Stat::EndFrame();
-    assert(Stat::GetSystemSample(Stat::ESystemStatStage::WorldTick).mCallCount == 0);
+    Stat::BeginFrame();
+    assert(Stat::GetSystemSample(Stat::ESystemStatStage::WorldUpdate).mCallCount == 0);
 }
 
 void TestFrameAndObjectStats() {
     Stat::ResetFrameStats();
-    Stat::BeginFrame(0.25);
+    Stat::BeginFrame();
+    assert(Stat::GetStatAverages().mFrameCount == 0);
+    std::this_thread::sleep_for(std::chrono::milliseconds{ 2 });
     Stat::EndFrame();
-    Stat::BeginFrame(0.5);
+    assert(Stat::GetStatAverages().mFrameCount == 0);
+    Stat::BeginFrame();
+    const double FirstElapsed{ Stat::GetFrameStats().mElapsedSeconds };
+    assert(FirstElapsed > 0.0);
+    std::this_thread::sleep_for(std::chrono::milliseconds{ 2 });
     Stat::EndFrame();
-    const Stat::FFrameStats Frame{Stat::GetFrameStats()};
-    assert(Frame.mDeltaSeconds == 0.5);
-    assert(Frame.mElapsedSeconds == 0.75);
+    Stat::BeginFrame();
+    const Stat::FFrameStats Frame{ Stat::GetFrameStats() };
+    assert(Frame.mDeltaSeconds > 0.0);
+    assert(Frame.mElapsedSeconds > FirstElapsed);
     assert(Frame.mFrameCount == 2);
-    assert(Frame.mFramesPerSecond == 2.0);
-    assert(Frame.mAverageFrameMilliseconds == 500.0);
-    Stat::BeginFrame(std::numeric_limits<double>::quiet_NaN());
-    Stat::EndFrame();
-    assert(Stat::GetFrameStats().mDeltaSeconds == 0.0);
-    assert(Stat::GetFrameStats().mElapsedSeconds == 0.75);
+    assert(std::abs(Frame.mAverageFrameMilliseconds * Frame.mFramesPerSecond - 1000.0) < 1.0e-9);
     Stat::RecordObjectCounts(12, 3);
-    const Stat::FStats Snapshot{Stat::GetStats()};
+    const Stat::FStats Snapshot{ Stat::GetStats() };
     Stat::RecordObjectCounts(10, 2);
     assert(Snapshot.mObjects.mObjectCount == 12);
     assert(Snapshot.mObjects.mActorCount == 3);
@@ -242,27 +249,29 @@ void TestCentralMemoryStats() {
 void TestStatAverages() {
     Stat::ResetFrameStats();
     const Stat::FMemoryStats Before{Stat::GetMemoryStats()};
-    const std::size_t SceneIndex{static_cast<std::size_t>(Stat::ESystemStatStage::SceneRender)};
-    const std::size_t GeometryIndex{static_cast<std::size_t>(Stat::ESystemStatStage::RenderGeometry)};
+    const std::size_t SceneIndex{static_cast<std::size_t>(Stat::ESystemStatStage::RenderPreparation)};
+    const std::size_t GeometryIndex{static_cast<std::size_t>(Stat::ESystemStatStage::Geometry)};
     const std::size_t TagIndex{static_cast<std::size_t>(Stat::EMemoryTag::Message)};
     assert(Stat::GetStatAverages().mFrameCount == 0);
-    Stat::BeginFrame(0.125);
-    Stat::RecordSystemTime(Stat::ESystemStatStage::SceneRender, 8.0);
+    Stat::BeginFrame();
+    Stat::RecordSystemTime(Stat::ESystemStatStage::RenderPreparation, 8.0);
     Stat::RecordObjectCounts(10, 2);
     Stat::RecordAllocation(100, Stat::EMemoryTag::Message);
     Stat::RecordPickingTime(2.0);
     assert(Stat::GetStatAverages().mFrameCount == 0);
     Stat::EndFrame();
+    assert(Stat::GetStatAverages().mFrameCount == 0);
+    Stat::BeginFrame();
     const Stat::FStatAverages First{Stat::GetStatAverages()};
     assert(First.mFrameCount == 1);
     assert(First.mSystemSamples[SceneIndex].mTotalMilliseconds == 8.0);
     assert(First.mSystemSamples[SceneIndex].mCallCount == 1.0);
-    assert(First.mFrame.mFramesPerSecond == 8.0);
+    assert(First.mFrame.mFramesPerSecond > 0.0);
     assert(First.mPicking.mAverageMilliseconds == 2.0);
-    Stat::BeginFrame(0.125);
-    Stat::RecordSystemTime(Stat::ESystemStatStage::SceneRender, 2.0);
-    Stat::RecordSystemTime(Stat::ESystemStatStage::SceneRender, 4.0);
-    Stat::RecordSystemTime(Stat::ESystemStatStage::RenderGeometry, 8.0);
+    Stat::BeginFrame();
+    Stat::RecordSystemTime(Stat::ESystemStatStage::RenderPreparation, 2.0);
+    Stat::RecordSystemTime(Stat::ESystemStatStage::RenderPreparation, 4.0);
+    Stat::RecordSystemTime(Stat::ESystemStatStage::Geometry, 8.0);
     Stat::RecordObjectCounts(20, 3);
     Stat::RecordAllocation(200, Stat::EMemoryTag::Message);
     Stat::RecordPickingTime(2.0);
@@ -275,16 +284,18 @@ void TestStatAverages() {
     assert(Stat::GetStatAverages().mObjects.mObjectCount == 10.0);
     assert(Stat::GetStatAverages().mMemory.mAllocatedBytes == static_cast<double>(Before.mAllocatedBytes) + 100.0);
     assert(Stat::GetStatAverages().mPicking.mAverageMilliseconds == 2.0);
-    Stat::BeginFrame(0.375);
+    Stat::BeginFrame();
     Stat::RecordObjectCounts(30, 4);
     Stat::RecordDeallocation(200, Stat::EMemoryTag::Message);
-    assert(Stat::GetStatAverages().mFrame.mFramesPerSecond == 8.0);
+    assert(Stat::GetStatAverages().mFrame.mFramesPerSecond == First.mFrame.mFramesPerSecond);
+    std::this_thread::sleep_for(std::chrono::milliseconds{ 550 });
     Stat::EndFrame();
     Stat::EndFrame();
+    Stat::BeginFrame();
     const Stat::FStatAverages Average{Stat::GetStatAverages()};
     assert(Average.mFrameCount == 2);
-    assert(Average.mFrame.mFramesPerSecond == 4.0);
-    assert(Average.mFrame.mAverageFrameMilliseconds == 250.0);
+    assert(Average.mFrame.mFramesPerSecond > 0.0);
+    assert(std::abs(Average.mFrame.mAverageFrameMilliseconds * Average.mFrame.mFramesPerSecond - 1000.0) < 1.0e-9);
     assert(Average.mSystemSamples[SceneIndex].mTotalMilliseconds == 3.0);
     assert(Average.mSystemSamples[SceneIndex].mCallCount == 1.0);
     assert(Average.mSystemSamples[GeometryIndex].mTotalMilliseconds == 4.0);
@@ -303,8 +314,10 @@ void TestStatAverages() {
     assert(Average.mPicking.mAttemptsPerFrame == 1.0);
     assert(Stat::GetPickingStats().mAttemptCount == 3);
     assert(Stat::GetPickingStats().mTotalMilliseconds == 10.0);
-    Stat::BeginFrame(0.75);
+    Stat::BeginFrame();
+    std::this_thread::sleep_for(std::chrono::milliseconds{ 550 });
     Stat::EndFrame();
+    Stat::BeginFrame();
     const Stat::FStatAverages Empty{Stat::GetStatAverages()};
     assert(Empty.mFrameCount == 1);
     assert(Empty.mSystemSamples[SceneIndex].mTotalMilliseconds == 0.0);
@@ -313,13 +326,13 @@ void TestStatAverages() {
     assert(Empty.mPicking.mMillisecondsPerFrame == 0.0);
     assert(Empty.mPicking.mAttemptsPerFrame == 0.0);
     assert(Empty.mObjects.mObjectCount == 30.0);
-    Stat::BeginFrame(0.125);
-    Stat::RecordSystemTime(Stat::ESystemStatStage::SceneRender, 100.0);
+    Stat::BeginFrame();
+    Stat::RecordSystemTime(Stat::ESystemStatStage::RenderPreparation, 100.0);
     Stat::RecordPickingTime(100.0);
     Stat::EndFrame();
     Stat::ResetFrameStats();
     assert(Stat::GetStatAverages().mFrameCount == 0);
-    Stat::BeginFrame(0.125);
+    Stat::BeginFrame();
     Stat::EndFrame();
     assert(Stat::GetStatAverages().mSystemSamples[SceneIndex].mTotalMilliseconds == 0.0);
     assert(Stat::GetStatAverages().mPicking.mAverageMilliseconds == 0.0);
@@ -327,6 +340,93 @@ void TestStatAverages() {
     assert(Stat::GetMemoryStats().mAllocatedBytes == Before.mAllocatedBytes);
 }
 
+void TestExclusiveFrameBreakdown() {
+    Stat::ResetFrameStats();
+    Stat::BeginFrame();
+    std::this_thread::sleep_for(std::chrono::milliseconds{ 2 });
+    {
+        const Stat::FScopedSystemStatTimer Setup{ Stat::ESystemStatStage::FrameSetup };
+        std::this_thread::sleep_for(std::chrono::milliseconds{ 2 });
+    }
+    {
+        const Stat::FScopedSystemStatTimer Preview{ Stat::ESystemStatStage::PreviewRender };
+        const Stat::FScopedSystemStatTimer Preparation{ Stat::ESystemStatStage::RenderPreparation };
+        const Stat::FScopedSystemStatTimer Geometry{ Stat::ESystemStatStage::Geometry };
+        const Stat::FScopedSystemStatTimer Overlays{ Stat::ESystemStatStage::EditorOverlays };
+        std::this_thread::sleep_for(std::chrono::milliseconds{ 3 });
+    }
+    {
+        const Stat::FScopedSystemStatTimer Ui{ Stat::ESystemStatStage::EditorUi };
+        std::this_thread::sleep_for(std::chrono::milliseconds{ 1 });
+    }
+    {
+        const Stat::FScopedSystemStatTimer Outer{ Stat::ESystemStatStage::WorldUpdate };
+        const Stat::FScopedSystemStatTimer Inner{ Stat::ESystemStatStage::WorldUpdate };
+        std::this_thread::sleep_for(std::chrono::milliseconds{ 2 });
+    }
+    for (int Index{}; Index < 3; ++Index) {
+        const Stat::FScopedSystemStatTimer Preparation{ Stat::ESystemStatStage::RenderPreparation };
+        std::this_thread::sleep_for(std::chrono::milliseconds{ 1 });
+        {
+            const Stat::FScopedSystemStatTimer Geometry{ Stat::ESystemStatStage::Geometry };
+            std::this_thread::sleep_for(std::chrono::milliseconds{ 1 });
+        }
+        {
+            const Stat::FScopedSystemStatTimer Overlays{ Stat::ESystemStatStage::EditorOverlays };
+            std::this_thread::sleep_for(std::chrono::milliseconds{ 1 });
+        }
+    }
+    {
+        const Stat::FScopedSystemStatTimer Ui{ Stat::ESystemStatStage::UiRender };
+        std::this_thread::sleep_for(std::chrono::milliseconds{ 1 });
+    }
+    {
+        const Stat::FScopedSystemStatTimer Present{ Stat::ESystemStatStage::Present };
+        std::this_thread::sleep_for(std::chrono::milliseconds{ 1 });
+    }
+    Stat::EndFrame();
+    std::this_thread::sleep_for(std::chrono::milliseconds{ 4 });
+    Stat::BeginFrame();
+    const Stat::FStatAverages Snapshot{ Stat::GetStatAverages() };
+    double TotalMilliseconds{};
+    double RoundedMicroseconds{};
+    double RoundedShareTenths{};
+    double PreviousMicroseconds{};
+    double PreviousShareTenths{};
+    for (const Stat::FSystemStatAverage& Sample : Snapshot.mSystemSamples) {
+        assert(Sample.mExclusiveMilliseconds > 0.0);
+        TotalMilliseconds += Sample.mExclusiveMilliseconds;
+        const double CumulativeMicroseconds{ std::round(TotalMilliseconds * 1000.0) };
+        const double CumulativeShareTenths{ std::round(TotalMilliseconds * 1000.0 / Snapshot.mFrame.mAverageFrameMilliseconds) };
+        RoundedMicroseconds += CumulativeMicroseconds - PreviousMicroseconds;
+        RoundedShareTenths += CumulativeShareTenths - PreviousShareTenths;
+        PreviousMicroseconds = CumulativeMicroseconds;
+        PreviousShareTenths = CumulativeShareTenths;
+    }
+    assert(std::abs(TotalMilliseconds - Snapshot.mFrame.mAverageFrameMilliseconds) < 1.0e-9);
+    assert(RoundedMicroseconds == std::round(Snapshot.mFrame.mAverageFrameMilliseconds * 1000.0));
+    assert(RoundedShareTenths == 1000.0);
+    const Stat::FSystemStatAverage& Preview{ Snapshot.mSystemSamples[static_cast<std::size_t>(Stat::ESystemStatStage::PreviewRender)] };
+    assert(Preview.mExclusiveMilliseconds >= 3.0);
+    assert(Preview.mExclusiveMilliseconds == Preview.mTotalMilliseconds);
+    assert(Preview.mCallCount == 1.0);
+    assert(Snapshot.mSystemSamples[static_cast<std::size_t>(Stat::ESystemStatStage::Other)].mExclusiveMilliseconds >= 6.0);
+    assert(Snapshot.mSystemSamples[static_cast<std::size_t>(Stat::ESystemStatStage::RenderPreparation)].mCallCount == 3.0);
+    assert(Snapshot.mSystemSamples[static_cast<std::size_t>(Stat::ESystemStatStage::Geometry)].mCallCount == 3.0);
+    assert(Snapshot.mSystemSamples[static_cast<std::size_t>(Stat::ESystemStatStage::EditorOverlays)].mCallCount == 3.0);
+    assert(Snapshot.mSystemSamples[static_cast<std::size_t>(Stat::ESystemStatStage::WorldUpdate)].mCallCount == 2.0);
+    Stat::ResetFrameStats();
+    Stat::BeginFrame();
+    Stat::EndFrame();
+    Stat::BeginFrame();
+    const Stat::FStatAverages Empty{ Stat::GetStatAverages() };
+    double EmptyTotal{};
+    for (const Stat::FSystemStatAverage& Sample : Empty.mSystemSamples) {
+        EmptyTotal += Sample.mExclusiveMilliseconds;
+    }
+    assert(std::abs(EmptyTotal - Empty.mFrame.mAverageFrameMilliseconds) < 1.0e-9);
+    assert(Empty.mSystemSamples[static_cast<std::size_t>(Stat::ESystemStatStage::WorldUpdate)].mCallCount == 0.0);
+}
 int main() {
     TestFrameTime();
     TestWorldTime();
@@ -336,6 +436,7 @@ int main() {
     TestFrameAndObjectStats();
     TestCentralMemoryStats();
     TestStatAverages();
+    TestExclusiveFrameBreakdown();
     std::cout << "All time and stat tests passed.\n";
     return 0;
 }
