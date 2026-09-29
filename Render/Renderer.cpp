@@ -10,9 +10,11 @@
 #include <dxgi1_6.h>
 
 FRenderer::~FRenderer() {
+#if EnableFrameResourceFence
     if (mFrameFenceEvent != nullptr) {
         CloseHandle(mFrameFenceEvent);
     }
+#endif
 }
 
 void FRenderer::Create(HWND WindowHandle, UINT Width, UINT Height) {
@@ -33,6 +35,7 @@ bool FRenderer::Initialize() {
     if (!CreateSamplerStates() || !mTextRenderer.Initialize(mDevice.Get(), 256) || !mBillboardRenderer.Initialize(mDevice.Get(), 64)) {
         return false;
     }
+#if EnableFrameResourceFence
     Microsoft::WRL::ComPtr<ID3D11Device5> FenceDevice{};
     if (FAILED(mDevice.As(&FenceDevice)) || FAILED(mDeviceContext.As(&mFenceContext)) || FAILED(FenceDevice->CreateFence(0, D3D11_FENCE_FLAG_NONE, IID_PPV_ARGS(mFrameFence.GetAddressOf())))) {
         return false;
@@ -41,6 +44,7 @@ bool FRenderer::Initialize() {
     if (mFrameFenceEvent == nullptr) {
         return false;
     }
+#endif
     for (FFrameResource& FrameResource : mFrameResources) {
         if (!FrameResource.Initialize(mDevice.Get(), mDeviceContext.Get())) {
             return false;
@@ -67,10 +71,14 @@ void FRenderer::BindSamplerStates() {
 
 void FRenderer::EndFrame() {
     if (mCurrentFrameResource != nullptr) {
+#if EnableFrameResourceFence
         const HRESULT Result{mFenceContext->Signal(mFrameFence.Get(), mNextFenceValue)};
         ErrorHandler::ReportHRESULT(Result, "[ FRenderer ]", "Failed to signal the frame fence.", ErrorHandler::EErrorLevel::Critical);
-        mCurrentFrameResource->SetCompletionValue(mNextFenceValue);
+        mCompletionValues[mNextFrameResourceIndex] = mNextFenceValue;
         ++mNextFenceValue;
+        mNextFrameResourceIndex = (mNextFrameResourceIndex + 1) % mFrameResourceCount;
+#endif
+        mCurrentFrameResource->EndFrame();
         mCurrentFrameResource = nullptr;
     }
     mSwapChain->Present(0, DXGI_PRESENT_ALLOW_TEARING);
@@ -97,10 +105,10 @@ void FRenderer::BeginFrame(float DeltaTime) {
     if (std::isfinite(DeltaTime) && DeltaTime > 0.0f) {
         mAnimationTime = std::fmod(mAnimationTime + DeltaTime, 25.0f);
     }
-    
+
+#if EnableFrameResourceFence
     FFrameResource& FrameResource{mFrameResources[mNextFrameResourceIndex]};
-    
-    const Uint64 CompletionValue{FrameResource.GetCompletionValue()};
+    const Uint64 CompletionValue{mCompletionValues[mNextFrameResourceIndex]};
     if (CompletionValue != 0 && mFrameFence->GetCompletedValue() < CompletionValue) {
         const HRESULT Result{mFrameFence->SetEventOnCompletion(CompletionValue, mFrameFenceEvent)};
         ErrorHandler::ReportHRESULT(Result, "[ FRenderer ]", "Failed to register the frame fence event.", ErrorHandler::EErrorLevel::Critical);
@@ -117,13 +125,14 @@ void FRenderer::BeginFrame(float DeltaTime) {
             }
         }
     }
-
+#else
+    FFrameResource& FrameResource{mFrameResources.front()};
+#endif
     if (!FrameResource.BeginFrame(mDeviceContext.Get(), mAnimationTime)) {
         ErrorHandler::Report("[ FRenderer ]", "Failed to begin a frame resource.", ErrorHandler::EErrorLevel::Critical);
         return;
     }
     mCurrentFrameResource = &FrameResource;
-    mNextFrameResourceIndex = (mNextFrameResourceIndex + 1) % mFrameResourceCount;
 }
 
 void FRenderer::RenderView(const FRenderView& View, const FSceneRenderData& Scene) {
@@ -251,6 +260,7 @@ void FRenderer::Terminate() {
     for (FFrameResource& FrameResource : mFrameResources) {
         FrameResource.Reset();
     }
+#if EnableFrameResourceFence
     mFrameFence.Reset();
     mFenceContext.Reset();
     if (mFrameFenceEvent != nullptr) {
@@ -258,8 +268,10 @@ void FRenderer::Terminate() {
         mFrameFenceEvent = nullptr;
     }
     mNextFenceValue = 1;
-    mCurrentFrameResource = nullptr;
+    mCompletionValues = {};
     mNextFrameResourceIndex = 0;
+#endif
+    mCurrentFrameResource = nullptr;
     mAnimationTime = 0.0f;
 
     if (mBackBufferSurface != nullptr) {

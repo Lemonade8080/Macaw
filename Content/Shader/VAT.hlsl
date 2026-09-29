@@ -30,7 +30,6 @@ SamplerState LinearWrap : register(s0);
 SamplerState PointClamp : register(s2);
 
 #include "FrameResource.hlsli"
-#include "MeshDraw.hlsli"
 
 struct VS_INPUT
 {
@@ -51,7 +50,7 @@ struct PS_INPUT
     nointerpolation float3 ColorCoefficient : Jungle2;
 };
 
-PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID)
+PS_INPUT mainVS(VS_INPUT Input, uint ModelIndex : MODEL_INDEX)
 {
     PS_INPUT Output;
 
@@ -87,7 +86,7 @@ PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID)
     float3 VATPosition = float3(-BlenderLocalPos.z, BlenderLocalPos.x, BlenderLocalPos.y);
     
     
-    FModelContext ModelContext = ModelContexts[ModelContextStart + InstanceID];
+    FModelContext ModelContext = ModelContexts[ModelIndex];
 
     //VAT에서 뽑은 위치값에 World 행렬 곱해주기
     float4 WorldPosition = mul(float4(VATPosition, 1.0f), ModelContext.World);

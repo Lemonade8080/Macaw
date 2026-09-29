@@ -8,7 +8,7 @@ bool FFrameResource::Initialize(ID3D11Device* Device, ID3D11DeviceContext* Conte
     if (Device == nullptr || Context == nullptr) {
         return false;
     }
-    if (!InitializeConstantBuffer(Device, mFrameBuffer, sizeof(FFrameConstants)) || !InitializeConstantBuffer(Device, mViewBuffer, sizeof(FViewConstants)) || !InitializeConstantBuffer(Device, mDrawBuffer, sizeof(FDrawConstants)) || !InitializeConstantBuffer(Device, mTextBuffer, sizeof(FTextConstants)) || !mLights.Initialize(Device, Context, 16) || !mModels.Initialize(Device, Context, 128)) {
+    if (!InitializeConstantBuffer(Device, mFrameBuffer, sizeof(FFrameConstants)) || !InitializeConstantBuffer(Device, mViewBuffer, sizeof(FViewConstants)) || !InitializeConstantBuffer(Device, mTextBuffer, sizeof(FTextConstants)) || !mLights.Initialize(Device, Context, 16) || !mModels.Initialize(Device, Context, 128)) {
         Reset();
         return false;
     }
@@ -18,7 +18,7 @@ bool FFrameResource::Initialize(ID3D11Device* Device, ID3D11DeviceContext* Conte
 void FFrameResource::Reset() {
     mFrameBuffer.Reset();
     mViewBuffer.Reset();
-    mDrawBuffer.Reset();
+    mModelIndexBuffer.Reset();
     mTextBuffer.Reset();
     mLights.Reset();
     mModels.Reset();
@@ -32,7 +32,6 @@ void FFrameResource::Reset() {
     mFrameReady = false;
     mViewReady = false;
     mHasCameraWorld = false;
-    mCompletionValue = 0;
 }
 
 bool FFrameResource::BeginFrame(ID3D11DeviceContext* Context, float AnimationTime) {
@@ -44,15 +43,10 @@ bool FFrameResource::BeginFrame(ID3D11DeviceContext* Context, float AnimationTim
     return mFrameReady;
 }
 
-void FFrameResource::SetCompletionValue(Uint64 CompletionValue) {
-    mCompletionValue = CompletionValue;
+void FFrameResource::EndFrame() {
     mFrameReady = false;
     mViewReady = false;
     mHasCameraWorld = false;
-}
-
-Uint64 FFrameResource::GetCompletionValue() const {
-    return mCompletionValue;
 }
 
 bool FFrameResource::PrepareView(ID3D11Device* Device, ID3D11DeviceContext* Context, const FRenderView& View, const FSceneRenderData& Scene, const FRenderQueue& Queue) {
@@ -98,18 +92,27 @@ bool FFrameResource::BindCommon(ID3D11DeviceContext* Context) const {
 }
 
 bool FFrameResource::BindModels(ID3D11DeviceContext* Context) const {
-    if (!BindCommon(Context) || mModels.IsEmpty()) {
+    if (!BindCommon(Context) || mModels.IsEmpty() || !mModelIndexBuffer.IsValid()) {
         return false;
     }
     Context->VSSetShaderResources(0, 1, mModels.GetSRV());
     Context->PSSetShaderResources(0, 1, mModels.GetSRV());
-    BindConstantBuffer(Context, 2, mDrawBuffer);
+    ID3D11Buffer* ModelIndexBuffer{mModelIndexBuffer.GetBuffer()};
+    const UINT Stride{sizeof(Uint32)};
+    const UINT Offset{};
+    Context->IASetVertexBuffers(4, 1, &ModelIndexBuffer, &Stride, &Offset);
     return true;
 }
 
-bool FFrameResource::BindMeshDraw(ID3D11DeviceContext* Context, Uint32 ModelIndex) {
-    const FDrawConstants Constants{ModelIndex};
-    return mViewReady && ModelIndex < mModels.GetCount() && mDrawBuffer.WriteDiscard(Context, &Constants, sizeof(Constants));
+bool FFrameResource::BindMeshDraw(ID3D11DeviceContext* Context, Uint32 ModelIndex) const {
+    if (Context == nullptr || !mViewReady || ModelIndex >= mModels.GetCount() || !mModelIndexBuffer.IsValid()) {
+        return false;
+    }
+    ID3D11Buffer* ModelIndexBuffer{mModelIndexBuffer.GetBuffer()};
+    const UINT Stride{sizeof(Uint32)};
+    const UINT Offset{ModelIndex * Stride};
+    Context->IASetVertexBuffers(4, 1, &ModelIndexBuffer, &Stride, &Offset);
+    return true;
 }
 
 bool FFrameResource::BindTextDraw(ID3D11DeviceContext* Context, const FTextProbe& Probe) {
@@ -193,6 +196,10 @@ bool FFrameResource::UploadModels(ID3D11Device* Device, ID3D11DeviceContext* Con
     mModelContexts.clear();
     const TArray<FMeshDrawItem>& SceneItems{Queue.GetItems(ERenderPass::SceneGeometry)};
     const TArray<FMeshDrawItem>& GizmoItems{Queue.GetItems(ERenderPass::Gizmo)};
+    constexpr std::size_t MaxModelCount{UINT32_MAX / sizeof(FModelContext)};
+    if (SceneItems.size() > MaxModelCount || GizmoItems.size() > MaxModelCount - SceneItems.size()) {
+        return false;
+    }
     mModelContexts.reserve(SceneItems.size() + GizmoItems.size());
     for (const FMeshDrawItem& Item : SceneItems) {
         mModelContexts.push_back(FModelContext{Item.mProbe.mWorld, Item.mMaterialIndex, Item.mProbe.mFlags});
@@ -203,7 +210,24 @@ bool FFrameResource::UploadModels(ID3D11Device* Device, ID3D11DeviceContext* Con
     ID3D11ShaderResourceView* NullResource{nullptr};
     Context->VSSetShaderResources(0, 1, &NullResource);
     Context->PSSetShaderResources(0, 1, &NullResource);
-    return mModels.UploadDiscard(Device, Context, mModelContexts);
+    return mModels.UploadDiscard(Device, Context, mModelContexts) && (mModels.IsEmpty() || EnsureModelIndices(Device));
+}
+
+bool FFrameResource::EnsureModelIndices(ID3D11Device* Device) {
+    const Uint32 Capacity{mModels.GetCapacity()};
+    if (mModelIndexBuffer.GetByteSize() / sizeof(Uint32) >= Capacity) {
+        return true;
+    }
+    TArray<Uint32> ModelIndices{};
+    ModelIndices.resize(Capacity);
+    for (Uint32 Index{}; Index < Capacity; ++Index) {
+        ModelIndices[Index] = Index;
+    }
+    FGraphicsBufferDescription Description{};
+    Description.mByteSize = Capacity * sizeof(Uint32);
+    Description.mUsage = D3D11_USAGE_IMMUTABLE;
+    Description.mBindFlags = D3D11_BIND_VERTEX_BUFFER;
+    return mModelIndexBuffer.Initialize(Device, Description, ModelIndices.data());
 }
 
 void FFrameResource::BindConstantBuffer(ID3D11DeviceContext* Context, Uint32 Slot, const FGraphicsBuffer& Buffer) const {

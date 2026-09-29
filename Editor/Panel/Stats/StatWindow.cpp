@@ -2,6 +2,7 @@
 #include "Editor/Panel/Stats/StatWindow.h"
 
 #include "Core/Stat/Stat.h"
+#include "Render/RenderConfig.h"
 #include "ImGui/imgui.h"
 #include <array>
 #include <cfloat>
@@ -67,11 +68,21 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
         AddRow(Rows, RowCount, "STAT RENDER (CPU)", 0, HeadingColor, "ms / total %%");
         AddRow(Rows, RowCount, "0.5 s average / all views", 0, MutedColor, "");
         AddRow(Rows, RowCount, "Total render", 0, HeadingColor, "%.3f / %.1f%%", TotalMilliseconds, TotalMilliseconds > 0.0 ? 100.0 : 0.0);
-        constexpr std::array Stages{Stat::ESystemStatStage::RenderFenceWait, Stat::ESystemStatStage::RenderBeginFrame, Stat::ESystemStatStage::RenderTarget, Stat::ESystemStatStage::RenderMaterials, Stat::ESystemStatStage::RenderQueue, Stat::ESystemStatStage::RenderViewUpload, Stat::ESystemStatStage::RenderGeometry, Stat::ESystemStatStage::RenderSelectionOutline, Stat::ESystemStatStage::RenderSceneGuides, Stat::ESystemStatStage::RenderGizmo, Stat::ESystemStatStage::RenderText, Stat::ESystemStatStage::RenderBillboard, Stat::ESystemStatStage::RenderOrientationAxis, Stat::ESystemStatStage::UiRender, Stat::ESystemStatStage::Present};
+        constexpr std::array Stages{Stat::ESystemStatStage::RenderBeginFrame, Stat::ESystemStatStage::RenderTarget, Stat::ESystemStatStage::RenderMaterials, Stat::ESystemStatStage::RenderQueue, Stat::ESystemStatStage::RenderViewUpload, Stat::ESystemStatStage::RenderGeometry, Stat::ESystemStatStage::RenderSelectionOutline, Stat::ESystemStatStage::RenderSceneGuides, Stat::ESystemStatStage::RenderGizmo, Stat::ESystemStatStage::RenderText, Stat::ESystemStatStage::RenderBillboard, Stat::ESystemStatStage::RenderOrientationAxis, Stat::ESystemStatStage::UiRender, Stat::ESystemStatStage::Present};
         double AccountedMilliseconds{};
+#if EnableFrameResourceFence
+        const double FenceWaitMilliseconds{Samples[static_cast<std::size_t>(Stat::ESystemStatStage::RenderFenceWait)].mTotalMilliseconds};
+        const double FenceWaitShare{TotalMilliseconds > 0.0 ? FenceWaitMilliseconds * 100.0 / TotalMilliseconds : 0.0};
+        AddRow(Rows, RowCount, Stat::GetSystemStageName(Stat::ESystemStatStage::RenderFenceWait), 0, TextColor, "%.3f / %.1f%%", FenceWaitMilliseconds, FenceWaitShare);
+        AccountedMilliseconds += FenceWaitMilliseconds;
+#endif
         for (const Stat::ESystemStatStage Stage : Stages) {
-            const double ExcludedMilliseconds{Stage == Stat::ESystemStatStage::RenderBeginFrame ? Samples[static_cast<std::size_t>(Stat::ESystemStatStage::RenderFenceWait)].mTotalMilliseconds : 0.0};
+#if EnableFrameResourceFence
+            const double ExcludedMilliseconds{Stage == Stat::ESystemStatStage::RenderBeginFrame ? FenceWaitMilliseconds : 0.0};
             const double Milliseconds{std::max(Samples[static_cast<std::size_t>(Stage)].mTotalMilliseconds - ExcludedMilliseconds, 0.0)};
+#else
+            const double Milliseconds{std::max(Samples[static_cast<std::size_t>(Stage)].mTotalMilliseconds, 0.0)};
+#endif
             const double Share{TotalMilliseconds > 0.0 ? Milliseconds * 100.0 / TotalMilliseconds : 0.0};
             AddRow(Rows, RowCount, Stat::GetSystemStageName(Stage), 0, TextColor, "%.3f / %.1f%%", Milliseconds, Share);
             AccountedMilliseconds += Milliseconds;

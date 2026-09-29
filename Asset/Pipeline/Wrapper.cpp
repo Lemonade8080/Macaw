@@ -92,12 +92,18 @@ UINT GetUint(const rapidjson::Value& Parent, const char* Name) {
 }
 
 EVertexFormat ParseVertexFormat(const char* Value) {
-    if (std::strcmp(Value, "Float2") == 0)
+    if (std::strcmp(Value, "Float2") == 0) {
         return EVertexFormat::Float2;
-    if (std::strcmp(Value, "Float3") == 0)
+    }
+    if (std::strcmp(Value, "Float3") == 0) {
         return EVertexFormat::Float3;
-    if (std::strcmp(Value, "Float4") == 0)
+    }
+    if (std::strcmp(Value, "Float4") == 0) {
         return EVertexFormat::Float4;
+    }
+    if (std::strcmp(Value, "Uint") == 0) {
+        return EVertexFormat::Uint;
+    }
 
     ErrorHandler::Report("ParseVertexFormat", "The vertex format is invalid.", ErrorHandler::EErrorLevel::Error);
     return EVertexFormat::Float3;
@@ -111,6 +117,8 @@ DXGI_FORMAT ConvertVertexFormat(EVertexFormat Value) {
             return DXGI_FORMAT_R32G32B32_FLOAT;
         case EVertexFormat::Float4:
             return DXGI_FORMAT_R32G32B32A32_FLOAT;
+        case EVertexFormat::Uint:
+            return DXGI_FORMAT_R32_UINT;
         default:
             ErrorHandler::Report("ConvertVertexFormat", "The vertex format is invalid.", ErrorHandler::EErrorLevel::Error);
             return DXGI_FORMAT_UNKNOWN;

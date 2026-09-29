@@ -7,7 +7,6 @@ struct FModelContext {
 StructuredBuffer<FModelContext> ModelContexts : register(t0);
 
 #include "FrameResource.hlsli"
-#include "MeshDraw.hlsli"
 
 struct FOutlineInput {
     float3 mPosition : POSITION;
@@ -37,9 +36,9 @@ float4 ExpandOutline(float4 ClipPosition, float3 WorldNormal) {
     return ClipPosition;
 }
 
-FOutlineVertex MainVS(FOutlineInput Input, uint InstanceId : SV_InstanceID) {
+FOutlineVertex MainVS(FOutlineInput Input, uint ModelIndex : MODEL_INDEX) {
     FOutlineVertex Output = {0.0f, 0.0f, 0.0f, 0.0f};
-    const FModelContext ModelContext = {ModelContexts[ModelContextStart + InstanceId]};
+    const FModelContext ModelContext = {ModelContexts[ModelIndex]};
     const float3 FirstCofactor = {cross(ModelContext.mWorld[1].xyz, ModelContext.mWorld[2].xyz)};
     const float3 SecondCofactor = {cross(ModelContext.mWorld[2].xyz, ModelContext.mWorld[0].xyz)};
     const float3 ThirdCofactor = {cross(ModelContext.mWorld[0].xyz, ModelContext.mWorld[1].xyz)};

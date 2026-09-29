@@ -21,7 +21,6 @@ StructuredBuffer<FModelContext> ModelContexts : register(t0);
 StructuredBuffer<FSurfaceOpaqueMaterial> MaterialBuffer : register(t1);
 
 #include "FrameResource.hlsli"
-#include "MeshDraw.hlsli"
 
 struct VS_INPUT {
     float3 Position : POSITION;
@@ -38,10 +37,10 @@ struct PS_INPUT {
     nointerpolation float3 ColorCoefficient : Jungle2;
 };
 
-PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID) {
+PS_INPUT mainVS(VS_INPUT Input, uint ModelIndex : MODEL_INDEX) {
     PS_INPUT Output;
 
-    FModelContext ModelContext = ModelContexts[ModelContextStart + InstanceID];
+    FModelContext ModelContext = ModelContexts[ModelIndex];
 
     float4 WorldPosition = mul(float4(Input.Position, 1.0f), ModelContext.World);
 

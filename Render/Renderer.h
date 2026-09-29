@@ -1,6 +1,12 @@
 #pragma once
 
+#include "RenderConfig.h"
+
+#if EnableFrameResourceFence
 #include <d3d11_4.h>
+#else
+#include <d3d11.h>
+#endif
 #include <wrl/client.h>
 #include <array>
 #include <memory>
@@ -52,16 +58,24 @@ private:
     void DrawOrientationAxis(const FRenderView& View);
 
 private:
+#if EnableFrameResourceFence
     static constexpr Uint32 mFrameResourceCount{3};
+#else
+    static constexpr Uint32 mFrameResourceCount{1};
+#endif
 #ifdef _DEBUG
     Microsoft::WRL::ComPtr<ID3D11Debug> mDebugInterface{};
 #endif
     Microsoft::WRL::ComPtr<ID3D11Device> mDevice{};
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> mDeviceContext{};
+#if EnableFrameResourceFence
     Microsoft::WRL::ComPtr<ID3D11DeviceContext4> mFenceContext{};
     Microsoft::WRL::ComPtr<ID3D11Fence> mFrameFence{};
     HANDLE mFrameFenceEvent{nullptr};
     Uint64 mNextFenceValue{1};
+    std::array<Uint64, mFrameResourceCount> mCompletionValues{};
+    Uint32 mNextFrameResourceIndex{};
+#endif
     Microsoft::WRL::ComPtr<IDXGISwapChain> mSwapChain{};
     std::unique_ptr<IRenderSurface> mBackBufferSurface{};
     // s0: LinearWrap, s1: LinearClamp, s2: PointClamp, s3: PointWrap, s4: AnisotropicWrap, s5: ShadowCompare.
@@ -70,7 +84,6 @@ private:
 
     std::array<FFrameResource, mFrameResourceCount> mFrameResources{};
     FFrameResource* mCurrentFrameResource{nullptr};
-    Uint32 mNextFrameResourceIndex{};
     float mAnimationTime{};
     FRenderQueue mRenderQueue{};
     FMeshRenderer mMeshRenderer{};

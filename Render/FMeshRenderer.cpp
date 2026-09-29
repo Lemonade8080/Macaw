@@ -5,6 +5,9 @@
 #include "Asset/UTexture.h"
 #include "FFrameResource.h"
 
+
+// #define ENABLE_INSTANCE 
+
 void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawItem>& Items, ERenderMode Mode) {
     if (Items.empty() || Context.mAssetRegistry == nullptr || Context.mFrameResource == nullptr) {
         return;
@@ -19,7 +22,7 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
     for (std::size_t Begin{}; Begin < Items.size();) {
         const FMeshDrawItem& First{Items[Begin]};
         std::size_t End{Begin + 1};
-        while (End < Items.size() && First.HasSameBatch(Items[End]) && ((First.mProbe.mFlags ^ Items[End].mProbe.mFlags) & static_cast<Uint32>(ERenderObjectFlags::Selected)) == 0) {
+        while (End < Items.size() && First.HasSameBatch(Items[End]) && Items[End].mModelIndex == static_cast<std::size_t>(First.mModelIndex) + End - Begin && ((First.mProbe.mFlags ^ Items[End].mProbe.mFlags) & static_cast<Uint32>(ERenderObjectFlags::Selected)) == 0) {
             ++End;
         }
         const UPipeline* Pipeline{Context.mAssetRegistry->ResolveAsset<UPipeline>(First.mProbe.mPipelineHandle)};
@@ -45,9 +48,7 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawIt
             DeviceContext->IASetVertexBuffers(0, _countof(VertexBuffers), VertexBuffers, Strides, Offsets);
             DeviceContext->IASetIndexBuffer(Mesh->GetIndexBuffer(), DXGI_FORMAT_R32_UINT, 0);
 #ifdef ENABLE_INSTANCE
-            if (Context.mFrameResource->BindMeshDraw(DeviceContext, First.mModelIndex)) {
-                DeviceContext->DrawIndexedInstanced(First.mIndexCount, static_cast<Uint32>(End - Begin), First.mFirstIndex, 0, 0);
-            }
+            DeviceContext->DrawIndexedInstanced(First.mIndexCount, static_cast<Uint32>(End - Begin), First.mFirstIndex, 0, First.mModelIndex);
 #else
             for (std::size_t Index{Begin}; Index < End; ++Index) {
                 if (Context.mFrameResource->BindMeshDraw(DeviceContext, Items[Index].mModelIndex)) {

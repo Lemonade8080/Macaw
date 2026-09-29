@@ -5,9 +5,16 @@
 #include "World/UWorld.h"
 #include "World/FWorldEditorContext.h"
 
+struct FOutlinerVisibleItem
+{
+    AActor* Actor = nullptr;
+    uint32 Depth = 0;
+};
+
 class FOutlinerPanel : public FEditorWindow {
 public:
     FOutlinerPanel(UWorld& InWorld, FWorldEditorContext& InEditorContext);
+    void MarkDirty(){ bHierarchyDirty = true;}
 
 private:
     void DrawContents() override;
@@ -28,4 +35,19 @@ private:
     UWorld* mWorld{};
     FWorldEditorContext* mEditorContext{};
     ImGuiTextFilter mActorFilter{};
+
+    /* Outliner */
+
+    TMap<AActor*, TArray<AActor*>> mChildrenByParent;
+    TArray<FOutlinerVisibleItem> mVisibleItems;
+    TSet<AActor*> mExpandedActors;
+
+    void RebuildHierarchy();
+    void RebuildVisibleItems();
+    void AddVisibleActor(AActor* ParentActor, uint32 Depth);
+
+    uint64 mCachedRevision = 0;
+    bool bHierarchyDirty = true;
+    bool bVisibleDirty = true;
 };
+

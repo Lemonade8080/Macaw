@@ -37,7 +37,6 @@ Texture2D ReflectionTexture : register(t14);
 SamplerState LinearWrap : register(s0);
 
 #include "FrameResource.hlsli"
-#include "MeshDraw.hlsli"
 
 struct VS_INPUT {
     float3 Position : POSITION;
@@ -53,9 +52,9 @@ struct PS_INPUT {
     nointerpolation uint MaterialIndex : Jungle1;
 };
 
-PS_INPUT mainVS(VS_INPUT Input, uint InstanceID : SV_InstanceID) {
+PS_INPUT mainVS(VS_INPUT Input, uint ModelIndex : MODEL_INDEX) {
     PS_INPUT Output;
-    FModelContext ModelContext = ModelContexts[ModelContextStart + InstanceID];
+    FModelContext ModelContext = ModelContexts[ModelIndex];
     float4 WorldPosition = mul(float4(Input.Position, 1.0f), ModelContext.World);
     Output.Position = mul(WorldPosition, ViewProjection);
     Output.Normal = mul(Input.Normal, (float3x3) ModelContext.World);
