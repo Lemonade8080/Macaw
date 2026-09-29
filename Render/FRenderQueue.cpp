@@ -12,17 +12,9 @@ void FRenderQueue::Build(const IAssetRegistry* Registry, const FSceneRenderData&
     mSceneItems.clear();
     mOutlineItems.clear();
     mGizmoItems.clear();
-    mVisibleProbes.clear();
+    
     if (View.IsPassEnabled(ERenderPass::SceneGeometry)) {
-        for (const auto& Probe : Scene.mActorProbes) {
-            DirectX::BoundingSphere WorldBounds{};
-            Probe.mLocalBounds.Transform(WorldBounds, Probe.mWorld.ToSimpleMath());
-
-            if (!View.mCamera.mViewFrustum.Intersects(WorldBounds)) {
-                continue;
-            }
-            mVisibleProbes.push_back(Probe);
-        }
+        FrustumCulling(Scene.mActorProbes, View.mCamera.mViewFrustum);
 
         BuildItems(Registry, mVisibleProbes, mSceneItems, View.mSettings.mBRenderSky);
     }
@@ -107,5 +99,28 @@ void FRenderQueue::AddItems(const IAssetRegistry* Registry, const TArray<FActorP
     for (std::size_t Index{Begin}; Index < End; ++Index) {
         const FActorProbe& Probe{Probes[Index]};
         Items.push_back(FMeshDrawItem{Probe, TextureSignature, MaterialIndex, GroupIndex, FirstIndex, IndexCount});
+    }
+}
+
+void FRenderQueue::FrustumCulling(const TArray<FActorProbe>& BeforeCullingProbes, const FFrustum& Frustum)
+{
+    mVisibleProbes.clear();
+
+    for (const auto& Probe : BeforeCullingProbes) {
+        DirectX::BoundingSphere WorldBounds{};
+        Probe.mLocalSphereBounds.Transform(WorldBounds, Probe.mWorld.ToSimpleMath());
+
+        if (!Frustum.Intersects(WorldBounds)) {
+            continue;
+        }
+
+        DirectX::BoundingOrientedBox WorldOBB{};
+        Probe.mLocalOBB.Transform(WorldOBB, Probe.mWorld.ToSimpleMath());
+        if (!Frustum.Intersects(WorldOBB))
+        {
+            continue;
+        }
+
+        mVisibleProbes.push_back(Probe);
     }
 }
