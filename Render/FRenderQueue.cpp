@@ -12,8 +12,7 @@ namespace
         const UMesh& Mesh,
         const CameraProbe& Camera)
     {
-        DirectX::BoundingOrientedBox WorldBounds{};
-        Probe.mLocalBounds.Transform(WorldBounds, Probe.mWorld.ToSimpleMath());
+        const DirectX::BoundingSphere& WorldBounds{Probe.mWorldSphereBounds};
 
         const FVector3 Center{
             WorldBounds.Center.x,
@@ -21,13 +20,7 @@ namespace
             WorldBounds.Center.z
         };
 
-        const FVector3 Extents{
-            WorldBounds.Extents.x,
-            WorldBounds.Extents.y,
-            WorldBounds.Extents.z
-        };
-
-        const float Radius{ Extents.Length() };
+        const float Radius{WorldBounds.Radius};
         if (Radius <= 1e-4f) { return 0; }
 
         const FVector3 ViewCenter{Camera.mView.TransformPosition(Center)};
@@ -68,18 +61,7 @@ void FRenderQueue::Build(const IAssetRegistry* Registry, const FSceneRenderData&
     
     if (View.IsPassEnabled(ERenderPass::SceneGeometry)) {
         FrustumCulling(Scene.mActorProbes, View.mCamera.mViewFrustum);
-
-        for (const auto& Probe : Scene.mActorProbes) {
-            DirectX::BoundingOrientedBox WorldBounds{};
-            Probe.mLocalBounds.Transform(WorldBounds, Probe.mWorld.ToSimpleMath());
-
-            if (!View.mCamera.mViewFrustum.Intersects(WorldBounds)) {
-                continue;
-            }
-            PassProbes.push_back(Probe);
-        }
-
-        BuildItems(Registry, PassProbes, mSceneItems, View.mSettings.mBRenderSky, View.mCamera, true);
+        BuildItems(Registry, mVisibleProbes, mSceneItems, View.mSettings.mBRenderSky, View.mCamera, true);
     }
     if (View.mSelectedActorHandle.IsValid()) {
         for (FMeshDrawItem& Item : mSceneItems) {
