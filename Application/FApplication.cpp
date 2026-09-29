@@ -192,13 +192,15 @@ void FApplication::RenderFrame() {
     mWindowState.mRenderingFrame = true;
     mFrameTimer.Tick();
     const float DeltaTime{static_cast<float>(mFrameTimer.GetUpdateDeltaSeconds())};
-    Stat::BeginFrame(mFrameTimer.GetDeltaSeconds());
+    Stat::BeginFrame();
     {
-        const Stat::FScopedSystemStatTimer FrameStat{Stat::ESystemStatStage::Frame};
-        Stat::RecordObjectCounts(UObjectSystem::GetObjectCount(), mContext.mWorld->GetActors().size());
-        mContext.mRenderer.BeginFrame(DeltaTime);
         {
-            const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::Offscreen};
+            const Stat::FScopedSystemStatTimer StageStat{ Stat::ESystemStatStage::FrameSetup };
+            Stat::RecordObjectCounts(UObjectSystem::GetObjectCount(), mContext.mWorld->GetActors().size());
+            mContext.mRenderer.BeginFrame(DeltaTime);
+        }
+        {
+            const Stat::FScopedSystemStatTimer StageStat{ Stat::ESystemStatStage::PreviewRender };
             mContext.mEditorUIManager->RenderOffscreen(mContext.mRenderer, *mContext.mAssetRegistry);
         }
         {
