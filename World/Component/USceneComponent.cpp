@@ -5,26 +5,11 @@
 #include "World/AActor.h"
 
 namespace {
-    bool DecomposeWorldTransform(const FMatrix& WorldMatrix, FVector3& OutScale, FQuat& OutRotation, FVector3& OutTranslation) {
-        FMatrix TransformMatrix{WorldMatrix};
-
-        const float Row0[3]{TransformMatrix.m_[0][0], TransformMatrix.m_[0][1], TransformMatrix.m_[0][2]};
-        const float Row1[3]{TransformMatrix.m_[1][0], TransformMatrix.m_[1][1], TransformMatrix.m_[1][2]};
-        const float Row2[3]{TransformMatrix.m_[2][0], TransformMatrix.m_[2][1], TransformMatrix.m_[2][2]};
-        for (Uint32 Column{0}; Column < 3; ++Column) {
-            TransformMatrix.m_[0][Column] = -Row0[Column];
-            TransformMatrix.m_[1][Column] = Row2[Column];
-            TransformMatrix.m_[2][Column] = Row1[Column];
-        }
-
-        return TransformMatrix.Decompose(OutScale, OutRotation, OutTranslation);
-    }
-
     bool ApplyWorldMatrix(USceneComponent& Component, const FMatrix& DesiredWorld) {
         FVector3 Scale{};
         FQuat Rotation{};
         FVector3 Translation{};
-        if (!DecomposeWorldTransform(DesiredWorld, Scale, Rotation, Translation)) {
+        if (!DesiredWorld.Decompose(Scale, Rotation, Translation)) {
             return false;
         }
 

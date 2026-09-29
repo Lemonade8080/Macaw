@@ -666,11 +666,11 @@ bool FTransformGizmo::GetAxisParameterOnDragPlane(const FRay& WorldRay, const FD
 FVector3 FTransformGizmo::GetWorldAxis(EAxis Axis) const {
     switch (Axis) {
         case EAxis::X:
+            return mGizmoWorldTransform.Forward();
+        case EAxis::Y:
             return mGizmoWorldTransform.Right();
         case EAxis::Z:
             return mGizmoWorldTransform.Up();
-        case EAxis::Y:
-            return mGizmoWorldTransform.Forward();
         default:
             return FVector3::Zero;
     }
@@ -686,7 +686,7 @@ void FTransformGizmo::BuildGizmoProbes(TArray<FActorProbe>& GizmoProbes) {
     const EModifyMode CurrentMode{mGizmoMode.HasValue() ? static_cast<EModifyMode>(mGizmoMode.Peek()) : EModifyMode::None};
 
     const auto Submit{[&](const FMatrix& LocalTransform, FAssetHandle MeshHandle, FAssetHandle MaterialHandle) {
-        GizmoProbes.emplace_back(FActorProbe{ .mWorld = LocalTransform * mGizmoWorldTransform, .mMeshHandle = MeshHandle, .mMaterialHandle = MaterialHandle, .mPipelineHandle = mGizmoPipeline, .mFlags = static_cast<Uint32>(ERenderObjectFlags::Unlit)});
+        GizmoProbes.emplace_back(FActorProbe{ .mWorld = LocalTransform * mGizmoWorldTransform, .mMeshHandle = MeshHandle, .mMaterialHandle = MaterialHandle, .mPipelineHandle = mGizmoPipeline});
     }};
 
     switch (CurrentMode) {

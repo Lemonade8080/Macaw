@@ -1,5 +1,8 @@
 ﻿#include "pch.h"
 
+#include <algorithm>
+#include <cmath>
+
 #include "FEditorViewport.h"
 #include "Editor/Panel/FStatPanel.h"
 
@@ -54,9 +57,9 @@ namespace {
             case EOrthographicView::Right:
                 return {0.0f, 0.0f, HalfSqrtTwo, HalfSqrtTwo};
             case EOrthographicView::Top:
-                return {-HalfSqrtTwo, 0.0f, 0.0f, HalfSqrtTwo};
+                return {0.0f, HalfSqrtTwo, 0.0f, HalfSqrtTwo};
             case EOrthographicView::Bottom:
-                return {HalfSqrtTwo, 0.0f, 0.0f, HalfSqrtTwo};
+                return {0.0f, -HalfSqrtTwo, 0.0f, HalfSqrtTwo};
             default:
                 return {};
         }
@@ -347,6 +350,11 @@ bool FEditorViewport::BuildCameraProbe(CameraProbe& OutCamera) {
     }
 
     OutCamera.mViewProjection = OutCamera.mView * OutCamera.mProjection;
+
+    FFrustum LocalFrustum{};
+    FFrustum::CreateFromMatrix(LocalFrustum, OutCamera.mProjection.ToSimpleMath());
+    LocalFrustum.Transform(OutCamera.mViewFrustum, OutCamera.mView.Inverse().ToSimpleMath());
+
     return true;
 }
 
@@ -382,37 +390,20 @@ void FEditorViewport::ApplyMouseNavigation(const FViewportMouseNavigationInput& 
 
     const FEditorSettings Settings{mEditorContext != nullptr ? mEditorContext->GetEditorSettings() : FEditorSettings{}};
     const float RotationSensitivity{Settings.mRotationSensitivity * 0.001f};
-    constexpr float MaximumPitch{0.99f};
-
-    FQuat YawDelta{FQuat::CreateFromAxisAngle(FVector3::UnitZ, NavigationInput.mDragDeltaX * RotationSensitivity)};
-    YawDelta.Normalize();
-
-    //Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "DeltaX %f", NavigationInput.DragDeltaX);
-
-    FQuat YawedRotation{FQuat::Concatenate(YawDelta, mCameraRotation)};
-    YawedRotation.Normalize();
-
-    FTransform YawedTransform{};
-    YawedTransform.SetRotation(YawedRotation);
-    const FMatrix YawMatrix{YawedTransform.ToMatrixWithScale()};
-    FVector3 Right{YawMatrix.Right()};
-    FVector3 Forward{YawMatrix.Forward()};
-
-    Right.Normalize();
+    constexpr float MaximumForwardUp{0.99f};
+    const FTransform CameraTransform{FVector3{}, mCameraRotation, FVector3{1.0f, 1.0f, 1.0f}};
+    FVector3 Forward{CameraTransform.ToMatrixNoScale().Forward()};
     Forward.Normalize();
 
-    const float ForwardUp{Forward.Dot(FVector3::UnitZ)};
-    float PitchAngle{NavigationInput.mDragDeltaY * RotationSensitivity};
-    if ((ForwardUp > MaximumPitch && NavigationInput.mDragDeltaY > 0.0f) || (ForwardUp < -MaximumPitch && NavigationInput.mDragDeltaY < 0.0f)) {
-        PitchAngle = 0.0f;
-    }
+    const float CurrentYaw{std::atan2(Forward.mY, Forward.mX)};
+    const float CurrentElevation{std::asin(std::clamp(Forward.mZ, -1.0f, 1.0f))};
+    const float MaximumElevation{std::asin(MaximumForwardUp)};
+    const float NewYaw{CurrentYaw + NavigationInput.mDragDeltaX * RotationSensitivity};
+    const float NewElevation{std::clamp(CurrentElevation + NavigationInput.mDragDeltaY * RotationSensitivity, -MaximumElevation, MaximumElevation)};
 
-    FQuat PitchDelta{FQuat::CreateFromAxisAngle(Right, PitchAngle)};
-    PitchDelta.Normalize();
-
-    FQuat WorldDelta{FQuat::Concatenate(PitchDelta, YawDelta)};
-    WorldDelta.Normalize();
-    mCameraRotation = FQuat::Concatenate(WorldDelta, mCameraRotation);
+    const FQuat YawRotation{FQuat::CreateFromAxisAngle(FVector3::UnitZ, NewYaw)};
+    const FQuat PitchRotation{FQuat::CreateFromAxisAngle(FVector3::UnitY, -NewElevation)};
+    mCameraRotation = FQuat::Concatenate(YawRotation, PitchRotation);
     mCameraRotation.Normalize();
 }
 
@@ -424,7 +415,7 @@ void FEditorViewport::ApplyKeyboardNavigation(const FViewportKeyboardNavigationI
 
     const FTransform CameraTransform{mCameraPosition, mCameraRotation, FVector3{1.0f, 1.0f, 1.0f}};
     const FMatrix CameraWorldMatrix{CameraTransform.ToMatrixNoScale()};
-    FVector3 MoveDirection{CameraWorldMatrix.Forward() * NavigationInput.mForwardAxis - CameraWorldMatrix.Right() * NavigationInput.mRightAxis + CameraWorldMatrix.Up() * NavigationInput.mUpAxis};
+    FVector3 MoveDirection{CameraWorldMatrix.Forward() * NavigationInput.mForwardAxis + CameraWorldMatrix.Right() * NavigationInput.mRightAxis + CameraWorldMatrix.Up() * NavigationInput.mUpAxis};
 
     if (MoveDirection.LengthSquared() <= 0.0f) {
         return;

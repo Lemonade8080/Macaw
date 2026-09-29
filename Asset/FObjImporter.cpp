@@ -151,7 +151,7 @@ bool FObjImporter::LoadObjFile(const FString& FilePath, FGeometry& OutGeometry) 
             TempFaceCount += static_cast<Int32>(Vertices.size());
 
             //반대로 뒤집기
-            std::reverse(Vertices.begin(), Vertices.end());
+            //std::reverse(Vertices.begin(), Vertices.end());
 
             ObjInfo.mFaceVerticesPolygon.push_back(Vertices);
         } else if (Tag == "mtllib") {

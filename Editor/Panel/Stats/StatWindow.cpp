@@ -43,7 +43,7 @@ namespace {
 }
 
 void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags StatFlags) {
-    if (!StatFlags.mBShowFps && !StatFlags.mBShowMemory && !StatFlags.mBObjectSystem && !StatFlags.mBShowPicking) {
+    if (!StatFlags.mBShowFps && !StatFlags.mBShowMemory && !StatFlags.mBObjectSystem && !StatFlags.mBShowPicking && !StatFlags.mBShowRender) {
         return;
     }
 
@@ -57,9 +57,29 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
         return;
     }
 
-    const Stat::FStats Snapshot{Stat::GetStats()};
+    const Stat::FStatAverages Snapshot{Stat::GetStatAverages()};
     FStatOverlayRows Rows{};
     std::size_t RowCount{};
+
+    if (StatFlags.mBShowRender) {
+        const auto& Samples{Snapshot.mSystemSamples};
+        const double TotalMilliseconds{Samples[static_cast<std::size_t>(Stat::ESystemStatStage::RenderBeginFrame)].mTotalMilliseconds + Samples[static_cast<std::size_t>(Stat::ESystemStatStage::RenderView)].mTotalMilliseconds + Samples[static_cast<std::size_t>(Stat::ESystemStatStage::UiRender)].mTotalMilliseconds + Samples[static_cast<std::size_t>(Stat::ESystemStatStage::Present)].mTotalMilliseconds};
+        AddRow(Rows, RowCount, "STAT RENDER (CPU)", 0, HeadingColor, "ms / total %%");
+        AddRow(Rows, RowCount, "0.5 s average / all views", 0, MutedColor, "");
+        AddRow(Rows, RowCount, "Total render", 0, HeadingColor, "%.3f / %.1f%%", TotalMilliseconds, TotalMilliseconds > 0.0 ? 100.0 : 0.0);
+        constexpr std::array Stages{Stat::ESystemStatStage::RenderFenceWait, Stat::ESystemStatStage::RenderBeginFrame, Stat::ESystemStatStage::RenderTarget, Stat::ESystemStatStage::RenderMaterials, Stat::ESystemStatStage::RenderQueue, Stat::ESystemStatStage::RenderViewUpload, Stat::ESystemStatStage::RenderGeometry, Stat::ESystemStatStage::RenderSelectionOutline, Stat::ESystemStatStage::RenderSceneGuides, Stat::ESystemStatStage::RenderGizmo, Stat::ESystemStatStage::RenderText, Stat::ESystemStatStage::RenderBillboard, Stat::ESystemStatStage::RenderOrientationAxis, Stat::ESystemStatStage::UiRender, Stat::ESystemStatStage::Present};
+        double AccountedMilliseconds{};
+        for (const Stat::ESystemStatStage Stage : Stages) {
+            const double ExcludedMilliseconds{Stage == Stat::ESystemStatStage::RenderBeginFrame ? Samples[static_cast<std::size_t>(Stat::ESystemStatStage::RenderFenceWait)].mTotalMilliseconds : 0.0};
+            const double Milliseconds{std::max(Samples[static_cast<std::size_t>(Stage)].mTotalMilliseconds - ExcludedMilliseconds, 0.0)};
+            const double Share{TotalMilliseconds > 0.0 ? Milliseconds * 100.0 / TotalMilliseconds : 0.0};
+            AddRow(Rows, RowCount, Stat::GetSystemStageName(Stage), 0, TextColor, "%.3f / %.1f%%", Milliseconds, Share);
+            AccountedMilliseconds += Milliseconds;
+        }
+        const double OtherMilliseconds{std::max(TotalMilliseconds - AccountedMilliseconds, 0.0)};
+        const double OtherShare{TotalMilliseconds > 0.0 ? OtherMilliseconds * 100.0 / TotalMilliseconds : 0.0};
+        AddRow(Rows, RowCount, "Other render overhead", 0, MutedColor, "%.3f / %.1f%%", OtherMilliseconds, OtherShare);
+    }
 
     //if(Reader.Peek() == EStatDisplayMode::Fps)
     if (StatFlags.mBShowFps) {
@@ -70,48 +90,52 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
     }
 
     if (StatFlags.mBShowFps || StatFlags.mBShowPicking) {
-        const Stat::FPickingStats& Picking{Snapshot.mPicking};
+        const Stat::FPickingStatAverage& Picking{Snapshot.mPicking};
+        const Stat::FPickingStats PickingStats{Stat::GetPickingStats()};
         AddRow(Rows, RowCount, "STAT PICKING", 0, HeadingColor, "");
-        AddRow(Rows, RowCount, "Last picking", 0, TextColor, "%.3f ms", Picking.mLastMilliseconds);
-        if (Picking.mHasPhaseTiming) {
-            AddRow(Rows, RowCount, "Last broad phase", 0, TextColor, "%.3f ms", Picking.mLastBroadPhaseMilliseconds);
-            AddRow(Rows, RowCount, "Last narrow phase", 0, TextColor, "%.3f ms", Picking.mLastNarrowPhaseMilliseconds);
+        AddRow(Rows, RowCount, "Average picking (0.5 s)", 0, TextColor, "%.3f ms", Picking.mAverageMilliseconds);
+        AddRow(Rows, RowCount, "Picking attempts / frame", 0, TextColor, "%.2f", Picking.mAttemptsPerFrame);
+        AddRow(Rows, RowCount, "Picking time / frame", 0, TextColor, "%.3f ms", Picking.mMillisecondsPerFrame);
+        AddRow(Rows, RowCount, "Last picking", 0, TextColor, "%.3f ms", PickingStats.mLastMilliseconds);
+        if (PickingStats.mHasPhaseTiming) {
+            AddRow(Rows, RowCount, "Last broad phase", 0, TextColor, "%.3f ms", PickingStats.mLastBroadPhaseMilliseconds);
+            AddRow(Rows, RowCount, "Last narrow phase", 0, TextColor, "%.3f ms", PickingStats.mLastNarrowPhaseMilliseconds);
         }
-        AddRow(Rows, RowCount, "Picking attempts", 0, TextColor, "%llu", static_cast<unsigned long long>(Picking.mAttemptCount));
-        AddRow(Rows, RowCount, "Picking total", 0, TextColor, "%.3f ms", Picking.mTotalMilliseconds);
+        AddRow(Rows, RowCount, "Picking attempts", 0, TextColor, "%llu", static_cast<unsigned long long>(PickingStats.mAttemptCount));
+        AddRow(Rows, RowCount, "Picking total", 0, TextColor, "%.3f ms", PickingStats.mTotalMilliseconds);
     }
 
     if (StatFlags.mBShowFps) {
-        if (Snapshot.mSystem.mFrameCount > 0) {
-            AddRow(Rows, RowCount, "CPU / previous frame", 1, HeadingColor, "ms / calls");
-            for (std::size_t Index{}; Index < static_cast<std::size_t>(Stat::ESystemStatStage::Count); ++Index) {
+        if (Snapshot.mFrameCount > 0) {
+            AddRow(Rows, RowCount, "CPU / 0.5 s average", 1, HeadingColor, "ms / calls");
+            for (std::size_t Index{}; Index <= static_cast<std::size_t>(Stat::ESystemStatStage::Present); ++Index) {
                 const Stat::ESystemStatStage Stage{static_cast<Stat::ESystemStatStage>(Index)};
-                const Stat::FSystemStatSample& Sample{Snapshot.mSystem.mSamples[Index]};
+                const Stat::FSystemStatAverage& Sample{Snapshot.mSystemSamples[Index]};
                 const bool BSummary{Stage == Stat::ESystemStatStage::Frame || Stage == Stat::ESystemStatStage::WorldTick || Stage == Stat::ESystemStatStage::SceneRender || Stage == Stat::ESystemStatStage::EditorUi || Stage == Stat::ESystemStatStage::Present};
-                AddRow(Rows, RowCount, Stat::GetSystemStageName(Stage), BSummary ? 1 : 2, TextColor, "%.3f / %llu", Sample.mTotalMilliseconds, static_cast<unsigned long long>(Sample.mCallCount));
+                AddRow(Rows, RowCount, Stat::GetSystemStageName(Stage), BSummary ? 1 : 2, TextColor, "%.3f / %.2f", Sample.mTotalMilliseconds, Sample.mCallCount);
             }
         }
     }
 
     if (StatFlags.mBObjectSystem) {
-        AddRow(Rows, RowCount, "STAT OBJECT SYSTEM", 0, HeadingColor, "");
-        AddRow(Rows, RowCount, "UObjects", 0, TextColor, "%llu", static_cast<unsigned long long>(Snapshot.mObjects.mObjectCount));
-        AddRow(Rows, RowCount, "Actors", 0, TextColor, "%llu", static_cast<unsigned long long>(Snapshot.mObjects.mActorCount));
+        AddRow(Rows, RowCount, "STAT OBJECT SYSTEM", 0, HeadingColor, "0.5 s average");
+        AddRow(Rows, RowCount, "UObjects", 0, TextColor, "%.1f", Snapshot.mObjects.mObjectCount);
+        AddRow(Rows, RowCount, "Actors", 0, TextColor, "%.1f", Snapshot.mObjects.mActorCount);
     }
 
     if (StatFlags.mBShowMemory) {
-        const Stat::FMemoryStats& Memory{Snapshot.mMemory};
-        AddRow(Rows, RowCount, "STAT MEMORY", 0, HeadingColor, "Tracked heap");
+        const Stat::FMemoryStatAverage& Memory{Snapshot.mMemory};
+        AddRow(Rows, RowCount, "STAT MEMORY", 0, HeadingColor, "0.5 s average");
         AddRow(Rows, RowCount, "Allocated", 0, TextColor, "%.2f MiB", static_cast<double>(Memory.mAllocatedBytes) / (1024.0 * 1024.0));
         AddRow(Rows, RowCount, "Peak", 0, TextColor, "%.2f MiB", static_cast<double>(Memory.mPeakAllocatedBytes) / (1024.0 * 1024.0));
-        AddRow(Rows, RowCount, "Active allocations", 1, TextColor, "%llu", static_cast<unsigned long long>(Memory.mActiveAllocationCount));
+        AddRow(Rows, RowCount, "Active allocations", 1, TextColor, "%.1f", Memory.mActiveAllocationCount);
         AddRow(Rows, RowCount, "Allocation calls", 2, TextColor, "%llu", static_cast<unsigned long long>(Memory.mTotalAllocationCount));
         AddRow(Rows, RowCount, "Deallocation calls", 2, TextColor, "%llu", static_cast<unsigned long long>(Memory.mTotalDeallocationCount));
         AddRow(Rows, RowCount, "Memory by tag", 2, HeadingColor, "KiB / count / share");
         for (std::size_t Index{}; Index < static_cast<std::size_t>(Stat::EMemoryTag::Count); ++Index) {
-            const Stat::FTagStats& Tag{Memory.mTagStats[Index]};
+            const Stat::FTagStatAverage& Tag{Memory.mTagStats[Index]};
             const double Share{Memory.mAllocatedBytes > 0 ? static_cast<double>(Tag.mAllocatedBytes) * 100.0 / static_cast<double>(Memory.mAllocatedBytes) : 0.0};
-            AddRow(Rows, RowCount, Stat::GetMemoryTagName(static_cast<Stat::EMemoryTag>(Index)), 2, TextColor, "%.1f / %llu / %.0f%%", static_cast<double>(Tag.mAllocatedBytes) / 1024.0, static_cast<unsigned long long>(Tag.mActiveAllocationCount), Share);
+            AddRow(Rows, RowCount, Stat::GetMemoryTagName(static_cast<Stat::EMemoryTag>(Index)), 2, TextColor, "%.1f / %.1f / %.0f%%", Tag.mAllocatedBytes / 1024.0, Tag.mActiveAllocationCount, Share);
         }
     }
 
@@ -129,7 +153,21 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
     const bool BCompact{DetailLevel < 2 || LevelCounts[DetailLevel] > Capacity};
     const int VisibleRows{std::min(LevelCounts[DetailLevel], Capacity - (BCompact && Capacity > 1 ? 1 : 0))};
     const bool BFooter{BCompact && Capacity > 1};
-    const float Width{std::min(FontSize * 35.0f, AvailableWidth)};
+    const float ColumnGap{16.0f};
+    float LabelWidth{};
+    float MaxValueWidth{};
+    int MeasuredRows{};
+    for (std::size_t Index{}; Index < RowCount && MeasuredRows < VisibleRows; ++Index) {
+        const FStatOverlayRow& Row{Rows[Index]};
+        if (Row.mDetailLevel > DetailLevel) {
+            continue;
+        }
+        LabelWidth = std::max(LabelWidth, ImGui::GetFont()->CalcTextSizeA(FontSize, FLT_MAX, 0.0f, Row.mLabel).x);
+        MaxValueWidth = std::max(MaxValueWidth, ImGui::GetFont()->CalcTextSizeA(FontSize, FLT_MAX, 0.0f, Row.mValue.data()).x);
+        ++MeasuredRows;
+    }
+    const float FooterWidth{BFooter ? ImGui::GetFont()->CalcTextSizeA(FontSize, FLT_MAX, 0.0f, "Enlarge viewport for details").x : 0.0f};
+    const float Width{std::min(std::max(LabelWidth + ColumnGap + MaxValueWidth, FooterWidth) + Padding * 2.0f, AvailableWidth)};
     const ImVec2 PanelMin{Max.x - Margin - Width, Min.y + Margin};
     const ImVec2 PanelMax{Max.x - Margin, PanelMin.y + Padding * 2.0f + LineHeight * static_cast<float>(VisibleRows + (BFooter ? 1 : 0))};
     ImDrawList& DrawList{*ImGui::GetWindowDrawList()};
