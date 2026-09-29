@@ -122,30 +122,102 @@ bool UWorld::DestroyActor(AActor* Actor) {
     return true;
 }
 
-void UWorld::FlushPendingDestroyActors() {
-    for (AActor* Actor : mPendingDestroyActors) {
-        if (Actor == nullptr) {
-            continue;
-        }
+void UWorld::FlushPendingDestroyActors() 
+{
+    bool bRemovedAnyActor = false;
+
+    for (AActor* Actor : mPendingDestroyActors) 
+    {
+        if (Actor == nullptr) {continue;}
 
         auto It{std::ranges::find_if(mActors, [Actor](const std::unique_ptr<AActor>& Ptr) {
             return Ptr.get() == Actor;
         })};
 
-        if (It == mActors.end()) {
-            continue;
-        }
+        if (It == mActors.end()) { continue; }
 
         if (mEditorContext != nullptr && mEditorContext->GetSelectedActor() == Actor) {
             mEditorContext->ClearSelection();
         }
+
         Actor->SetWorld(nullptr);
         UObjectSystem::Unregister(Actor, Actor->GetHandle());
 
         mActors.erase(It);
+        bRemovedAnyActor = true;
     }
 
     mPendingDestroyActors.clear();
+    if (bRemovedAnyActor) { MarkOutlinerDirty(); }
+}
+
+void UWorld::AttachActor(AActor* Child, AActor* Parent)
+{
+    if (Child == nullptr || Parent == nullptr || Child == Parent)
+    {
+        return;
+    }
+
+    USceneComponent* ChildRoot = Child->GetRootComponent();
+    USceneComponent* ParentRoot = Parent->GetRootComponent();
+
+    if (ChildRoot == nullptr || ParentRoot == nullptr)
+    {
+        return;
+    }
+
+    // 이미 같은 부모라면 변경 없음
+    if (ChildRoot->GetParent() == ParentRoot)
+    {
+        return;
+    }
+
+    ChildRoot->AttachToComponent(ParentRoot);
+    MarkOutlinerDirty();
+}
+
+void UWorld::DetachActor(AActor* Actor)
+{
+    if (Actor == nullptr)
+    {
+        return;
+    }
+
+    USceneComponent* RootComponent = Actor->GetRootComponent();
+
+    if (RootComponent == nullptr)
+    {
+        return;
+    }
+
+    if (RootComponent->DetachFromComponent(EAttachmentTransformRule::KeepWorldTransform))
+    {
+        MarkOutlinerDirty();
+    }
+}
+
+bool UWorld::RenameActor(AActor* Actor, const FName& NewName)
+{
+    if (Actor == nullptr)
+    {
+        return false;
+    }
+
+    if (Actor->GetWorld() != this)
+    {
+        return false;
+    }
+
+    if (Actor->GetName() == NewName)
+    {
+        return false;
+    }
+
+    Actor->SetName(NewName);
+
+    MarkOutlinerDirty();
+
+    return true;
 }
 
 const TArray<std::unique_ptr<AActor>>& UWorld::GetActors() const {
@@ -573,6 +645,8 @@ AActor* UWorld::AddActor(std::unique_ptr<AActor> InActor) {
     mActors.push_back(std::move(InActor));
 
     Actor->SetWorld(this);
+
+    MarkOutlinerDirty();
 
     return Actor;
 }

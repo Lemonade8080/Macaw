@@ -8,6 +8,8 @@
 class FOutlinerPanel : public FEditorWindow {
 public:
     FOutlinerPanel(UWorld& InWorld, FWorldEditorContext& InEditorContext);
+    void MarkDirty(){ bHierarchyDirty = true;}
+    void RebuildHierarchy();
 
 private:
     void DrawContents() override;
@@ -28,4 +30,9 @@ private:
     UWorld* mWorld{};
     FWorldEditorContext* mEditorContext{};
     ImGuiTextFilter mActorFilter{};
+
+    TMap<AActor*, TArray<AActor*>> mChildrenByParent;
+
+    uint64 mCachedRevision = 0;
+    bool bHierarchyDirty = true;
 };

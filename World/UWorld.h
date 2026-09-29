@@ -47,6 +47,10 @@ public:
     bool DestroyActor(AActor* Actor);
     void FlushPendingDestroyActors();
 
+    void AttachActor(AActor* Child, AActor* Parent);
+    void DetachActor(AActor* Actor);
+    bool RenameActor(AActor* Actor, const FName& NewName);
+
     const TArray<std::unique_ptr<AActor>>& GetActors() const;
     void BuildSceneRenderData(FSceneRenderData& Scene) const;
 
@@ -94,12 +98,17 @@ public:
     FName MakeUniqueObjectName(std::string_view SourceName);
     AActor* FindActorByName(FName InName) const;
 
+    void MarkOutlinerDirty() { ++OutlinerRevision; }
+    uint64 GetOutlinerRevision() const { return OutlinerRevision; }
+
 private:
     friend class FTemporarySceneLoader;
 
     void ClearActors();
     void InitializeSubsystems();
     void DeinitializeSubsystems();
+
+    uint64 OutlinerRevision = 0;
 
 private:
     FWorldTime mTime{};

@@ -18,7 +18,52 @@ FOutlinerPanel::FOutlinerPanel(UWorld& InWorld, FWorldEditorContext& InEditorCon
       mEditorContext(&InEditorContext) {
 }
 
+void FOutlinerPanel::RebuildHierarchy()
+{
+    mRootActors.clear();
+    mChildrenByParent.clear();
+
+    const auto& Actors = mWorld->GetActors();
+
+    mRootActors.reserve(Actors.size());
+
+    for (const std::unique_ptr<AActor>& ActorPtr : Actors)
+    {
+        AActor* Actor = ActorPtr.get();
+
+        if (Actor == nullptr)
+        {
+            continue;
+        }
+
+        USceneComponent* RootComponent = Actor->GetRootComponent();
+        USceneComponent* ParentComponent = RootComponent != nullptr ? RootComponent->GetParent() : nullptr;
+
+        AActor* ParentActor = ParentComponent != nullptr ? ParentComponent->GetOwner() : nullptr;
+
+        if (ParentActor == Actor)
+        {
+            ParentActor = nullptr;
+        }
+
+        mChildrenByParent[ParentActor].push_back(Actor);
+    }
+}
+
 void FOutlinerPanel::DrawContents() {
+
+    // Dirty 구현
+    const uint64 WorldRevision = mWorld->GetOutlinerRevision();
+    if (mCachedRevision != WorldRevision){ bHierarchyDirty = true;}
+
+    if (bHierarchyDirty)
+    {
+        RebuildHierarchy();
+
+        mCachedRevision = WorldRevision;
+        bHierarchyDirty = false;
+    }
+
     ImGui::SetNextItemWidth(-FLT_MIN);
     if (ImGui::InputTextWithHint("##ActorFilter", "Search", mActorFilter.InputBuf, IM_ARRAYSIZE(mActorFilter.InputBuf))) {
         mActorFilter.Build();
@@ -78,9 +123,13 @@ bool FOutlinerPanel::IsRootActor(const AActor& Actor) const {
 }
 
 bool FOutlinerPanel::HasActorChildren(const AActor& Actor) const {
-    return std::ranges::any_of(mWorld->GetActors(), [this, &Actor](const std::unique_ptr<AActor>& ChildActor) {
-        return IsActorAttachedTo(*ChildActor, Actor);
-    });
+    //return std::ranges::any_of(mWorld->GetActors(), [this, &Actor](const std::unique_ptr<AActor>& ChildActor) {
+    //    return IsActorAttachedTo(*ChildActor, Actor);
+    //});
+
+    auto It = mChildrenByParent.find(const_cast<AActor*>(&Actor));
+
+    return It != mChildrenByParent.end() && !It->second.empty();
 }
 
 void FOutlinerPanel::DrawActorDragSource(AActor& Actor) {
@@ -191,9 +240,21 @@ void FOutlinerPanel::DrawActor(AActor& Actor) {
     ImGui::TextDisabled("%.*s", static_cast<int>(TypeName.size()), TypeName.data());
 
     if (BHasChildren && BOpen) {
-        for (const std::unique_ptr<AActor>& ChildActor : mWorld->GetActors()) {
-            if (IsActorAttachedTo(*ChildActor, Actor)) {
-                DrawActor(*ChildActor);
+        //for (const std::unique_ptr<AActor>& ChildActor : mWorld->GetActors()) {
+        //    if (IsActorAttachedTo(*ChildActor, Actor)) {
+        //        DrawActor(*ChildActor);
+        //    }
+        //}
+        auto It = mChildrenByParent.find(&Actor);
+
+        if (It != mChildrenByParent.end())
+        {
+            for (AActor* Child : It->second)
+            {
+                if (Child != nullptr)
+                {
+                    DrawActor(*Child);
+                }
             }
         }
         ImGui::TreePop();
@@ -203,8 +264,22 @@ void FOutlinerPanel::DrawActor(AActor& Actor) {
 }
 
 void FOutlinerPanel::DrawRootActors() {
-    for (const std::unique_ptr<AActor>& Actor : mWorld->GetActors()) {
-        if (IsRootActor(*Actor)) {
+    //for (const std::unique_ptr<AActor>& Actor : mWorld->GetActors()) {
+    //    if (IsRootActor(*Actor)) {
+    //        DrawActor(*Actor);
+    //    }
+    //}
+    auto It = mChildrenByParent.find(nullptr);
+
+    if (It == mChildrenByParent.end())
+    {
+        return;
+    }
+
+    for (AActor* Actor : It->second)
+    {
+        if (Actor != nullptr)
+        {
             DrawActor(*Actor);
         }
     }
