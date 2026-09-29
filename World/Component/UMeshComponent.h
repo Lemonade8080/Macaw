@@ -21,7 +21,7 @@ public:
 
     virtual const UMesh* ResolveMesh() const;
     bool BuildPickingBoxFromMesh();
-    bool RaycastMesh(const FRay& Ray, float& OutDistance) const;
+    bool RaycastMesh(const FRay& Ray, float& OutDistance, float MaxDistance = std::numeric_limits<float>::max()) const;
 
 protected:
     void Serialize(FArchive& Archive) override;

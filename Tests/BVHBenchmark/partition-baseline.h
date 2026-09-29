@@ -31,7 +31,7 @@ private:
 
     using TrisIndex = Uint32;
     struct FNode {
-        DirectX::BoundingBox BoundingBox;
+        DirectX::BoundingOrientedBox BoundingBox;
         Uint32 mLeft;
         Uint32 mRight;
         Uint32 mIndexStart = 0;
@@ -98,9 +98,9 @@ private:
     };
 public:
     bool BuildStructure(UMesh& Mesh);
-    bool Raycast(const UMesh& Mesh, const FRay& Ray, float& OutDistance, float MaxDistance = std::numeric_limits<float>::max()) const;
+    bool Raycast(const UMesh& Mesh, const FRay& Ray, float& OutDistance) const;
 private:
-    Uint32 MakeChild(const TArray<DirectX::BoundingBox>& TriangleBounds, Uint32 First, Uint32 Count, const MinMaxBox& Bounds);
+    Uint32 MakeChild(const TArray<DirectX::BoundingBox>& TriangleBounds, const TArray<TrisIndex>& SubTrisArray, const MinMaxBox& Bounds);
     TArray<Uint32> mIndexGroups;
     TArray<FNode> Nodes;
 };
@@ -152,7 +152,7 @@ public:
 
     void SetSubMeshes(const std::span<FSubMesh>& InSubMeshes);
 
-    bool Raycast(const FRay& Ray, float& OutDistance, float MaxDistance = std::numeric_limits<float>::max()) const;
+    bool Raycast(const FRay& Ray, float& OutDistance) const;
 
     const inline DirectX::BoundingOrientedBox GetBoundingBox() const { return mBoundingBox; }
 

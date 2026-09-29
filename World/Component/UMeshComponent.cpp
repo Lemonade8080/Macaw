@@ -43,49 +43,9 @@ bool UMeshComponent::BuildPickingBoxFromMesh() {
     return true;
 }
 
-# if 0
-bool UMeshComponent::RaycastMesh(const FRay& Ray, float& OutDistance) const {
-    const UMesh* Mesh{ResolveMesh()};
-    if (Mesh == nullptr) {
-        return false;
-    }
-
-    const auto Positions{Mesh->GetVertexAttributeData<EVertexAttribute::Position>()};
-    const TArray<Uint32>& Indices{Mesh->GetIndices()};
-    if (Positions.empty() || Indices.size() < 3) {
-        return false;
-    }
-
-    bool BHit{false};
-    float ClosestDistance{std::numeric_limits<float>::max()};
-    const FMatrix WorldMatrix{GetComponentToWorld()};
-    for (std::size_t Index{0}; Index + 2 < Indices.size(); Index += 3) {
-        const Uint32 I0{Indices[Index]};
-        const Uint32 I1{Indices[Index + 1]};
-        const Uint32 I2{Indices[Index + 2]};
-        if (I0 >= Positions.size() || I1 >= Positions.size() || I2 >= Positions.size()) {
-            continue;
-        }
-
-        const DirectX::XMVECTOR V0{DirectX::XMVector3TransformCoord(Positions[I0].ToSimpleMath(), WorldMatrix.ToSimpleMath())};
-        const DirectX::XMVECTOR V1{DirectX::XMVector3TransformCoord(Positions[I1].ToSimpleMath(), WorldMatrix.ToSimpleMath())};
-        const DirectX::XMVECTOR V2{DirectX::XMVector3TransformCoord(Positions[I2].ToSimpleMath(), WorldMatrix.ToSimpleMath())};
-        float Distance{0.0f};
-        if (DirectX::TriangleTests::Intersects(Ray.position, Ray.direction, V0, V1, V2, Distance) && Distance < ClosestDistance) {
-            ClosestDistance = Distance;
-            BHit = true;
-        }
-    }
-
-    if (BHit) {
-        OutDistance = ClosestDistance;
-    }
-    return BHit;
-}
-#else
-bool UMeshComponent::RaycastMesh(const FRay& Ray, float& OutDistance) const {
+bool UMeshComponent::RaycastMesh(const FRay& Ray, float& OutDistance, float MaxDistance) const {
     const UMesh* Mesh{ ResolveMesh() };
-    if (Mesh == nullptr) {
+    if (Mesh == nullptr || !(MaxDistance >= 0.0f)) {
         return false;
     }
 
@@ -116,16 +76,18 @@ bool UMeshComponent::RaycastMesh(const FRay& Ray, float& OutDistance) const {
         static_cast<float>(DirectionZ / LocalDirectionLength), 0.0f) };
 
     const FRay LocalRay{ LocalOrigin, LocalDirection };
+    const double LocalLimit = static_cast<double>(MaxDistance) * LocalDirectionLength;
+    const float LocalMaxDistance = LocalLimit >= std::numeric_limits<float>::max() ? std::numeric_limits<float>::max() : std::nextafter(static_cast<float>(LocalLimit), std::numeric_limits<float>::infinity());
     float ClosestDistance{ 0.0f };
-    const bool BHit = Mesh->Raycast(LocalRay, ClosestDistance);
+    const bool BHit = Mesh->Raycast(LocalRay, ClosestDistance, LocalMaxDistance);
 
     if (BHit) {
-        OutDistance = static_cast<float>(ClosestDistance / LocalDirectionLength);
+        const float WorldDistance = static_cast<float>(ClosestDistance / LocalDirectionLength);
+        if (WorldDistance > MaxDistance) return false;
+        OutDistance = WorldDistance;
     }
     return BHit;
 }
-#endif
-
 
 void UMeshComponent::Serialize(FArchive& Archive) {
     UPrimitiveComponent::Serialize(Archive);

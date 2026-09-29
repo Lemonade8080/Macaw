@@ -310,8 +310,8 @@ void UMesh::SetSubMeshes(const std::span<FSubMesh>& InSubMeshes) {
     mSubMeshes.assign(InSubMeshes.begin(), InSubMeshes.end());
 }
 
-bool UMesh::Raycast(const FRay& Ray, float& OutDistance, float MaxDistance) const {
-    return RaycastAccelerationStructure.Raycast(*this, Ray, OutDistance, MaxDistance);
+bool UMesh::Raycast(const FRay& Ray, float& OutDistance) const {
+    return RaycastAccelerationStructure.Raycast(*this, Ray, OutDistance);
 }
 
 bool FMeshRaycastAccelerationStructure::BuildStructure(UMesh& Mesh) {
@@ -427,78 +427,53 @@ Uint32 FMeshRaycastAccelerationStructure::MakeChild(const TArray<DirectX::Boundi
     return retIndex;
 }
 
-bool FMeshRaycastAccelerationStructure::Raycast(const UMesh& Mesh, const FRay& Ray, float& OutDistance, float MaxDistance) const {
-    if (Nodes.empty() || !(MaxDistance >= 0.0f)) return false;
+bool FMeshRaycastAccelerationStructure::Raycast(const UMesh& Mesh, const FRay& Ray, float& OutDistance) const {
+    if (Nodes.empty()) return false;
     const auto Positions{ Mesh.GetVertexAttributeData<EVertexAttribute::Position>() };
     const TArray<Uint32>& Indices{ Mesh.GetIndices() };
-    float ClosestDistance = MaxDistance;
-    const DirectX::XMVECTOR Origin = Ray.position;
-    const DirectX::XMVECTOR Direction = Ray.direction;
-    const DirectX::XMVECTOR IsParallel = DirectX::XMVectorLessOrEqual(DirectX::XMVectorAbs(Direction), DirectX::g_RayEpsilon);
-    const DirectX::XMVECTOR InverseDirection = DirectX::XMVectorReciprocal(DirectX::XMVectorSelect(Direction, DirectX::XMVectorSplatOne(), IsParallel));
-    const auto IntersectsBox = [&](const DirectX::BoundingBox& Box, float& EntryDistance) {
-        const DirectX::XMVECTOR Extents = DirectX::XMLoadFloat3(&Box.Extents);
-        const DirectX::XMVECTOR Offset = DirectX::XMVectorSubtract(DirectX::XMLoadFloat3(&Box.Center), Origin);
-        const DirectX::XMVECTOR Outside = DirectX::XMVectorAndInt(IsParallel, DirectX::XMVectorGreater(DirectX::XMVectorAbs(Offset), Extents));
-        if (!DirectX::XMVector3EqualInt(Outside, DirectX::XMVectorZero())) return false;
-        const DirectX::XMVECTOR T1 = DirectX::XMVectorMultiply(DirectX::XMVectorSubtract(Offset, Extents), InverseDirection);
-        const DirectX::XMVECTOR T2 = DirectX::XMVectorMultiply(DirectX::XMVectorAdd(Offset, Extents), InverseDirection);
-        DirectX::XMVECTOR Near = DirectX::XMVectorSelect(DirectX::XMVectorMin(T1, T2), DirectX::g_FltMin, IsParallel);
-        DirectX::XMVECTOR Far = DirectX::XMVectorSelect(DirectX::XMVectorMax(T1, T2), DirectX::g_FltMax, IsParallel);
-        Near = DirectX::XMVectorMax(Near, DirectX::XMVectorSplatY(Near));
-        Near = DirectX::XMVectorMax(Near, DirectX::XMVectorSplatZ(Near));
-        Far = DirectX::XMVectorMin(Far, DirectX::XMVectorSplatY(Far));
-        Far = DirectX::XMVectorMin(Far, DirectX::XMVectorSplatZ(Far));
-        EntryDistance = (std::max)(DirectX::XMVectorGetX(Near), 0.0f);
-        return EntryDistance <= DirectX::XMVectorGetX(Far) && EntryDistance <= ClosestDistance;
-    };
     float RootDistance = 0.0f;
-    if (!IntersectsBox(Nodes[0].BoundingBox, RootDistance)) return false;
+    if (!Nodes[0].BoundingBox.Intersects(Ray.position, Ray.direction, RootDistance)) return false;
     struct FStackEntry {
         Uint32 NodeIndex;
         float EntryDistance;
     };
-    FStackEntry Stack[64];
-    Uint32 StackSize = 0;
-    TArray<FStackEntry> Overflow;
-    const auto Push = [&](FStackEntry Entry) {
-        if (StackSize < std::size(Stack)) Stack[StackSize++] = Entry;
-        else Overflow.push_back(Entry);
-    };
-    FStackEntry Entry{ 0, RootDistance };
+    TArray<FStackEntry> Stack;
+    Stack.push_back({ 0, (std::max)(RootDistance, 0.0f) });
+    float ClosestDistance = std::numeric_limits<float>::max();
     bool BHit = false;
-    for (;;) {
-        if (Entry.EntryDistance <= ClosestDistance) {
-            const FNode& Node = Nodes[Entry.NodeIndex];
-            if (Node.mIndexCount == 0) {
-                FStackEntry Children[2]{ { Node.mLeft, 0.0f }, { Node.mRight, 0.0f } };
-                bool Hits[2]{};
-                for (Uint32 i = 0; i < 2; ++i) {
-                    Hits[i] = IntersectsBox(Nodes[Children[i].NodeIndex].BoundingBox, Children[i].EntryDistance);
-                }
-                if (Hits[0] && Hits[1]) {
-                    if (Children[0].EntryDistance > Children[1].EntryDistance) std::swap(Children[0], Children[1]);
-                    Push(Children[1]);
-                    Entry = Children[0];
-                    continue;
-                }
-                if (Hits[0] || Hits[1]) { Entry = Children[Hits[0] ? 0 : 1]; continue; }
+    while (!Stack.empty()) {
+        const FStackEntry Entry = Stack.back();
+        Stack.pop_back();
+        if (Entry.EntryDistance > ClosestDistance) continue;
+        const FNode& Node = Nodes[Entry.NodeIndex];
+        if (Node.mIndexCount == 0) {
+            FStackEntry Children[2]{ { Node.mLeft, 0.0f }, { Node.mRight, 0.0f } };
+            bool Hits[2]{};
+            for (Uint32 i = 0; i < 2; ++i) {
+                Hits[i] = Nodes[Children[i].NodeIndex].BoundingBox.Intersects(Ray.position, Ray.direction, Children[i].EntryDistance);
+                Children[i].EntryDistance = (std::max)(Children[i].EntryDistance, 0.0f);
+                Hits[i] = Hits[i] && Children[i].EntryDistance <= ClosestDistance;
             }
-            else for (Uint32 i = 0; i < Node.mIndexCount; ++i) {
-                const std::size_t Index = static_cast<std::size_t>(mIndexGroups[Node.mIndexStart + i]) * 3;
-                const DirectX::XMVECTOR V0 = Positions[Indices[Index]].ToSimpleMath();
-                const DirectX::XMVECTOR V1 = Positions[Indices[Index + 1]].ToSimpleMath();
-                const DirectX::XMVECTOR V2 = Positions[Indices[Index + 2]].ToSimpleMath();
-                float Distance = 0.0f;
-                if (DirectX::TriangleTests::Intersects(Origin, Direction, V0, V1, V2, Distance) && Distance <= ClosestDistance) {
-                    ClosestDistance = Distance;
-                    BHit = true;
-                }
+            if (Hits[0] && Hits[1]) {
+                if (Children[0].EntryDistance < Children[1].EntryDistance) std::swap(Children[0], Children[1]);
+                Stack.push_back(Children[0]);
+                Stack.push_back(Children[1]);
+            }
+            else if (Hits[0]) Stack.push_back(Children[0]);
+            else if (Hits[1]) Stack.push_back(Children[1]);
+            continue;
+        }
+        for (Uint32 i = 0; i < Node.mIndexCount; ++i) {
+            const std::size_t Index = static_cast<std::size_t>(mIndexGroups[Node.mIndexStart + i]) * 3;
+            const DirectX::XMVECTOR V0 = Positions[Indices[Index]].ToSimpleMath();
+            const DirectX::XMVECTOR V1 = Positions[Indices[Index + 1]].ToSimpleMath();
+            const DirectX::XMVECTOR V2 = Positions[Indices[Index + 2]].ToSimpleMath();
+            float Distance = 0.0f;
+            if (DirectX::TriangleTests::Intersects(Ray.position, Ray.direction, V0, V1, V2, Distance) && Distance < ClosestDistance) {
+                ClosestDistance = Distance;
+                BHit = true;
             }
         }
-        if (!Overflow.empty()) { Entry = Overflow.back(); Overflow.pop_back(); }
-        else if (StackSize > 0) Entry = Stack[--StackSize];
-        else break;
     }
     if (BHit) OutDistance = ClosestDistance;
     return BHit;
