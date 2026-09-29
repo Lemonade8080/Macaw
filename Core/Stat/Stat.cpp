@@ -10,15 +10,67 @@ namespace {
     struct FStatState {
         std::array<FSystemStatSample, static_cast<std::size_t>(ESystemStatStage::Count)> mCurrentSamples{};
         FStats mStats{};
+        FStatAverages mWindowTotals{};
+        FStatAverages mAverages{};
         double mFrameWindowSeconds{};
+        double mPickingWindowMilliseconds{};
+        std::uint64_t mPickingWindowCount{};
         std::uint64_t mFrameWindowCount{};
         std::uint64_t mActiveFrameId{};
         bool mFrameActive{};
+        bool mPublishAverages{};
     };
 
     FStatState& GetStatState() {
         static FStatState State{};
         return State;
+    }
+
+    void AccumulateAverages(FStatState& State) {
+        FStatAverages& Totals{State.mWindowTotals};
+        ++Totals.mFrameCount;
+        for (std::size_t Index{}; Index < Totals.mSystemSamples.size(); ++Index) {
+            Totals.mSystemSamples[Index].mTotalMilliseconds += State.mCurrentSamples[Index].mTotalMilliseconds;
+            Totals.mSystemSamples[Index].mCallCount += static_cast<double>(State.mCurrentSamples[Index].mCallCount);
+        }
+        Totals.mObjects.mObjectCount += static_cast<double>(State.mStats.mObjects.mObjectCount);
+        Totals.mObjects.mActorCount += static_cast<double>(State.mStats.mObjects.mActorCount);
+        const FMemoryStats& Memory{State.mStats.mMemory};
+        Totals.mMemory.mAllocatedBytes += static_cast<double>(Memory.mAllocatedBytes);
+        Totals.mMemory.mActiveAllocationCount += static_cast<double>(Memory.mActiveAllocationCount);
+        Totals.mMemory.mPeakAllocatedBytes = Memory.mPeakAllocatedBytes;
+        Totals.mMemory.mTotalAllocationCount = Memory.mTotalAllocationCount;
+        Totals.mMemory.mTotalDeallocationCount = Memory.mTotalDeallocationCount;
+        for (std::size_t Index{}; Index < Totals.mMemory.mTagStats.size(); ++Index) {
+            Totals.mMemory.mTagStats[Index].mAllocatedBytes += static_cast<double>(Memory.mTagStats[Index].mAllocatedBytes);
+            Totals.mMemory.mTagStats[Index].mActiveAllocationCount += static_cast<double>(Memory.mTagStats[Index].mActiveAllocationCount);
+        }
+    }
+
+    void PublishAverages(FStatState& State) {
+        State.mAverages = State.mWindowTotals;
+        FStatAverages& Averages{State.mAverages};
+        const double FrameCount{static_cast<double>(Averages.mFrameCount)};
+        Averages.mFrame = State.mStats.mFrame;
+        for (FSystemStatAverage& Sample : Averages.mSystemSamples) {
+            Sample.mTotalMilliseconds /= FrameCount;
+            Sample.mCallCount /= FrameCount;
+        }
+        Averages.mObjects.mObjectCount /= FrameCount;
+        Averages.mObjects.mActorCount /= FrameCount;
+        Averages.mMemory.mAllocatedBytes /= FrameCount;
+        Averages.mMemory.mActiveAllocationCount /= FrameCount;
+        for (FTagStatAverage& Tag : Averages.mMemory.mTagStats) {
+            Tag.mAllocatedBytes /= FrameCount;
+            Tag.mActiveAllocationCount /= FrameCount;
+        }
+        Averages.mPicking.mAverageMilliseconds = State.mPickingWindowCount > 0 ? State.mPickingWindowMilliseconds / static_cast<double>(State.mPickingWindowCount) : 0.0;
+        Averages.mPicking.mMillisecondsPerFrame = State.mPickingWindowMilliseconds / FrameCount;
+        Averages.mPicking.mAttemptsPerFrame = static_cast<double>(State.mPickingWindowCount) / FrameCount;
+        State.mWindowTotals = {};
+        State.mPickingWindowMilliseconds = 0.0;
+        State.mPickingWindowCount = 0;
+        State.mPublishAverages = false;
     }
 
     void RecordSample(ESystemStatStage Stage, double Milliseconds, std::uint64_t FrameId) {
@@ -47,6 +99,7 @@ void Stat::BeginFrame(double DeltaSeconds) {
         State.mFrameWindowSeconds += Frame.mDeltaSeconds;
         ++State.mFrameWindowCount;
         if (Frame.mFramesPerSecond == 0.0 || State.mFrameWindowSeconds >= 0.5) {
+            State.mPublishAverages = true;
             Frame.mFramesPerSecond = static_cast<double>(State.mFrameWindowCount) / State.mFrameWindowSeconds;
             Frame.mAverageFrameMilliseconds = State.mFrameWindowSeconds * 1000.0 / static_cast<double>(State.mFrameWindowCount);
             State.mFrameWindowSeconds = 0.0;
@@ -64,12 +117,21 @@ void Stat::EndFrame() {
     }
     State.mStats.mSystem.mSamples = State.mCurrentSamples;
     ++State.mStats.mSystem.mFrameCount;
+    AccumulateAverages(State);
+    if (State.mPublishAverages) {
+        PublishAverages(State);
+    }
     State.mFrameActive = false;
 }
 
 void Stat::ResetFrameStats() {
     FStatState& State{GetStatState()};
     State.mCurrentSamples = {};
+    State.mWindowTotals = {};
+    State.mAverages = {};
+    State.mPickingWindowMilliseconds = 0.0;
+    State.mPickingWindowCount = 0;
+    State.mPublishAverages = false;
     State.mStats.mSystem = {};
     State.mStats.mFrame = {};
     State.mStats.mPicking = {};
@@ -117,6 +179,34 @@ const char* Stat::GetSystemStageName(ESystemStatStage Stage) {
             return "UI render";
         case ESystemStatStage::Present:
             return "Present / wait";
+        case ESystemStatStage::RenderBeginFrame:
+            return "Frame setup";
+        case ESystemStatStage::RenderFenceWait:
+            return "Fence wait";
+        case ESystemStatStage::RenderView:
+            return "View render (inclusive)";
+        case ESystemStatStage::RenderTarget:
+            return "Target bind / clear";
+        case ESystemStatStage::RenderMaterials:
+            return "Material upload";
+        case ESystemStatStage::RenderQueue:
+            return "Render queue build";
+        case ESystemStatStage::RenderViewUpload:
+            return "View / light / model upload";
+        case ESystemStatStage::RenderGeometry:
+            return "Scene geometry";
+        case ESystemStatStage::RenderSelectionOutline:
+            return "Selection outline";
+        case ESystemStatStage::RenderSceneGuides:
+            return "Scene guides";
+        case ESystemStatStage::RenderGizmo:
+            return "Gizmo";
+        case ESystemStatStage::RenderText:
+            return "Text";
+        case ESystemStatStage::RenderBillboard:
+            return "Billboard";
+        case ESystemStatStage::RenderOrientationAxis:
+            return "Orientation axis";
         default:
             return "Unknown";
     }
@@ -174,18 +264,28 @@ void Stat::RecordObjectCounts(std::size_t ObjectCount, std::size_t ActorCount) {
     GetStatState().mStats.mObjects = FObjectStats{ObjectCount, ActorCount};
 }
 
-void Stat::RecordPickingTime(double Milliseconds) {
+void Stat::RecordPickingTime(double Milliseconds, double NarrowPhaseMilliseconds) {
     if (!std::isfinite(Milliseconds) || Milliseconds < 0.0) {
         return;
     }
-    FPickingStats& Stats{GetStatState().mStats.mPicking};
+    FStatState& State{GetStatState()};
+    FPickingStats& Stats{State.mStats.mPicking};
     Stats.mLastMilliseconds = Milliseconds;
+    Stats.mHasPhaseTiming = std::isfinite(NarrowPhaseMilliseconds) && NarrowPhaseMilliseconds >= 0.0 && NarrowPhaseMilliseconds <= Milliseconds;
+    Stats.mLastNarrowPhaseMilliseconds = Stats.mHasPhaseTiming ? NarrowPhaseMilliseconds : 0.0;
+    Stats.mLastBroadPhaseMilliseconds = Stats.mHasPhaseTiming ? Milliseconds - NarrowPhaseMilliseconds : 0.0;
     Stats.mTotalMilliseconds += Milliseconds;
     ++Stats.mAttemptCount;
+    State.mPickingWindowMilliseconds += Milliseconds;
+    ++State.mPickingWindowCount;
 }
 
 Stat::FStats Stat::GetStats() {
     return GetStatState().mStats;
+}
+
+FStatAverages Stat::GetStatAverages() {
+    return GetStatState().mAverages;
 }
 
 Stat::FFrameStats Stat::GetFrameStats() {

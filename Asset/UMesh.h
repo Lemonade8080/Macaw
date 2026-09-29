@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Core/Base/UObject.h"
 #include "Asset/Pipeline/Defines.h"
@@ -20,6 +20,90 @@
 #include "UAsset.h"
 #include "Core/Base/FAssetHandle.h"
 #include "Core/Base/TypeInfo.h"
+
+class UMesh;
+
+class FRaycastAccelerationStructure {
+private:
+    // BVH Build Parameters - DO: Benchmark
+    static constexpr Uint32 Slice = 32;
+    static constexpr float TraversalCostOverInternalCost = 2.5f;
+
+    using TrisIndex = Uint32;
+    struct FNode {
+        DirectX::BoundingOrientedBox BoundingBox;
+        Uint32 mLeft;
+        Uint32 mRight;
+        Uint32 mIndexStart = 0;
+        Uint32 mIndexCount = 0;
+    };
+    struct MinMaxBox {
+        float minX = std::numeric_limits<float>::max();
+        float minY = std::numeric_limits<float>::max();
+        float minZ = std::numeric_limits<float>::max();
+        float maxX = std::numeric_limits<float>::lowest();
+        float maxY = std::numeric_limits<float>::lowest();
+        float maxZ = std::numeric_limits<float>::lowest();
+
+        inline MinMaxBox() = default;
+
+        inline MinMaxBox(const DirectX::BoundingBox& Box)
+            : minX(Box.Center.x - Box.Extents.x)
+            , minY(Box.Center.y - Box.Extents.y)
+            , minZ(Box.Center.z - Box.Extents.z)
+            , maxX(Box.Center.x + Box.Extents.x)
+            , maxY(Box.Center.y + Box.Extents.y)
+            , maxZ(Box.Center.z + Box.Extents.z)
+        {
+        }
+
+        inline void Expand(const DirectX::BoundingBox& Box) {
+            if (minX > Box.Center.x - Box.Extents.x)
+                minX = Box.Center.x - Box.Extents.x;
+            if (minY > Box.Center.y - Box.Extents.y)
+                minY = Box.Center.y - Box.Extents.y;
+            if (minZ > Box.Center.z - Box.Extents.z)
+                minZ = Box.Center.z - Box.Extents.z;
+
+            if (maxX < Box.Center.x + Box.Extents.x)
+                maxX = Box.Center.x + Box.Extents.x;
+            if (maxY < Box.Center.y + Box.Extents.y)
+                maxY = Box.Center.y + Box.Extents.y;
+            if (maxZ < Box.Center.z + Box.Extents.z)
+                maxZ = Box.Center.z + Box.Extents.z;
+        }
+
+        inline float SurfaceArea() const {
+            const float dx = maxX - minX;
+            const float dy = maxY - minY;
+            const float dz = maxZ - minZ;
+
+            if (dx < 0.0f || dy < 0.0f || dz < 0.0f)
+                return 0.0f;
+
+            return 2.0f * (dx * dy + dy * dz + dz * dx);
+        }
+
+        static MinMaxBox Merge(const MinMaxBox& Box1, const MinMaxBox& Box2) {
+            MinMaxBox Result;
+            Result.minX = (std::min)(Box1.minX, Box2.minX);
+            Result.minY = (std::min)(Box1.minY, Box2.minY);
+            Result.minZ = (std::min)(Box1.minZ, Box2.minZ);
+
+            Result.maxX = (std::max)(Box1.maxX, Box2.maxX);
+            Result.maxY = (std::max)(Box1.maxY, Box2.maxY);
+            Result.maxZ = (std::max)(Box1.maxZ, Box2.maxZ);
+            return Result;
+        }
+    };
+public:
+    bool BuildStructure(UMesh& Mesh);
+    bool Raycast(const UMesh& Mesh, const FRay& Ray, float& OutDistance) const;
+private:
+    Uint32 MakeChild(const TArray<DirectX::BoundingBox>& TriangleBounds, const TArray<TrisIndex>& SubTrisArray, const MinMaxBox& Bounds);
+    TArray<Uint32> mIndexGroups;
+    TArray<FNode> Nodes;
+};
 
 class UMesh : public UAsset {
 private:
@@ -68,6 +152,10 @@ public:
 
     void SetSubMeshes(const std::span<FSubMesh>& InSubMeshes);
 
+    bool Raycast(const FRay& Ray, float& OutDistance) const;
+
+    const inline DirectX::BoundingOrientedBox GetBoundingBox() const { return mBoundingBox; }
+
 protected:
     virtual void Serialize(FArchive& Ar) override;
 
@@ -84,6 +172,8 @@ private:
 
     static std::size_t GetAttributeCount();
 
+    bool BuildBoundingBoxFromMesh();
+
 private:
     TFixedArray<Microsoft::WRL::ComPtr<ID3D11Buffer>, static_cast<std::size_t>(EVertexAttribute::MAX)> mVertexBuffers{};
     TFixedArray<std::unique_ptr<FVertexAttributeStorageBase>, static_cast<std::size_t>(EVertexAttribute::MAX)> mAttributeStorage{};
@@ -93,6 +183,10 @@ private:
     TArray<Uint32> mIndices{};
 
     TArray<FSubMesh> mSubMeshes{};
+
+    DirectX::BoundingOrientedBox mBoundingBox{ DirectX::XMFLOAT3{0.f, 0.f, 0.f}, DirectX::XMFLOAT3{0.f, 0.f, 0.f}, DirectX::XMFLOAT4{0.f, 0.f, 0.f, 1.f} };
+
+    FRaycastAccelerationStructure RaycastAccelerationStructure{};
 };
 
 template <typename T> UMesh::TVertexAttributeStorage<T>::TVertexAttributeStorage(std::span<const T> InData)

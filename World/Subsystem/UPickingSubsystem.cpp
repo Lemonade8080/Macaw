@@ -10,6 +10,11 @@
 #include <chrono>
 #include <cmath>
 
+// Temporary picking breakdown: set to 0 to disable the extra timers and overlay rows.
+#ifndef MACAW_PICKING_PHASE_TIMING
+#define MACAW_PICKING_PHASE_TIMING 1
+#endif
+
 void UPickingSubsystem::RegisterComponent(UPrimitiveComponent* Component) {
     if (Component == nullptr || ContainsComponent(Component)) {
         return;
@@ -26,6 +31,9 @@ void UPickingSubsystem::UnregisterComponent(UPrimitiveComponent* Component) {
 
 bool UPickingSubsystem::Raycast(const FRay& Ray, UPrimitiveComponent*& OutComponent, float& OutDistance, const FMatrix* CameraWorld) const {
     const std::chrono::steady_clock::time_point StartTime{std::chrono::steady_clock::now()};
+#if MACAW_PICKING_PHASE_TIMING
+    std::chrono::steady_clock::duration NarrowPhaseTime{};
+#endif
     OutComponent = nullptr;
     OutDistance = std::numeric_limits<float>::max();
 
@@ -77,7 +85,14 @@ bool UPickingSubsystem::Raycast(const FRay& Ray, UPrimitiveComponent*& OutCompon
         float HitDistance{BroadPhaseDistance};
         if (Component->GetTypeInfo()->IsA(UMeshComponent::StaticTypeInfo())) {
             auto* MeshComponent{static_cast<UMeshComponent*>(Component)};
-            if (!MeshComponent->RaycastMesh(Ray, HitDistance)) {
+#if MACAW_PICKING_PHASE_TIMING
+            const auto NarrowPhaseStart{std::chrono::steady_clock::now()};
+#endif
+            const bool HitMesh{MeshComponent->RaycastMesh(Ray, HitDistance)};
+#if MACAW_PICKING_PHASE_TIMING
+            NarrowPhaseTime += std::chrono::steady_clock::now() - NarrowPhaseStart;
+#endif
+            if (!HitMesh) {
                 continue;
             }
         }
@@ -89,7 +104,12 @@ bool UPickingSubsystem::Raycast(const FRay& Ray, UPrimitiveComponent*& OutCompon
     }
 
     const double Milliseconds{std::chrono::duration<double, std::milli>{std::chrono::steady_clock::now() - StartTime}.count()};
+#if MACAW_PICKING_PHASE_TIMING
+    // All remaining work (including billboard picking) belongs to broad phase here.
+    Stat::RecordPickingTime(Milliseconds, std::chrono::duration<double, std::milli>{NarrowPhaseTime}.count());
+#else
     Stat::RecordPickingTime(Milliseconds);
+#endif
     return OutComponent != nullptr;
 }
 

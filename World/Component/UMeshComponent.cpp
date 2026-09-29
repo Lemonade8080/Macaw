@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "Core/Property/IPropertyEditorContext.h"
 #include "UMeshComponent.h"
 
@@ -39,25 +39,11 @@ bool UMeshComponent::BuildPickingBoxFromMesh() {
         return false;
     }
 
-    const auto Positions{Mesh->GetVertexAttributeData<EVertexAttribute::Position>()};
-    if (Positions.empty()) {
-        return false;
-    }
-
-    std::vector<DirectX::XMFLOAT3> Points{};
-    Points.reserve(Positions.size());
-    for (const FVector3& Position : Positions) {
-        Points.emplace_back(Position.mX, Position.mY, Position.mZ);
-    }
-
-    DirectX::BoundingBox Bounds{};
-    DirectX::BoundingBox::CreateFromPoints(Bounds, Points.size(), Points.data(), sizeof(DirectX::XMFLOAT3));
-    DirectX::BoundingOrientedBox Box{};
-    DirectX::BoundingOrientedBox::CreateFromBoundingBox(Box, Bounds);
-    SetPickingBox(Box);
+    SetPickingBox(Mesh->GetBoundingBox());
     return true;
 }
 
+# if 0
 bool UMeshComponent::RaycastMesh(const FRay& Ray, float& OutDistance) const {
     const UMesh* Mesh{ResolveMesh()};
     if (Mesh == nullptr) {
@@ -96,6 +82,50 @@ bool UMeshComponent::RaycastMesh(const FRay& Ray, float& OutDistance) const {
     }
     return BHit;
 }
+#else
+bool UMeshComponent::RaycastMesh(const FRay& Ray, float& OutDistance) const {
+    const UMesh* Mesh{ ResolveMesh() };
+    if (Mesh == nullptr) {
+        return false;
+    }
+
+    // Component transforms are composed as SRT, without hierarchy-induced shear.
+    const FTransform WorldTransform{ GetComponentTransform() };
+    const FVector3& Scale{ WorldTransform.GetScale() };
+    if (!std::isfinite(Scale.mX) || !std::isfinite(Scale.mY) || !std::isfinite(Scale.mZ) ||
+        Scale.mX == 0.0f || Scale.mY == 0.0f || Scale.mZ == 0.0f) {
+        return false;
+    }
+
+    const DirectX::XMVECTOR InverseScale{ DirectX::XMVectorSet(1.0f / Scale.mX, 1.0f / Scale.mY, 1.0f / Scale.mZ, 0.0f) };
+    const DirectX::XMVECTOR Rotation{ DirectX::XMQuaternionNormalize(WorldTransform.GetRotationQuaternion().ToSimpleMath()) };
+    const DirectX::XMVECTOR Offset{ DirectX::XMVectorSubtract(Ray.position, WorldTransform.GetPosition().ToSimpleMath()) };
+    const DirectX::XMVECTOR LocalOrigin{ DirectX::XMVectorMultiply(DirectX::XMVector3InverseRotate(Offset, Rotation), InverseScale) };
+    const DirectX::XMVECTOR UnnormalizedLocalDirection{ DirectX::XMVectorMultiply(DirectX::XMVector3InverseRotate(Ray.direction, Rotation), InverseScale) };
+    const double DirectionX{ DirectX::XMVectorGetX(UnnormalizedLocalDirection) };
+    const double DirectionY{ DirectX::XMVectorGetY(UnnormalizedLocalDirection) };
+    const double DirectionZ{ DirectX::XMVectorGetZ(UnnormalizedLocalDirection) };
+    const double LocalDirectionLength{ std::hypot(DirectionX, DirectionY, DirectionZ) };
+    if (!std::isfinite(LocalDirectionLength) || LocalDirectionLength <= 0.0f ||
+        DirectX::XMVector3IsNaN(LocalOrigin) || DirectX::XMVector3IsInfinite(LocalOrigin)) {
+        return false;
+    }
+    const DirectX::XMVECTOR LocalDirection{ DirectX::XMVectorSet(
+        static_cast<float>(DirectionX / LocalDirectionLength),
+        static_cast<float>(DirectionY / LocalDirectionLength),
+        static_cast<float>(DirectionZ / LocalDirectionLength), 0.0f) };
+
+    const FRay LocalRay{ LocalOrigin, LocalDirection };
+    float ClosestDistance{ 0.0f };
+    const bool BHit = Mesh->Raycast(LocalRay, ClosestDistance);
+
+    if (BHit) {
+        OutDistance = static_cast<float>(ClosestDistance / LocalDirectionLength);
+    }
+    return BHit;
+}
+#endif
+
 
 void UMeshComponent::Serialize(FArchive& Archive) {
     UPrimitiveComponent::Serialize(Archive);
