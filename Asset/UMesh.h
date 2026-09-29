@@ -28,6 +28,7 @@ private:
     // BVH Build Parameters - DO: Benchmark
     static constexpr Uint32 Slice = 32;
     static constexpr float TraversalCostOverInternalCost = 2.5f;
+    static constexpr bool ForceSingleTriangleLeaf = false;
 
     using TrisIndex = Uint32;
     struct FNode {

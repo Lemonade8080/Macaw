@@ -412,10 +412,22 @@ Uint32 FMeshRaycastAccelerationStructure::MakeChild(const TArray<DirectX::Boundi
     float leafCost = static_cast<float>(Count);
     float Area = Bounds.SurfaceArea();
     float splitCost = Area > 0.0f && BestCost < std::numeric_limits<float>::max() ? TraversalCostOverInternalCost + BestCost / Area : std::numeric_limits<float>::max();
-    if (splitCost < leafCost) {
-        auto Begin = mIndexGroups.begin() + First;
-        auto Middle = std::partition(Begin, Begin + Count, [&](TrisIndex Index) { return GetBinIndex(TriangleBounds[Index], BestAxis) <= BestLeftEnd; });
-        const Uint32 LeftCount = static_cast<Uint32>(Middle - Begin);
+    if (ForceSingleTriangleLeaf ? Count > 1 : splitCost < leafCost) {
+        Uint32 LeftCount = Count / 2;
+        if (BestCost < std::numeric_limits<float>::max()) {
+            auto Begin = mIndexGroups.begin() + First;
+            auto Middle = std::partition(Begin, Begin + Count, [&](TrisIndex Index) { return GetBinIndex(TriangleBounds[Index], BestAxis) <= BestLeftEnd; });
+            LeftCount = static_cast<Uint32>(Middle - Begin);
+        }
+        if (BestCost == std::numeric_limits<float>::max() || LeftCount == 0 || LeftCount == Count) {
+            LeftCount = Count / 2;
+            BestLeftBox = {};
+            BestRightBox = {};
+            for (Uint32 Offset = 0; Offset < Count; ++Offset) {
+                if (Offset < LeftCount) BestLeftBox.Expand(TriangleBounds[mIndexGroups[First + Offset]]);
+                else BestRightBox.Expand(TriangleBounds[mIndexGroups[First + Offset]]);
+            }
+        }
         Nodes[retIndex].mLeft = MakeChild(TriangleBounds, First, LeftCount, BestLeftBox);
         Nodes[retIndex].mRight = MakeChild(TriangleBounds, First + LeftCount, Count - LeftCount, BestRightBox);
     }
