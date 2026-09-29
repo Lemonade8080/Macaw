@@ -243,7 +243,7 @@ void FApplication::SaveState() {
         Host->CaptureLayoutSettings(mContext.mEditorSettings);
     }
     FEditorConfigManager::Save(mContext.mEditorSettings);
-    mContext.mWorld->SaveScene("test", mContext.mAssetRegistry.get());
+    // mContext.mWorld->SaveScene("test", mContext.mAssetRegistry.get());
 }
 
 void FApplication::Shutdown() {
