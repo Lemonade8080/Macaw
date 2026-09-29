@@ -56,12 +56,14 @@ struct FActorProbe {
     FAssetHandle mPipelineHandle{};
     Uint32 mFlags{0x0000'0000};
     FObjectHandle mOwnerHandle{};
+    DirectX::BoundingOrientedBox mLocalBounds{};
 };
 
 struct CameraProbe {
     FMatrix mViewProjection{};
     FMatrix mView{};
     FMatrix mProjection{};
+    FFrustum mViewFrustum{};
 };
 
 struct FRenderSettings {

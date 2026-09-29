@@ -350,6 +350,11 @@ bool FEditorViewport::BuildCameraProbe(CameraProbe& OutCamera) {
     }
 
     OutCamera.mViewProjection = OutCamera.mView * OutCamera.mProjection;
+
+    FFrustum LocalFrustum{};
+    FFrustum::CreateFromMatrix(LocalFrustum, OutCamera.mProjection.ToSimpleMath());
+    LocalFrustum.Transform(OutCamera.mViewFrustum, OutCamera.mView.Inverse().ToSimpleMath());
+
     return true;
 }
 
