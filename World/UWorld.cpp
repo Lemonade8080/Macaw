@@ -1,4 +1,4 @@
-#include "pch.h"
+ï»¿#include "pch.h"
 #include "UWorld.h"
 #include "FTemporarySceneLoader.h"
 
@@ -166,7 +166,7 @@ void UWorld::AttachActor(AActor* Child, AActor* Parent)
         return;
     }
 
-    // ÀÌ¹Ì °°Àº ºÎ¸ğ¶ó¸é º¯°æ ¾øÀ½
+    // ì´ë¯¸ ê°™ì€ ë¶€ëª¨ë¼ë©´ ë³€ê²½ ì—†ìŒ
     if (ChildRoot->GetParent() == ParentRoot)
     {
         return;

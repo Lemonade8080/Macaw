@@ -47,6 +47,15 @@
       "AlignedByteOffset": 0,
       "InputClassification": "PerVertex",
       "InstanceDataStepRate": 0
+    },
+    {
+      "SemanticName": "MODEL_INDEX",
+      "SemanticIndex": 0,
+      "Format": "Uint",
+      "InputSlot": 4,
+      "AlignedByteOffset": 0,
+      "InputClassification": "PerInstance",
+      "InstanceDataStepRate": 1
     }
   ],
 

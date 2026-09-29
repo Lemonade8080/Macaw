@@ -34,11 +34,6 @@ private:
         FVector3 mPadding{};
     };
 
-    struct FDrawConstants {
-        Uint32 mModelContextStart{};
-        Uint32 mPadding[3]{};
-    };
-
     struct FTextConstants {
         FMatrix mWorld{};
         FVector4 mColor{};
@@ -60,7 +55,6 @@ private:
 
     static_assert(sizeof(FFrameConstants) == 16);
     static_assert(sizeof(FViewConstants) == 304);
-    static_assert(sizeof(FDrawConstants) == 16);
     static_assert(sizeof(FTextConstants) == 96);
     static_assert(sizeof(FModelContext) == 72);
 
@@ -69,14 +63,13 @@ public:
     void Reset();
 
     bool BeginFrame(ID3D11DeviceContext* Context, float AnimationTime);
-    void SetCompletionValue(Uint64 CompletionValue);
-    Uint64 GetCompletionValue() const;
+    void EndFrame();
 
     bool PrepareView(ID3D11Device* Device, ID3D11DeviceContext* Context, const FRenderView& View, const FSceneRenderData& Scene, const FRenderQueue& Queue);
     bool UpdateView(ID3D11DeviceContext* Context, const CameraProbe& Camera, const D3D11_VIEWPORT& Viewport, const FVector4& GridFade);
     bool BindCommon(ID3D11DeviceContext* Context) const;
     bool BindModels(ID3D11DeviceContext* Context) const;
-    bool BindMeshDraw(ID3D11DeviceContext* Context, Uint32 ModelIndex);
+    bool BindMeshDraw(ID3D11DeviceContext* Context, Uint32 ModelIndex) const;
     bool BindTextDraw(ID3D11DeviceContext* Context, const FTextProbe& Probe);
 
     bool UploadStream(ID3D11Device* Device, ID3D11DeviceContext* Context, EFrameStream Stream, const void* Data, Uint32 Count, Uint32 Stride, Uint32 BindFlags);
@@ -87,12 +80,13 @@ public:
 private:
     bool InitializeConstantBuffer(ID3D11Device* Device, FGraphicsBuffer& Buffer, Uint32 ByteSize);
     bool UploadModels(ID3D11Device* Device, ID3D11DeviceContext* Context, const FRenderQueue& Queue);
+    bool EnsureModelIndices(ID3D11Device* Device);
     void BindConstantBuffer(ID3D11DeviceContext* Context, Uint32 Slot, const FGraphicsBuffer& Buffer) const;
 
 private:
     FGraphicsBuffer mFrameBuffer{};
     FGraphicsBuffer mViewBuffer{};
-    FGraphicsBuffer mDrawBuffer{};
+    FGraphicsBuffer mModelIndexBuffer{};
     FGraphicsBuffer mTextBuffer{};
     TGraphicsArray<FLightProbe, true, true> mLights{};
     TGraphicsArray<FModelContext, true, true> mModels{};
@@ -102,5 +96,4 @@ private:
     bool mFrameReady{};
     bool mViewReady{};
     bool mHasCameraWorld{};
-    Uint64 mCompletionValue{};
 };
