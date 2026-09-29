@@ -111,8 +111,9 @@ struct FEdge
 {
     Uint32 V0;
     Uint32 V1;
+    Uint32 FaceCount{ 0 };
 
-    float Cost = 0.0f;
+    float Cost{ 0.0f };
     FVector3 NewPosition;
 };
 
@@ -172,21 +173,44 @@ public:
     const inline DirectX::BoundingOrientedBox GetBoundingBox() const { return mBoundingBox; }
 
     /* LOD */
-    bool GenerateLOD1(ID3D11Device* Device, float TargetRatio);
+    bool GenerateLOD(ID3D11Device* Device, Uint32 Level, float TargetRatio);
 
     TArray<FEdge> BuildEdges(const TArray<Uint32>& Indices);
 	FEdge FindShortestEdge(const TArray<FEdge>& Edges, const TArray<FVector3>& Positions);
 	bool CanCollapseEdge(const FEdge& Edge, TArray<FVector3>& LODPositions, TArray<Uint32>& LODIndices);
 
 private:
-    bool CreateLOD1VertexBuffer(ID3D11Device* Device);
-    bool CreateLOD1IndexBuffer(ID3D11Device* Device);
+    struct FGeneratedLOD
+    {
+        TArray<FVector3> mPositions{};
+        TArray<Uint32> mIndices{};
 
-    TArray<FVector3> mLOD1Positions;
-    TArray<Uint32> mLOD1Indices;
+        Microsoft::WRL::ComPtr<ID3D11Buffer> mVertexBuffer{};
 
-    Microsoft::WRL::ComPtr<ID3D11Buffer> mLOD1VertexBuffer;
-    Microsoft::WRL::ComPtr<ID3D11Buffer> mLOD1IndexBuffer;
+        Microsoft::WRL::ComPtr<ID3D11Buffer> mIndexBuffer{};
+
+        bool IsValid() const
+        {
+            return mVertexBuffer != nullptr && mIndexBuffer != nullptr && !mPositions.empty() && !mIndices.empty();
+        }
+
+        void Reset()
+        {
+            mVertexBuffer.Reset();
+            mIndexBuffer.Reset();
+            mPositions.clear();
+            mIndices.clear();
+        }
+    };
+
+    FGeneratedLOD* GetGeneratedLOD(int Level);
+    const FGeneratedLOD* GetGeneratedLOD(int Level) const;
+
+    bool CreateLODVertexBuffer(ID3D11Device* Device, FGeneratedLOD& LOD);
+    bool CreateLODIndexBuffer(ID3D11Device* Device, FGeneratedLOD& LOD);
+
+    // Level 1은 index 0, Level 2는 index 1
+    TArray<FGeneratedLOD> mGeneratedLODs{};
 
 protected:
     virtual void Serialize(FArchive& Ar) override;

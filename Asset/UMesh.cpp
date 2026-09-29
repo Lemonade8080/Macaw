@@ -18,6 +18,28 @@ std::size_t UMesh::GetAttributeCount() {
     return static_cast<std::size_t>(EVertexAttribute::MAX);
 }
 
+UMesh::FGeneratedLOD* UMesh::GetGeneratedLOD(int Level)
+{
+    if (Level <= 0) { return nullptr; }
+
+    const std::size_t Index{ static_cast<std::size_t>(Level - 1) };
+
+    if (Index >= mGeneratedLODs.size()) { return nullptr; }
+
+    return &mGeneratedLODs[Index];
+}
+
+const UMesh::FGeneratedLOD* UMesh::GetGeneratedLOD(int Level) const
+{
+    if (Level <= 0) { return nullptr; }
+
+    const std::size_t Index{ static_cast<std::size_t>(Level - 1) };
+
+    if (Index >= mGeneratedLODs.size()) { return nullptr; }
+
+    return &mGeneratedLODs[Index];
+}
+
 bool UMesh::BuildBoundingBoxFromMesh()
 {
     const auto Positions{ GetVertexAttributeData<EVertexAttribute::Position>() };
@@ -198,10 +220,12 @@ ID3D11Buffer* UMesh::GetVertexBuffer(EVertexAttribute Attribute) const {
     return mVertexBuffers[Index].Get();
 }
 
-ID3D11Buffer* UMesh::GetVertexBuffer(EVertexAttribute Attribute, int Level) const {
-    if (Level == 1 && Attribute == EVertexAttribute::Position && HasLOD(Level)) {
-        return mLOD1VertexBuffer.Get();
-    }
+ID3D11Buffer* UMesh::GetVertexBuffer(EVertexAttribute Attribute, int Level) const
+{
+    const FGeneratedLOD* LOD{ GetGeneratedLOD(Level) };
+
+    if (Attribute == EVertexAttribute::Position && LOD && LOD->IsValid())
+        return LOD->mVertexBuffer.Get();
 
     return GetVertexBuffer(Attribute);
 }
@@ -210,21 +234,34 @@ ID3D11Buffer* UMesh::GetIndexBuffer() const {
     return mIndexBuffer.Get();
 }
 
-ID3D11Buffer* UMesh::GetIndexBuffer(int Level) const {
-    return Level == 1 && HasLOD(Level) ? mLOD1IndexBuffer.Get() : GetIndexBuffer();
-}
+ID3D11Buffer* UMesh::GetIndexBuffer(int Level) const
+{
+    const FGeneratedLOD* LOD{ GetGeneratedLOD(Level) };
 
-Uint32 UMesh::GetIndexCount(int Level) const {
-    const std::size_t IndexCount{Level == 1 && HasLOD(Level) ? mLOD1Indices.size() : mIndices.size()};
-    return static_cast<Uint32>((std::min)(IndexCount, static_cast<std::size_t>(UINT32_MAX)));
-}
-
-bool UMesh::HasLOD(int Level) const {
-    if (Level == 0) {
-        return mIndexBuffer != nullptr && !mIndices.empty();
+    if (LOD != nullptr && LOD->IsValid()) {
+        return LOD->mIndexBuffer.Get();
     }
 
-    return Level == 1 && mLOD1VertexBuffer != nullptr && mLOD1IndexBuffer != nullptr && !mLOD1Indices.empty();
+    return GetIndexBuffer();
+}
+
+Uint32 UMesh::GetIndexCount(int Level) const
+{
+    const FGeneratedLOD* LOD{ GetGeneratedLOD(Level) };
+
+    if (LOD && LOD->IsValid())
+        return static_cast<Uint32>(LOD->mIndices.size());
+
+    return static_cast<Uint32>((std::min)(mIndices.size(), static_cast<std::size_t>(UINT32_MAX)));
+}
+
+bool UMesh::HasLOD(int Level) const
+{
+    if (Level == 0)
+        return mIndexBuffer && !mIndices.empty();
+
+    const FGeneratedLOD* LOD{ GetGeneratedLOD(Level) };
+    return LOD && LOD->IsValid();
 }
 
 bool UMesh::HasVertexAttribute(EVertexAttribute Attribute) const {
@@ -267,17 +304,18 @@ const void* UMesh::GetVertexData(EVertexAttribute Attribute) const {
     return mAttributeStorage[Index]->GetData();
 }
 
-bool UMesh::GenerateLOD1(ID3D11Device* Device, float TargetRatio) {
+bool UMesh::GenerateLOD(ID3D11Device* Device, Uint32 Level, float TargetRatio) {
 
-    mLOD1VertexBuffer.Reset();
-    mLOD1IndexBuffer.Reset();
-    mLOD1Positions.clear();
-    mLOD1Indices.clear();
-
-    const auto PositionData{GetVertexAttributeData<EVertexAttribute::Position>()};
-    if (Device == nullptr || PositionData.empty() || mIndices.empty() || mIndices.size() % 3 != 0 || TargetRatio <= 0.0f || TargetRatio >= 1.0f) {
+    if (Level == 0)
         return false;
-    }
+
+    if (mGeneratedLODs.size() < Level)
+        mGeneratedLODs.resize(Level);
+
+    FGeneratedLOD& OutputLOD{ mGeneratedLODs[Level - 1] };
+    OutputLOD.Reset();
+
+    const auto PositionData{ GetVertexAttributeData<EVertexAttribute::Position>() };
 
 	// Pos, Indices를 복사
     TArray<FVector3> LODPositions(PositionData.begin(), PositionData.end());
@@ -290,6 +328,17 @@ bool UMesh::GenerateLOD1(ID3D11Device* Device, float TargetRatio) {
     {
         TArray<FEdge> Edges{BuildEdges(LODIndices)};
         if (Edges.empty()) { break; }
+
+        std::unordered_set<Uint32> ProtectedVertices{};
+
+        for (const FEdge& Edge : Edges)
+        {
+            if (Edge.FaceCount != 2)
+            {
+                ProtectedVertices.insert(Edge.V0);
+                ProtectedVertices.insert(Edge.V1);
+            }
+        }
 
         for (FEdge& Edge : Edges) {
             Edge.NewPosition = (LODPositions[Edge.V0] + LODPositions[Edge.V1]) * 0.5f;
@@ -306,6 +355,8 @@ bool UMesh::GenerateLOD1(ID3D11Device* Device, float TargetRatio) {
             std::ranges::pop_heap(Edges, CompareCost);
             FEdge Candidate{Edges.back()};
             Edges.pop_back();
+
+            if (Candidate.FaceCount != 2) { continue; }
 
             if (CanCollapseEdge(Candidate, LODPositions, LODIndices)) {
                 SelectedEdge = Candidate;
@@ -343,14 +394,12 @@ bool UMesh::GenerateLOD1(ID3D11Device* Device, float TargetRatio) {
         LODIndices = std::move(CollapsedIndices);
     }
 
-    mLOD1Positions = std::move(LODPositions);
-    mLOD1Indices = std::move(LODIndices);
+    OutputLOD.mPositions = std::move(LODPositions);
+    OutputLOD.mIndices = std::move(LODIndices);
 
-    if (!CreateLOD1VertexBuffer(Device) || !CreateLOD1IndexBuffer(Device)) {
-        mLOD1VertexBuffer.Reset();
-        mLOD1IndexBuffer.Reset();
-        mLOD1Positions.clear();
-        mLOD1Indices.clear();
+    if (!CreateLODVertexBuffer(Device, OutputLOD) || !CreateLODIndexBuffer(Device, OutputLOD))
+    {
+        OutputLOD.Reset();
         return false;
     }
 
@@ -359,29 +408,40 @@ bool UMesh::GenerateLOD1(ID3D11Device* Device, float TargetRatio) {
 
 TArray<FEdge> UMesh::BuildEdges(const TArray<Uint32>& Indices)
 {
-    TArray<FEdge> Edges;
-    std::unordered_set<uint64_t> EdgeSet;
+    TArray<FEdge> Edges{};
+    std::unordered_map<uint64_t, std::size_t> EdgeMap{};
 
     auto AddEdge = [&](Uint32 A, Uint32 B)
-        {
-            // 1-3과 3-1을 같은 Edge로 취급
-            if (A > B) { std::swap(A, B); }
-
-            // 두 uint32를 하나의 uint64 key로 만듦
-            uint64_t Key = (static_cast<uint64_t>(A) << 32) | static_cast<uint64_t>(B);
-
-            // 처음 발견된 Edge만 추가
-            if (EdgeSet.insert(Key).second)
-            {
-                Edges.push_back({ A, B });
-            }
-        };
-
-    for (size_t i = 0; i + 2 < Indices.size(); i += 3)
     {
-        Uint32 V0 = Indices[i];
-        Uint32 V1 = Indices[i + 1];
-        Uint32 V2 = Indices[i + 2];
+        if (A > B) std::swap(A, B);
+
+        const uint64_t Key{ (static_cast<uint64_t>(A) << 32) | static_cast<uint64_t>(B)};
+
+        const auto It{ EdgeMap.find(Key) };
+
+        if (It == EdgeMap.end())
+        {
+            const std::size_t EdgeIndex{ Edges.size() };
+            EdgeMap.emplace(Key, EdgeIndex);
+
+            FEdge Edge{};
+            Edge.V0 = A;
+            Edge.V1 = B;
+            Edge.FaceCount = 1;
+
+            Edges.push_back(Edge);
+        }
+        else
+        {
+            ++Edges[It->second].FaceCount;
+        }
+    };
+
+    for (std::size_t Index{}; Index + 2 < Indices.size(); Index += 3)
+    {
+        const Uint32 V0{ Indices[Index] };
+        const Uint32 V1{ Indices[Index + 1] };
+        const Uint32 V2{ Indices[Index + 2] };
 
         AddEdge(V0, V1);
         AddEdge(V1, V2);
@@ -417,6 +477,7 @@ FEdge UMesh::FindShortestEdge(const TArray<FEdge>& Edges, const TArray<FVector3>
 bool UMesh::CanCollapseEdge(const FEdge& Edge, TArray<FVector3>& LODPositions, TArray<Uint32>& LODIndices)
 {
 	constexpr float Epsilon = 1e-8f;
+    if (Edge.FaceCount != 2) { return false; }
 
 	for (size_t i = 0; i + 2 < LODIndices.size(); i += 3)
 	{
@@ -452,20 +513,20 @@ bool UMesh::CanCollapseEdge(const FEdge& Edge, TArray<FVector3>& LODPositions, T
     return true;
 }
 
-bool UMesh::CreateLOD1VertexBuffer(ID3D11Device* Device)
+bool UMesh::CreateLODVertexBuffer(ID3D11Device* Device, FGeneratedLOD& LOD)
 {
-    if (Device == nullptr || mLOD1Positions.empty())
+    if (Device == nullptr || LOD.mPositions.empty())
         return false;
 
     D3D11_BUFFER_DESC BufferDesc{};
     BufferDesc.ByteWidth =
-        static_cast<UINT>(mLOD1Positions.size() * sizeof(FVector3));
+        static_cast<UINT>(LOD.mPositions.size() * sizeof(FVector3));
 
     BufferDesc.Usage = D3D11_USAGE_DEFAULT;
     BufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
 
     D3D11_SUBRESOURCE_DATA InitialData{};
-    InitialData.pSysMem = mLOD1Positions.data();
+    InitialData.pSysMem = LOD.mPositions.data();
 
     Microsoft::WRL::ComPtr<ID3D11Buffer> Buffer;
 
@@ -478,25 +539,25 @@ bool UMesh::CreateLOD1VertexBuffer(ID3D11Device* Device)
     if (FAILED(Result))
         return false;
 
-    mLOD1VertexBuffer = std::move(Buffer);
+    LOD.mVertexBuffer = std::move(Buffer);
 
     return true;
 }
 
-bool UMesh::CreateLOD1IndexBuffer(ID3D11Device* Device)
+bool UMesh::CreateLODIndexBuffer(ID3D11Device* Device, FGeneratedLOD& LOD)
 {
-    if (Device == nullptr || mLOD1Indices.empty())
+    if (Device == nullptr || LOD.mIndices.empty())
         return false;
 
     D3D11_BUFFER_DESC BufferDesc{};
     BufferDesc.ByteWidth =
-        static_cast<UINT>(mLOD1Indices.size() * sizeof(Uint32));
+        static_cast<UINT>(LOD.mIndices.size() * sizeof(Uint32));
 
     BufferDesc.Usage = D3D11_USAGE_DEFAULT;
     BufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
 
     D3D11_SUBRESOURCE_DATA InitialData{};
-    InitialData.pSysMem = mLOD1Indices.data();
+    InitialData.pSysMem = LOD.mIndices.data();
 
     Microsoft::WRL::ComPtr<ID3D11Buffer> Buffer;
 
@@ -509,12 +570,10 @@ bool UMesh::CreateLOD1IndexBuffer(ID3D11Device* Device)
     if (FAILED(Result))
         return false;
 
-    mLOD1IndexBuffer = std::move(Buffer);
+    LOD.mIndexBuffer = std::move(Buffer);
 
     return true;
 }
-
-
 
 void UMesh::Serialize(FArchive& Ar) {
     UAsset::Serialize(Ar);
@@ -571,10 +630,11 @@ void UMesh::Reset() {
     mIndices.clear();
     mSubMeshes.clear();
 
-    mLOD1VertexBuffer.Reset();
-    mLOD1IndexBuffer.Reset();
-    mLOD1Positions.clear();
-    mLOD1Indices.clear();
+    for (FGeneratedLOD& LOD : mGeneratedLODs) {
+        LOD.Reset();
+    }
+
+    mGeneratedLODs.clear();
 }
 
 const TArray<Uint32>& UMesh::GetIndices() const {
