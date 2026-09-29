@@ -12,21 +12,11 @@ void FRenderQueue::Build(const IAssetRegistry* Registry, const FSceneRenderData&
     mSceneItems.clear();
     mOutlineItems.clear();
     mGizmoItems.clear();
+    
     if (View.IsPassEnabled(ERenderPass::SceneGeometry)) {
-        TArray<FActorProbe> PassProbes;
-        PassProbes.reserve(Scene.mActorProbes.size());
+        FrustumCulling(Scene.mActorProbes, View.mCamera.mViewFrustum);
 
-        for (const auto& Probe : Scene.mActorProbes) {
-            DirectX::BoundingOrientedBox WorldBounds{};
-            Probe.mLocalBounds.Transform(WorldBounds, Probe.mWorld.ToSimpleMath());
-
-            if (!View.mCamera.mViewFrustum.Intersects(WorldBounds)) {
-                continue;
-            }
-            PassProbes.push_back(Probe);
-        }
-
-        BuildItems(Registry, PassProbes, mSceneItems, View.mSettings.mBRenderSky);
+        BuildItems(Registry, mVisibleProbes, mSceneItems, View.mSettings.mBRenderSky);
     }
     if (View.mSelectedActorHandle.IsValid()) {
         for (FMeshDrawItem& Item : mSceneItems) {
@@ -110,4 +100,25 @@ void FRenderQueue::AddItems(const IAssetRegistry* Registry, const TArray<FActorP
         const FActorProbe& Probe{Probes[Index]};
         Items.push_back(FMeshDrawItem{Probe, TextureSignature, MaterialIndex, GroupIndex, FirstIndex, IndexCount});
     }
+}
+
+void FRenderQueue::FrustumCulling(const TArray<FActorProbe>& BeforeCullingProbes, const FFrustum& Frustum)
+{
+    mVisibleProbes.clear();
+    mVisibleProbes.reserve(BeforeCullingProbes.size());
+
+    if (BeforeCullingProbes.empty())
+    {
+        return;
+    }
+
+    const bool bNeedsRebuiled = mBVHTree.GetNodes().empty() || (mCachedProbeCount != BeforeCullingProbes.size());
+
+    if (bNeedsRebuiled)
+    {
+        mBVHTree.Build(BeforeCullingProbes);
+        mCachedProbeCount = BeforeCullingProbes.size();
+    }
+    
+    mBVHTree.FrustumCull(Frustum, BeforeCullingProbes, mVisibleProbes);
 }

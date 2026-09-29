@@ -27,15 +27,18 @@ const FTransform& USceneComponent::GetRelativeTransform() const {
 
 void USceneComponent::SetRelativeTransform(const FTransform& Transform) {
     this->mTransform = Transform;
+    MarkTarnsformDirty();
 }
 
 void USceneComponent::SetRelativeLocation(const FVector3& Location) {
     mTransform.SetPosition(Location);
+    MarkTarnsformDirty();
 }
 
 void USceneComponent::SetRelativeLocationAndRotation(const FVector3& Location, const FRotator& Rotation) {
     mTransform.SetPosition(Location);
     mTransform.SetRotation(Rotation);
+    MarkTarnsformDirty();
 }
 
 FVector3 USceneComponent::GetRelativeLocation() const {
@@ -44,6 +47,7 @@ FVector3 USceneComponent::GetRelativeLocation() const {
 
 void USceneComponent::SetRelativeRotation(const FRotator& Rotation) {
     mTransform.SetRotation(Rotation);
+    MarkTarnsformDirty();
 }
 
 FRotator USceneComponent::GetRelativeRotation() const {
@@ -52,6 +56,7 @@ FRotator USceneComponent::GetRelativeRotation() const {
 
 void USceneComponent::SetRelativeScale3D(const FVector3& Scale) {
     mTransform.SetScale(Scale);
+    MarkTarnsformDirty();
 }
 
 FVector3 USceneComponent::GetRelativeScale3D() const {
@@ -161,10 +166,12 @@ bool USceneComponent::SetWorldTransform(const FTransform& WorldTransform) {
         }
 
         mTransform = RelativeTransform;
+        MarkTarnsformDirty();
         return true;
     }
 
     mTransform = DesiredWorldTransform;
+    MarkTarnsformDirty();
     return true;
 }
 
@@ -251,6 +258,19 @@ bool USceneComponent::ResolveLoadedReferences() {
 
     mPendingParentGuid = {};
     return true;
+}
+
+void USceneComponent::MarkTarnsformDirty()
+{
+    OnTransformUpdate();
+
+    for (const auto& ChileRef : mChildren)
+    {
+        if (USceneComponent* Child = ChileRef.Get())
+        {
+            Child->MarkTarnsformDirty();
+        }
+    }
 }
 
 void USceneComponent::DrawPanels(IPropertyEditorContext* Context) {
