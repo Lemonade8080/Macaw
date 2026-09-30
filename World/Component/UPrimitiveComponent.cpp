@@ -22,6 +22,12 @@ void UPrimitiveComponent::SetVisible(bool BInVisible) {
     OnRenderStateChanged();
 }
 
+void UPrimitiveComponent::OnRenderStateChanged() {
+    USceneComponent::OnRenderStateChanged();
+    UWorld* World = GetBelongingWorld();
+    if (World != nullptr) World->GetPickingSubsystem().UpdateComponent(this);
+}
+
 void UPrimitiveComponent::OnRegister() {
     USceneComponent::OnRegister();
 

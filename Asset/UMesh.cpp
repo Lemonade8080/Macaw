@@ -791,16 +791,17 @@ void UMesh::SetSubMeshes(const std::span<FSubMesh>& InSubMeshes) {
     ++mRenderRevision;
 }
 
-bool UMesh::Raycast(const FRay& Ray, float& OutDistance, float MaxDistance) const {
-    return RaycastAccelerationStructure.Raycast(*this, Ray, OutDistance, MaxDistance);
+bool UMesh::Raycast(const FRay& Ray, float& OutDistance, float MaxDistance, bool ReverseWinding) const {
+    return RaycastAccelerationStructure.Raycast(*this, Ray, OutDistance, MaxDistance, ReverseWinding);
 }
 
 bool FMeshRaycastAccelerationStructure::BuildStructure(UMesh& Mesh) {
-    Nodes.clear();
+    mTree.Clear();
+    mTrianglePackets.clear();
     mIndexGroups.clear();
     const auto Positions{ Mesh.GetVertexAttributeData<EVertexAttribute::Position>() };
     const TArray<Uint32>& Indices{ Mesh.GetIndices() };
-    if (Positions.empty() || Indices.empty() || Indices.size() % 3 != 0 || Indices.size() / 3 > std::numeric_limits<Uint32>::max()) return false;
+    if (Positions.empty() || Indices.empty() || Indices.size() % 3 != 0 || Indices.size() / 3 > BVH8::IndexMask) return false;
     for (Uint32 Index : Indices) {
         if (Index >= Positions.size()) return false;
     }
@@ -823,12 +824,33 @@ bool FMeshRaycastAccelerationStructure::BuildStructure(UMesh& Mesh) {
         Bounds.Expand(TriangleBounds[t]);
         mIndexGroups[t] = static_cast<TrisIndex>(t);
     }
-    MakeChild(TriangleBounds, 0, static_cast<Uint32>(mIndexGroups.size()), Bounds);
+    TArray<FNode> BuildNodes;
+    MakeChild(BuildNodes, TriangleBounds, 0, static_cast<Uint32>(mIndexGroups.size()), Bounds);
+    mTrianglePackets.reserve((mIndexGroups.size() + MaxTrianglesPerPacket - 1) / MaxTrianglesPerPacket);
+    mTree.Build(BuildNodes, [](const FNode& Node) { return Node.mLeft == std::numeric_limits<Uint32>::max(); }, [&](const FNode& Node) {
+        const Uint32 Index = static_cast<Uint32>(mTrianglePackets.size());
+        auto& Packet = mTrianglePackets.emplace_back();
+        for (Uint32 Lane = 0; Lane < Node.mIndexCount; ++Lane) {
+            const std::size_t TriangleIndex = static_cast<std::size_t>(mIndexGroups[Node.mIndexStart + Lane]) * 3;
+            const auto V0 = Positions[Indices[TriangleIndex]].ToSimpleMath(), V1 = Positions[Indices[TriangleIndex + 1]].ToSimpleMath(), V2 = Positions[Indices[TriangleIndex + 2]].ToSimpleMath();
+            DirectX::XMFLOAT3 Origin, Edge1, Edge2;
+            DirectX::XMStoreFloat3(&Origin, V0);
+            DirectX::XMStoreFloat3(&Edge1, DirectX::XMVectorSubtract(V1, V0));
+            DirectX::XMStoreFloat3(&Edge2, DirectX::XMVectorSubtract(V2, V0));
+            Packet.V0[0][Lane] = Origin.x; Packet.V0[1][Lane] = Origin.y; Packet.V0[2][Lane] = Origin.z;
+            Packet.Edge1[0][Lane] = Edge1.x; Packet.Edge1[1][Lane] = Edge1.y; Packet.Edge1[2][Lane] = Edge1.z;
+            Packet.Edge2[0][Lane] = Edge2.x; Packet.Edge2[1][Lane] = Edge2.y; Packet.Edge2[2][Lane] = Edge2.z;
+        }
+        return BVH8::FLeaf{Index, Node.mIndexCount};
+    }, [](const FNode& Node) { return Node.mIndexCount <= MaxTrianglesPerPacket; });
+    TArray<Uint32>{}.swap(mIndexGroups);
     return true;
 }
 
-Uint32 FMeshRaycastAccelerationStructure::MakeChild(const TArray<DirectX::BoundingBox>& TriangleBounds, Uint32 First, Uint32 Count, const MinMaxBox& Bounds) {
+Uint32 FMeshRaycastAccelerationStructure::MakeChild(TArray<FNode>& BuildNodes, const TArray<DirectX::BoundingBox>& TriangleBounds, Uint32 First, Uint32 Count, const MinMaxBox& Bounds) {
     FNode Node{};
+    Node.mIndexStart = First;
+    Node.mIndexCount = Count;
     Node.BoundingBox.Center = { Bounds.minX * 0.5f + Bounds.maxX * 0.5f, Bounds.minY * 0.5f + Bounds.maxY * 0.5f, Bounds.minZ * 0.5f + Bounds.maxZ * 0.5f };
     Node.BoundingBox.Extents = { Bounds.maxX * 0.5f - Bounds.minX * 0.5f, Bounds.maxY * 0.5f - Bounds.minY * 0.5f, Bounds.maxZ * 0.5f - Bounds.minZ * 0.5f };
     Node.BoundingBox.Extents.x += 4.0f * std::numeric_limits<float>::epsilon() * (std::abs(Node.BoundingBox.Center.x) + Node.BoundingBox.Extents.x);
@@ -887,13 +909,10 @@ Uint32 FMeshRaycastAccelerationStructure::MakeChild(const TArray<DirectX::Boundi
         }
     }
 
-    int retIndex = Nodes.size();
-    Nodes.push_back(Node);
+    const Uint32 retIndex = static_cast<Uint32>(BuildNodes.size());
+    BuildNodes.push_back(Node);
 
-    float leafCost = static_cast<float>(Count);
-    float Area = Bounds.SurfaceArea();
-    float splitCost = Area > 0.0f && BestCost < std::numeric_limits<float>::max() ? TraversalCostOverInternalCost + BestCost / Area : std::numeric_limits<float>::max();
-    if (ForceSingleTriangleLeaf ? Count > 1 : splitCost < leafCost) {
+    if (Count > 1) {
         Uint32 LeftCount = Count / 2;
         if (BestCost < std::numeric_limits<float>::max()) {
             auto Begin = mIndexGroups.begin() + First;
@@ -909,90 +928,15 @@ Uint32 FMeshRaycastAccelerationStructure::MakeChild(const TArray<DirectX::Boundi
                 else BestRightBox.Expand(TriangleBounds[mIndexGroups[First + Offset]]);
             }
         }
-        Nodes[retIndex].mLeft = MakeChild(TriangleBounds, First, LeftCount, BestLeftBox);
-        Nodes[retIndex].mRight = MakeChild(TriangleBounds, First + LeftCount, Count - LeftCount, BestRightBox);
+        BuildNodes[retIndex].mLeft = MakeChild(BuildNodes, TriangleBounds, First, LeftCount, BestLeftBox);
+        BuildNodes[retIndex].mRight = MakeChild(BuildNodes, TriangleBounds, First + LeftCount, Count - LeftCount, BestRightBox);
     }
-    else {
-        Nodes[retIndex].mIndexStart = First;
-        Nodes[retIndex].mIndexCount = Count;
-    }
-
     return retIndex;
 }
 
-bool FMeshRaycastAccelerationStructure::Raycast(const UMesh& Mesh, const FRay& Ray, float& OutDistance, float MaxDistance) const {
-    if (Nodes.empty() || !(MaxDistance >= 0.0f)) return false;
-    const auto Positions{ Mesh.GetVertexAttributeData<EVertexAttribute::Position>() };
-    const TArray<Uint32>& Indices{ Mesh.GetIndices() };
+bool FMeshRaycastAccelerationStructure::Raycast(const UMesh&, const FRay& Ray, float& OutDistance, float MaxDistance, bool ReverseWinding) const {
     float ClosestDistance = MaxDistance;
-    const DirectX::XMVECTOR Origin = Ray.position;
-    const DirectX::XMVECTOR Direction = Ray.direction;
-    const DirectX::XMVECTOR IsParallel = DirectX::XMVectorLessOrEqual(DirectX::XMVectorAbs(Direction), DirectX::g_RayEpsilon);
-    const DirectX::XMVECTOR InverseDirection = DirectX::XMVectorReciprocal(DirectX::XMVectorSelect(Direction, DirectX::XMVectorSplatOne(), IsParallel));
-    const auto IntersectsBox = [&](const DirectX::BoundingBox& Box, float& EntryDistance) {
-        const DirectX::XMVECTOR Extents = DirectX::XMLoadFloat3(&Box.Extents);
-        const DirectX::XMVECTOR Offset = DirectX::XMVectorSubtract(DirectX::XMLoadFloat3(&Box.Center), Origin);
-        const DirectX::XMVECTOR Outside = DirectX::XMVectorAndInt(IsParallel, DirectX::XMVectorGreater(DirectX::XMVectorAbs(Offset), Extents));
-        if (!DirectX::XMVector3EqualInt(Outside, DirectX::XMVectorZero())) return false;
-        const DirectX::XMVECTOR T1 = DirectX::XMVectorMultiply(DirectX::XMVectorSubtract(Offset, Extents), InverseDirection);
-        const DirectX::XMVECTOR T2 = DirectX::XMVectorMultiply(DirectX::XMVectorAdd(Offset, Extents), InverseDirection);
-        DirectX::XMVECTOR Near = DirectX::XMVectorSelect(DirectX::XMVectorMin(T1, T2), DirectX::g_FltMin, IsParallel);
-        DirectX::XMVECTOR Far = DirectX::XMVectorSelect(DirectX::XMVectorMax(T1, T2), DirectX::g_FltMax, IsParallel);
-        Near = DirectX::XMVectorMax(Near, DirectX::XMVectorSplatY(Near));
-        Near = DirectX::XMVectorMax(Near, DirectX::XMVectorSplatZ(Near));
-        Far = DirectX::XMVectorMin(Far, DirectX::XMVectorSplatY(Far));
-        Far = DirectX::XMVectorMin(Far, DirectX::XMVectorSplatZ(Far));
-        EntryDistance = (std::max)(DirectX::XMVectorGetX(Near), 0.0f);
-        return EntryDistance <= DirectX::XMVectorGetX(Far) && EntryDistance <= ClosestDistance;
-    };
-    float RootDistance = 0.0f;
-    if (!IntersectsBox(Nodes[0].BoundingBox, RootDistance)) return false;
-    struct FStackEntry {
-        Uint32 NodeIndex;
-        float EntryDistance;
-    };
-    FStackEntry Stack[64];
-    Uint32 StackSize = 0;
-    TArray<FStackEntry> Overflow;
-    const auto Push = [&](FStackEntry Entry) {
-        if (StackSize < std::size(Stack)) Stack[StackSize++] = Entry;
-        else Overflow.push_back(Entry);
-    };
-    FStackEntry Entry{ 0, RootDistance };
-    bool BHit = false;
-    for (;;) {
-        if (Entry.EntryDistance <= ClosestDistance) {
-            const FNode& Node = Nodes[Entry.NodeIndex];
-            if (Node.mIndexCount == 0) {
-                FStackEntry Children[2]{ { Node.mLeft, 0.0f }, { Node.mRight, 0.0f } };
-                bool Hits[2]{};
-                for (Uint32 i = 0; i < 2; ++i) {
-                    Hits[i] = IntersectsBox(Nodes[Children[i].NodeIndex].BoundingBox, Children[i].EntryDistance);
-                }
-                if (Hits[0] && Hits[1]) {
-                    if (Children[0].EntryDistance > Children[1].EntryDistance) std::swap(Children[0], Children[1]);
-                    Push(Children[1]);
-                    Entry = Children[0];
-                    continue;
-                }
-                if (Hits[0] || Hits[1]) { Entry = Children[Hits[0] ? 0 : 1]; continue; }
-            }
-            else for (Uint32 i = 0; i < Node.mIndexCount; ++i) {
-                const std::size_t Index = static_cast<std::size_t>(mIndexGroups[Node.mIndexStart + i]) * 3;
-                const DirectX::XMVECTOR V0 = Positions[Indices[Index]].ToSimpleMath();
-                const DirectX::XMVECTOR V1 = Positions[Indices[Index + 1]].ToSimpleMath();
-                const DirectX::XMVECTOR V2 = Positions[Indices[Index + 2]].ToSimpleMath();
-                float Distance = 0.0f;
-                if (DirectX::TriangleTests::Intersects(Origin, Direction, V0, V1, V2, Distance) && Distance <= ClosestDistance) {
-                    ClosestDistance = Distance;
-                    BHit = true;
-                }
-            }
-        }
-        if (!Overflow.empty()) { Entry = Overflow.back(); Overflow.pop_back(); }
-        else if (StackSize > 0) Entry = Stack[--StackSize];
-        else break;
-    }
-    if (BHit) OutDistance = ClosestDistance;
-    return BHit;
+    const bool Hit = mTree.RaycastTrianglePackets(Ray, ClosestDistance, mTrianglePackets.data(), ReverseWinding);
+    if (Hit) OutDistance = ClosestDistance;
+    return Hit;
 }

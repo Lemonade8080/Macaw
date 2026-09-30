@@ -18,6 +18,7 @@ public:
 
     void DrawPanels(IPropertyEditorContext* Context) override;
 
+    void OnRenderStateChanged() override;
     void OnRegister() override;
     void OnUnregister() override;
     

@@ -1,8 +1,0 @@
-newmtl Prisoner_material
-Kd 1.000000 1.000000 1.000000
-Ka 0.0 0.0 0.0
-Ks 0.0 0.0 0.0
-d 1.0
-illum 2
-map_Kd Texture/prisoner_diffuse.png
-map_Ke Texture/Prisoner_Capoeira_VAT.hdr

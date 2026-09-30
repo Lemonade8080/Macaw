@@ -74,6 +74,7 @@ void UStaticMeshComponent::SetPipelineHandle(FAssetHandle InHandle) {
 }
 
 void UStaticMeshComponent::OnRenderStateChanged() {
+    UMeshComponent::OnRenderStateChanged();
     AActor* Owner{GetOwner()};
     UWorld* World{Owner != nullptr ? Owner->GetWorld() : nullptr};
 

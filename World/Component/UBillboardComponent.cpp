@@ -52,6 +52,7 @@ void UBillboardComponent::Serialize(FArchive& Archive) {
     Archive.Serialize("UVMin", mUvMin);
     Archive.Serialize("UVMax", mUvMax);
     Archive.Serialize("Color", mColor);
+    if (Archive.IsLoading()) OnRenderStateChanged();
 }
 
 bool UBillboardComponent::TryGetBillBoardWorld(FMatrix& OutWorld) const {
@@ -69,6 +70,7 @@ void UBillboardComponent::SetTextureHandle(FAssetHandle InTextureHandle) {
     const IAssetRegistry* Registry{World != nullptr ? World->GetAssetRegistry() : nullptr};
     mTextureAssetPath = Registry != nullptr && Registry->GetAssetPath(mTextureHandle) != nullptr ? *Registry->GetAssetPath(mTextureHandle) : FAssetPath{};
     mTextureAssetGuid = Registry != nullptr && Registry->GetAssetGuid(mTextureHandle) != nullptr ? *Registry->GetAssetGuid(mTextureHandle) : FGuid{};
+    OnRenderStateChanged();
 }
 
 void UBillboardComponent::SetPipelineHandle(FAssetHandle InPipelineHandle) {
@@ -77,10 +79,12 @@ void UBillboardComponent::SetPipelineHandle(FAssetHandle InPipelineHandle) {
     const IAssetRegistry* Registry{World != nullptr ? World->GetAssetRegistry() : nullptr};
     mPipelineAssetPath = Registry != nullptr && Registry->GetAssetPath(mPipelineHandle) != nullptr ? *Registry->GetAssetPath(mPipelineHandle) : FAssetPath{};
     mPipelineAssetGuid = Registry != nullptr && Registry->GetAssetGuid(mPipelineHandle) != nullptr ? *Registry->GetAssetGuid(mPipelineHandle) : FGuid{};
+    OnRenderStateChanged();
 }
 
 void UBillboardComponent::SetSize(const FVector2& InSize) {
     mSize = InSize;
+    OnRenderStateChanged();
 }
 
 void UBillboardComponent::SetUV(const FVector2& InUVMin, const FVector2& InUVMax) {

@@ -88,6 +88,14 @@ ConfigureProject("Math", "StaticLib")
 ConfigureProject("Core", "StaticLib")
     files { "Core/**.h", "Core/**.cpp", "Core/**.cc" }
     dependson { "Math" }
+    filter "files:Core/Spatial/FBVH8*.cpp"
+        buildoptions { "/d2Qvec-" }
+    filter "files:Core/Spatial/FPickingMath.cpp"
+        buildoptions { "/d2Qvec-" }
+    filter "files:Core/Spatial/FBVH8AVX.cpp"
+        enablepch "Off"
+        vectorextensions "AVX"
+    filter {}
 
 ConfigureProject("Serialization", "StaticLib")
     files { "Serialization/**.h", "Serialization/**.cpp" }
@@ -98,6 +106,9 @@ ConfigureProject("Asset", "StaticLib")
     dependson { "Serialization" }
 
 ConfigureProject("World", "StaticLib")
+    filter "files:World/Component/UMeshComponent.cpp"
+        buildoptions { "/d2Qvec-" }
+    filter {}
     files { "World/**.h", "World/**.cpp" }
     dependson { "Asset" }
 

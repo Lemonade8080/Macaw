@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "UPrimitiveComponent.h"
+#include "FMeshPickingProxy.h"
 #include "Core/Base/FAssetHandle.h"
 #include "Core/Asset/FAssetPath.h"
 #include "Core/Base/FGuid.h"
@@ -27,6 +28,9 @@ protected:
     void Serialize(FArchive& Archive) override;
 
 private:
+    mutable FMeshPickingProxy mRaycastProxy;
+    mutable Uint64 mRaycastTransformRevision = 0;
+    mutable bool mRaycastTransformInitialized = false;
     FAssetHandle mMeshHandle{};
     FAssetPath mMeshAssetPath{};
     FGuid mMeshAssetGuid{};

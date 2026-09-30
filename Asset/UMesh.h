@@ -3,6 +3,8 @@
 #include "Core/Base/UObject.h"
 #include "Asset/Pipeline/Defines.h"
 #include "Core/Base/FVertexAttribute.h"
+#include "Core/Spatial/FBVH8.h"
+#include "Core/Spatial/FBVH8TrianglePackets.h"
 
 #include <array>
 #include <functional>
@@ -22,19 +24,19 @@
 #include "Core/Base/TypeInfo.h"
 
 class UMesh;
+struct FMeshPickingSource { const UMesh* Mesh = nullptr; };
 
 class FMeshRaycastAccelerationStructure {
 private:
     // BVH Build Parameters - DO: Benchmark
     static constexpr Uint32 Slice = 32;
-    static constexpr float TraversalCostOverInternalCost = 2.5f;
-    static constexpr bool ForceSingleTriangleLeaf = true; // TODO: Benchmark(mem size)
+    static constexpr Uint32 MaxTrianglesPerPacket = 8;
 
     using TrisIndex = Uint32;
     struct FNode {
         DirectX::BoundingBox BoundingBox;
-        Uint32 mLeft;
-        Uint32 mRight;
+        Uint32 mLeft = std::numeric_limits<Uint32>::max();
+        Uint32 mRight = std::numeric_limits<Uint32>::max();
         Uint32 mIndexStart = 0;
         Uint32 mIndexCount = 0;
     };
@@ -99,11 +101,12 @@ private:
     };
 public:
     bool BuildStructure(UMesh& Mesh);
-    bool Raycast(const UMesh& Mesh, const FRay& Ray, float& OutDistance, float MaxDistance = std::numeric_limits<float>::max()) const;
+    bool Raycast(const UMesh& Mesh, const FRay& Ray, float& OutDistance, float MaxDistance = std::numeric_limits<float>::max(), bool ReverseWinding = false) const;
 private:
-    Uint32 MakeChild(const TArray<DirectX::BoundingBox>& TriangleBounds, Uint32 First, Uint32 Count, const MinMaxBox& Bounds);
+    Uint32 MakeChild(TArray<FNode>& BuildNodes, const TArray<DirectX::BoundingBox>& TriangleBounds, Uint32 First, Uint32 Count, const MinMaxBox& Bounds);
     TArray<Uint32> mIndexGroups;
-    TArray<FNode> Nodes;
+    TArray<BVH8::FTrianglePacket> mTrianglePackets;
+    FBVH8 mTree;
 };
 
 /* LOD */
@@ -131,7 +134,8 @@ public:
 
 public:
     UMesh() = default;
-    ~UMesh() = default;
+    ~UMesh() override { mPickingSource->Mesh = nullptr; }
+    std::shared_ptr<const FMeshPickingSource> GetPickingSource() const { return mPickingSource; }
 
     UMesh(const UMesh&) = delete;
     UMesh& operator=(const UMesh&) = delete;
@@ -170,7 +174,7 @@ public:
 
     void SetSubMeshes(const std::span<FSubMesh>& InSubMeshes);
 
-    bool Raycast(const FRay& Ray, float& OutDistance, float MaxDistance = std::numeric_limits<float>::max()) const;
+    bool Raycast(const FRay& Ray, float& OutDistance, float MaxDistance = std::numeric_limits<float>::max(), bool ReverseWinding = false) const;
 
     const inline DirectX::BoundingOrientedBox GetBoundingBox() const { return mBoundingBox; }
 
@@ -245,6 +249,7 @@ private:
 
     DirectX::BoundingOrientedBox mBoundingBox{ DirectX::XMFLOAT3{0.f, 0.f, 0.f}, DirectX::XMFLOAT3{0.f, 0.f, 0.f}, DirectX::XMFLOAT4{0.f, 0.f, 0.f, 1.f} };
 
+    std::shared_ptr<FMeshPickingSource> mPickingSource = std::make_shared<FMeshPickingSource>(this);
     FMeshRaycastAccelerationStructure RaycastAccelerationStructure{};
 };
 
