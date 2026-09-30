@@ -13,8 +13,16 @@ struct FLODSetting
 inline constexpr FLODSetting GLODSettings[]{
     { 0.5f, 1.0f },
     { 0.25f, 0.5f },
-    { 0.12f, 0.3f },
-    { 0.06f, 0.1f },
+    { 0.12f, 0.22f },
+    { 0.05f, 0.1f },
+    { 0.0f, 0.03f },
 };
 
 inline constexpr Uint32 GLODCount{static_cast<Uint32>(sizeof(GLODSettings) / sizeof(GLODSettings[0]))};
+static_assert(GLODCount <= 32, "Available LODs use a 32-bit mask.");
+
+// 각 경계의 +/-8% 구간에서만 두 LOD를 디더링으로 교차 전환한다.
+inline constexpr float GLODTransitionHalfWidth{0.08f};
+// 바운딩 구의 화면 지름(픽셀). 작은 물체만 서서히 지운 뒤 CPU에서 제외한다.
+inline constexpr float GLODCullPixels{0.75f};
+inline constexpr float GLODFadePixels{1.5f};

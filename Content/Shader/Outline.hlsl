@@ -9,11 +9,13 @@ struct FOutlineInput {
 
 struct FOutlineVertex {
     float4 mPosition : SV_POSITION;
+    nointerpolation float mLODDither : TEXCOORD7;
 };
 
 struct FOutlineGeometryInput {
     float4 mPosition : SV_POSITION;
     float3 mNormal : NORMAL;
+    nointerpolation float mLODDither : TEXCOORD7;
 };
 
 float4 ExpandOutline(float4 ClipPosition, float3 WorldNormal) {
@@ -33,7 +35,7 @@ float4 ExpandOutline(float4 ClipPosition, float3 WorldNormal) {
 }
 
 FOutlineVertex MainVS(FOutlineInput Input, uint DrawRecordIndex : MODEL_INDEX) {
-    FOutlineVertex Output = {0.0f, 0.0f, 0.0f, 0.0f};
+    FOutlineVertex Output = (FOutlineVertex)0;
 
     const FModelContext ModelContext = {GetModelContext(DrawRecordIndex)};
 
@@ -45,6 +47,7 @@ FOutlineVertex MainVS(FOutlineInput Input, uint DrawRecordIndex : MODEL_INDEX) {
 
     const float4 WorldPosition = {mul(float4(Input.mPosition, 1.0f), ModelContext.mWorld)};
     Output.mPosition = ExpandOutline(mul(WorldPosition, ViewProjection), WorldNormal);
+    Output.mLODDither = ModelContext.mLODDither;
 
     return Output;
 }
@@ -52,13 +55,14 @@ FOutlineVertex MainVS(FOutlineInput Input, uint DrawRecordIndex : MODEL_INDEX) {
 [maxvertexcount(3)]
 void MainGS(triangle FOutlineGeometryInput Input[3], inout TriangleStream<FOutlineVertex> Stream) {
     for (uint Index = {0}; Index < 3; ++Index) {
-        FOutlineVertex Output = {ExpandOutline(Input[Index].mPosition, Input[Index].mNormal)};
+        FOutlineVertex Output = {ExpandOutline(Input[Index].mPosition, Input[Index].mNormal), Input[Index].mLODDither};
         Stream.Append(Output);
     }
 
     Stream.RestartStrip();
 }
 
-float4 MainPS() : SV_TARGET {
+float4 MainPS(FOutlineVertex Input) : SV_TARGET {
+    ApplyLODDither(Input.mPosition.xy, Input.mLODDither);
     return float4(1.0f, 1.0f, 0.0f, 1.0f);
 }

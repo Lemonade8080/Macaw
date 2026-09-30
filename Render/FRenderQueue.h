@@ -9,7 +9,7 @@ struct FMeshDrawRecord {
     Uint32 mObjectIndex{};
     Uint32 mMaterialIndex{};
     Uint32 mFlags{};
-    Uint32 mPadding{};
+    float mLODDither{};
 };
 
 static_assert(sizeof(FMeshDrawRecord) == 16);
@@ -28,6 +28,7 @@ private:
         Uint32 mObjectIndex{};
         Uint32 mLODLevel{};
         Uint32 mFlags{};
+        float mLODDither{};
     };
 
     struct FSceneCacheKey {
@@ -36,6 +37,7 @@ private:
         Uint64 mObjectRevision{};
         Uint64 mTemplateRevision{};
         CameraProbe mCamera{};
+        float mViewportHeight{};
         FObjectHandle mSelectedActorHandle{};
         bool mUseLOD{};
         bool mRenderSky{};
@@ -57,7 +59,7 @@ private:
     void BuildSceneItems(const FRenderScene& Scene, const FRenderView& View);
     void BuildGizmoItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes);
 
-    Uint32 SelectLODLevel(const FRenderSceneObject& Object, const FRenderTemplateGroup& Group, const CameraProbe& Camera, float ProjectionScale, bool Perspective) const;
+    float CalculateScreenSize(const FRenderSceneObject& Object, const CameraProbe& Camera, float ProjectionScale, bool Perspective) const;
 
 private:
     FSceneCacheKey mSceneCacheKey{};
