@@ -3,8 +3,6 @@
 #include "FBVH8TrianglePackets.h"
 #include "FBVH8PacketSIMD.h"
 #include <immintrin.h>
-#include "FBVH8PreparedSSE.h"
-#include "FBVH8Scalar.h"
 
 namespace {
     struct FPreparedRayAVX {
@@ -74,11 +72,4 @@ bool BVH8::RaycastTrianglePacketsAVX(const FNode* Nodes, Uint32 RootReference, c
     const TTrianglePacketVisitor<FSIMD8> Visitor{Packets, Ray, ReverseWinding};
     if (RayData.Parallel[0] || RayData.Parallel[1] || RayData.Parallel[2]) return Traverse<FPreparedRayAVX, true>(Nodes, RootReference, RayData, ClosestDistance, Visitor);
     return Traverse<FPreparedRayAVX, false>(Nodes, RootReference, RayData, ClosestDistance, Visitor);
-}
-
-BVH8::FTrianglePacketRaycaster BVH8::SelectPacketAVX(EKernel Nodes, EKernel Triangles) {
-    if (Nodes == EKernel::Scalar) return CastPackets<FPreparedRayScalar, TTrianglePacketVisitor<FSIMD8>>;
-    if (Nodes == EKernel::SSE) return CastPackets<FPreparedRaySSE, TTrianglePacketVisitor<FSIMD8>>;
-    if (Triangles == EKernel::Scalar) return CastPackets<FPreparedRayAVX, FScalarTrianglePacketVisitor>;
-    return Triangles == EKernel::SSE ? CastPackets<FPreparedRayAVX, TTrianglePacketVisitor<FSIMD4>> : RaycastTrianglePacketsAVX;
 }

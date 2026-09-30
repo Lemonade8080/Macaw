@@ -9,7 +9,6 @@
 
 #include <chrono>
 #include <cmath>
-#include "Core/Spatial/FPickingMath.h"
 
 // Temporary picking breakdown: set to 0 to disable the extra timers and overlay rows.
 #ifndef MACAW_PICKING_PHASE_TIMING
@@ -75,7 +74,7 @@ bool FWorldRaycastAccelerationStructure::RaycastProxy(const FProxy& Proxy, const
         return true;
     }
     float HitDistance = 0.0f;
-    if (!PickingMath::IntersectBox(Proxy.Box, Ray, HitDistance) || HitDistance > OutDistance) return false;
+    if (!Proxy.Box.Intersects(Ray.position, Ray.direction, HitDistance) || HitDistance > OutDistance) return false;
     HitDistance = (std::max)(HitDistance, 0.0f);
     if (Proxy.Kind == EProxyKind::Mesh) {
 #if MACAW_PICKING_PHASE_TIMING

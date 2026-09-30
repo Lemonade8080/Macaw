@@ -41,12 +41,7 @@ namespace BVH8 {
     struct FTrianglePacket;
     using FTriangleRaycaster = bool (*)(const FNode*, Uint32, const FRayData&, const FRay&, float&, const FTriangle*, bool);
     using FTrianglePacketRaycaster = bool (*)(const FNode*, Uint32, const FRayData&, const FRay&, float&, const FTrianglePacket*, bool);
-    enum class EKernel { Scalar, SSE, AVX, Auto };
-    void Initialize(EKernel World = EKernel::Auto, EKernel Mesh = EKernel::Auto, EKernel Triangles = EKernel::Auto);
-    FTrianglePacketRaycaster SelectPacketBaseline(EKernel Nodes, EKernel Triangles);
-    FTrianglePacketRaycaster SelectPacketAVX(EKernel Nodes, EKernel Triangles);
-    bool RaycastScalar(const FNode* Nodes, Uint32 RootReference, const FRayData& Ray, float& ClosestDistance, void* Context, FVisitLeaf VisitLeaf);
-    Uint32 IntersectScalar(const FNode& Node, const FRayData& Ray, float MaxDistance, float* EntryDistances, Uint32 Count);
+    void Initialize();
     bool Raycast(const FNode* Nodes, Uint32 RootReference, const FRayData& Ray, float& ClosestDistance, void* Context, FVisitLeaf VisitLeaf);
     bool RaycastSSE(const FNode* Nodes, Uint32 RootReference, const FRayData& Ray, float& ClosestDistance, void* Context, FVisitLeaf VisitLeaf);
     bool RaycastAVX(const FNode* Nodes, Uint32 RootReference, const FRayData& Ray, float& ClosestDistance, void* Context, FVisitLeaf VisitLeaf);
