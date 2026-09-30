@@ -1,4 +1,6 @@
 {
+  "OcclusionCullable": true,
+  "OcclusionOccluder": true,
   "VertexShader": {
     "Source": "./Content/Shader/Alternate_Unlit.hlsl",
     "EntryPoint": "mainVS",

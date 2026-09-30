@@ -73,7 +73,7 @@ void FSceneRenderSurface::Reset() {
 }
 
 bool FSceneRenderSurface::IsValid() const {
-    return mRenderTargetView != nullptr && mDepthStencilView != nullptr && mViewport.Width > 0.0f && mViewport.Height > 0.0f;
+    return mRenderTargetView != nullptr && mDepthStencilView != nullptr && mDepthShaderResourceView != nullptr && mViewport.Width > 0.0f && mViewport.Height > 0.0f;
 }
 
 const D3D11_VIEWPORT& FSceneRenderSurface::GetViewport() const {
@@ -82,6 +82,10 @@ const D3D11_VIEWPORT& FSceneRenderSurface::GetViewport() const {
 
 ID3D11ShaderResourceView* FSceneRenderSurface::GetShaderResourceView() const {
     return mShaderResourceView.Get();
+}
+
+ID3D11ShaderResourceView* FSceneRenderSurface::GetDepthShaderResourceView() const {
+    return mDepthShaderResourceView.Get();
 }
 
 void FSceneRenderSurface::CreateSwapChainResources(ID3D11Device* Device) {
@@ -119,20 +123,26 @@ void FSceneRenderSurface::CreateDepthStencilResources(ID3D11Device* Device, std:
     TextureDescription.Height = Height;
     TextureDescription.MipLevels = 1;
     TextureDescription.ArraySize = 1;
-    TextureDescription.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    TextureDescription.Format = DXGI_FORMAT_R24G8_TYPELESS;
     TextureDescription.SampleDesc.Count = 1;
     TextureDescription.Usage = D3D11_USAGE_DEFAULT;
-    TextureDescription.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+    TextureDescription.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
     ErrorHandler::ReportHRESULT(Device->CreateTexture2D(&TextureDescription, nullptr, mDepthStencilTexture.GetAddressOf()), "[ FSceneRenderSurface ]", "Failed to create depth stencil texture.", ErrorHandler::EErrorLevel::Critical);
 
     D3D11_DEPTH_STENCIL_VIEW_DESC DepthStencilViewDescription{};
-    DepthStencilViewDescription.Format = TextureDescription.Format;
+    DepthStencilViewDescription.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
     DepthStencilViewDescription.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
     ErrorHandler::ReportHRESULT(Device->CreateDepthStencilView(mDepthStencilTexture.Get(), &DepthStencilViewDescription, mDepthStencilView.GetAddressOf()), "[ FSceneRenderSurface ]", "Failed to create depth stencil view.", ErrorHandler::EErrorLevel::Critical);
+    D3D11_SHADER_RESOURCE_VIEW_DESC DepthResourceDescription{};
+    DepthResourceDescription.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+    DepthResourceDescription.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    DepthResourceDescription.Texture2D.MipLevels = 1;
+    ErrorHandler::ReportHRESULT(Device->CreateShaderResourceView(mDepthStencilTexture.Get(), &DepthResourceDescription, mDepthShaderResourceView.GetAddressOf()), "[ FSceneRenderSurface ]", "Failed to create depth shader resource view.", ErrorHandler::EErrorLevel::Critical);
     mViewport = {0.0f, 0.0f, static_cast<float>(Width), static_cast<float>(Height), 0.0f, 1.0f};
 }
 
 void FSceneRenderSurface::ResetResources() {
+    mDepthShaderResourceView.Reset();
     mDepthStencilView.Reset();
     mDepthStencilTexture.Reset();
     mShaderResourceView.Reset();

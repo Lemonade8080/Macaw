@@ -21,6 +21,7 @@
 #include "FLineRenderer.h"
 #include "FSceneRenderSurface.h"
 #include "FFrameResource.h"
+#include "FGpuOcclusionCulling.h"
 
 class FRenderer {
 private:
@@ -112,6 +113,7 @@ private:
     Uint64 mFrameSerial{};
 
     FMeshRenderer mMeshRenderer{};
+    FGpuOcclusionCulling mOcclusionCulling{};
     FTextRenderer mTextRenderer{};
     FBillboardRenderer mBillboardRenderer{};
     FLineRenderer mLineRenderer{};

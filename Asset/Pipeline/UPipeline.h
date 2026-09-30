@@ -26,6 +26,9 @@ struct PipelineUnit {
     D3D11_PRIMITIVE_TOPOLOGY mPrimitiveTopology{D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST};
     bool mInitialized{false};
     UINT mStencilRef{0};
+    bool mOcclusionCullable{};
+    bool mOcclusionOccluder{};
+    bool mOcclusionDepthReusable{};
 };
 
 enum class ERenderMode : std::size_t {
@@ -60,6 +63,10 @@ public:
     bool RenderModeSettable(ERenderMode Mode) const;
     ERenderMode GetRenderMode() const;
     ERenderMode ResolveRenderMode(ERenderMode Mode) const;
+
+    bool IsOcclusionCullable(ERenderMode Mode) const;
+    bool CanWriteOcclusionDepth(ERenderMode Mode) const;
+    bool CanReuseOcclusionDepth(ERenderMode Mode) const;
 
 private:
     bool InitializeFamily(ID3D11Device* Device, const std::filesystem::path& FamilyDirectory);

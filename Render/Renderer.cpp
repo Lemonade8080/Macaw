@@ -35,7 +35,7 @@ void FRenderer::Create(HWND WindowHandle, UINT Width, UINT Height) {
 }
 
 bool FRenderer::Initialize() {
-    if (!CreateSamplerStates() || !mTextRenderer.Initialize(mDevice.Get(), 256) || !mBillboardRenderer.Initialize(mDevice.Get(), 64)) {
+    if (!CreateSamplerStates() || !mTextRenderer.Initialize(mDevice.Get(), 256) || !mBillboardRenderer.Initialize(mDevice.Get(), 64) || !mOcclusionCulling.Initialize(mDevice.Get())) {
         return false;
     }
 
@@ -145,6 +145,7 @@ void FRenderer::BeginFrame(float DeltaTime) {
 
     mCurrentFrameResource = &FrameResource;
     ++mFrameSerial;
+    mOcclusionCulling.BeginFrame(mFrameSerial);
     PruneRenderQueues();
 }
 
@@ -226,7 +227,11 @@ void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, con
 
     switch (Pass) {
         case ERenderPass::SceneGeometry:
-            mMeshRenderer.Draw(Context, Queue.GetItems(Pass), View.mRenderMode);
+            if (mOcclusionCulling.Prepare(mDevice.Get(), Context.mDeviceContext, View, Scene, Queue)) {
+                mMeshRenderer.DrawOccluded(Context, View, Queue, mOcclusionCulling);
+            } else {
+                mMeshRenderer.Draw(Context, Queue.GetItems(Pass), View.mRenderMode);
+            }
             break;
         case ERenderPass::SelectionOutline:
             mMeshRenderer.Draw(Context, Queue.GetItems(Pass), ERenderMode::Outline);
@@ -315,6 +320,7 @@ void FRenderer::Terminate() {
     mDeviceContext->ClearState();
 
     mLineRenderer.Reset();
+    mOcclusionCulling.Reset();
     mRenderQueues.clear();
     mRenderScenes.clear();
     mFrameSerial = 0;

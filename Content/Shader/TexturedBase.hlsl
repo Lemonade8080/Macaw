@@ -69,9 +69,9 @@ float4 mainPS(PS_INPUT Input) : SV_TARGET {
     ApplyLODDither(Input.Position.xy, Input.LODDither);
     FSurfaceOpaqueMaterial Material = MaterialBuffer[Input.MaterialIndex];
 
-    float4 BaseColor = DiffuseTexture.Sample(LinearWrap, Input.UV) * Material.DiffuseColorAndOpacity;
+    float4 BaseColor = DiffuseTexture.Sample(LinearWrap, Input.UV);
     
-    BaseColor.rgb *= CalculateDirectLighting(Input.WorldPosition, Input.Normal, LightCount);
+   // BaseColor.rgb *= CalculateDirectLighting(Input.WorldPosition, Input.Normal, LightCount);
 
     return BaseColor;
 }
