@@ -274,16 +274,13 @@ void Stat::RecordObjectCounts(std::size_t ObjectCount, std::size_t ActorCount) {
     GetStatState().mStats.mObjects = FObjectStats{ObjectCount, ActorCount};
 }
 
-void Stat::RecordPickingTime(double Milliseconds, double NarrowPhaseMilliseconds) {
+void Stat::RecordPickingTime(double Milliseconds) {
     if (!std::isfinite(Milliseconds) || Milliseconds < 0.0) {
         return;
     }
     FStatState& State{GetStatState()};
     FPickingStats& Stats{State.mStats.mPicking};
     Stats.mLastMilliseconds = Milliseconds;
-    Stats.mHasPhaseTiming = std::isfinite(NarrowPhaseMilliseconds) && NarrowPhaseMilliseconds >= 0.0 && NarrowPhaseMilliseconds <= Milliseconds;
-    Stats.mLastNarrowPhaseMilliseconds = Stats.mHasPhaseTiming ? NarrowPhaseMilliseconds : 0.0;
-    Stats.mLastBroadPhaseMilliseconds = Stats.mHasPhaseTiming ? Milliseconds - NarrowPhaseMilliseconds : 0.0;
     Stats.mTotalMilliseconds += Milliseconds;
     ++Stats.mAttemptCount;
     State.mPickingWindowMilliseconds += Milliseconds;

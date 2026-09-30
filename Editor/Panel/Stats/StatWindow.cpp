@@ -139,10 +139,6 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
         AddRow(Rows, RowCount, "Picking attempts / frame", 0, TextColor, "%.2f", Picking.mAttemptsPerFrame);
         AddRow(Rows, RowCount, "Picking time / frame", 0, TextColor, "%.3f ms", Picking.mMillisecondsPerFrame);
         AddRow(Rows, RowCount, "Last picking", 0, TextColor, "%.3f ms", PickingStats.mLastMilliseconds);
-        if (PickingStats.mHasPhaseTiming) {
-            AddRow(Rows, RowCount, "Last broad phase", 0, TextColor, "%.3f ms", PickingStats.mLastBroadPhaseMilliseconds);
-            AddRow(Rows, RowCount, "Last narrow phase", 0, TextColor, "%.3f ms", PickingStats.mLastNarrowPhaseMilliseconds);
-        }
         AddRow(Rows, RowCount, "Picking attempts", 0, TextColor, "%llu", static_cast<unsigned long long>(PickingStats.mAttemptCount));
         AddRow(Rows, RowCount, "Picking total", 0, TextColor, "%.3f ms", PickingStats.mTotalMilliseconds);
     }

@@ -21,13 +21,13 @@ namespace BVH8 {
     inline Uint32 MakeLeafReference(FLeaf Leaf) { return MakeReference(Leaf.Index, Leaf.Count, true); }
     inline Uint32 MakeLeafReference(Uint32 Index) { return MakeReference(Index, 1, true); }
 
-    struct alignas(64) FNode {
+    struct alignas(32) FNode {
         float MinX[8]{}, MaxX[8]{};
         float MinY[8]{}, MaxY[8]{};
         float MinZ[8]{}, MaxZ[8]{};
         Uint32 Children[8]{};
     };
-    static_assert(sizeof(FNode) == 256 && alignof(FNode) == 64);
+    static_assert(sizeof(FNode) == 224 && alignof(FNode) == 32);
 
     struct FRayData {
         float Origin[3];
@@ -37,16 +37,9 @@ namespace BVH8 {
     };
     using FVisitLeaf = bool (*)(void*, Uint32, float&);
     using FRaycaster = bool (*)(const FNode*, Uint32, const FRayData&, float&, void*, FVisitLeaf);
-    struct FTriangle;
     struct FTrianglePacket;
-    using FTriangleRaycaster = bool (*)(const FNode*, Uint32, const FRayData&, const FRay&, float&, const FTriangle*, bool);
     using FTrianglePacketRaycaster = bool (*)(const FNode*, Uint32, const FRayData&, const FRay&, float&, const FTrianglePacket*, bool);
-    enum class EKernel { Scalar, SSE, AVX, Auto };
-    void Initialize(EKernel World = EKernel::Auto, EKernel Mesh = EKernel::Auto, EKernel Triangles = EKernel::Auto);
-    FTrianglePacketRaycaster SelectPacketBaseline(EKernel Nodes, EKernel Triangles);
-    FTrianglePacketRaycaster SelectPacketAVX(EKernel Nodes, EKernel Triangles);
-    bool RaycastScalar(const FNode* Nodes, Uint32 RootReference, const FRayData& Ray, float& ClosestDistance, void* Context, FVisitLeaf VisitLeaf);
-    Uint32 IntersectScalar(const FNode& Node, const FRayData& Ray, float MaxDistance, float* EntryDistances, Uint32 Count);
+    void Initialize();
     bool Raycast(const FNode* Nodes, Uint32 RootReference, const FRayData& Ray, float& ClosestDistance, void* Context, FVisitLeaf VisitLeaf);
     bool RaycastSSE(const FNode* Nodes, Uint32 RootReference, const FRayData& Ray, float& ClosestDistance, void* Context, FVisitLeaf VisitLeaf);
     bool RaycastAVX(const FNode* Nodes, Uint32 RootReference, const FRayData& Ray, float& ClosestDistance, void* Context, FVisitLeaf VisitLeaf);
@@ -54,26 +47,17 @@ namespace BVH8 {
     bool RaycastTrianglePackets(const FNode* Nodes, Uint32 RootReference, const FRayData& RayData, const FRay& Ray, float& ClosestDistance, const FTrianglePacket* Packets, bool ReverseWinding = false);
     bool RaycastTrianglePacketsSSE(const FNode* Nodes, Uint32 RootReference, const FRayData& RayData, const FRay& Ray, float& ClosestDistance, const FTrianglePacket* Packets, bool ReverseWinding = false);
     bool RaycastTrianglePacketsAVX(const FNode* Nodes, Uint32 RootReference, const FRayData& RayData, const FRay& Ray, float& ClosestDistance, const FTrianglePacket* Packets, bool ReverseWinding = false);
-    bool RaycastTriangles(const FNode* Nodes, Uint32 RootReference, const FRayData& RayData, const FRay& Ray, float& ClosestDistance, const FTriangle* Triangles, bool ReverseWinding = false);
-    bool RaycastTrianglesSSE(const FNode* Nodes, Uint32 RootReference, const FRayData& RayData, const FRay& Ray, float& ClosestDistance, const FTriangle* Triangles, bool ReverseWinding = false);
-    bool RaycastTrianglesAVX(const FNode* Nodes, Uint32 RootReference, const FRayData& RayData, const FRay& Ray, float& ClosestDistance, const FTriangle* Triangles, bool ReverseWinding = false);
-    Uint32 IntersectSSE(const FNode& Node, const FRayData& Ray, float MaxDistance, float* EntryDistances, Uint32 Count);
-    Uint32 IntersectAVX(const FNode& Node, const FRayData& Ray, float MaxDistance, float* EntryDistances, Uint32 Count);
 }
 
 class FBVH8 {
+    friend class FDynamicBVH8;
 public:
     void Clear() { mNodes.clear(); mRootReference = 0; }
     Uint32 GetRootReference() const { return mRootReference; }
-    DirectX::BoundingBox RefitChild(Uint32 Reference, Uint32 Lane, const DirectX::BoundingBox& Box);
     const TArray<BVH8::FNode>& GetNodes() const { return mNodes; }
     bool RaycastTrianglePackets(const FRay& Ray, float& ClosestDistance, const BVH8::FTrianglePacket* Packets, bool ReverseWinding = false) const {
         if (mNodes.empty() || !(ClosestDistance >= 0.0f)) return false;
         return BVH8::RaycastTrianglePackets(mNodes.data(), mRootReference, BVH8::FRayData{Ray}, Ray, ClosestDistance, Packets, ReverseWinding);
-    }
-    bool RaycastTriangles(const FRay& Ray, float& ClosestDistance, const BVH8::FTriangle* Triangles, bool ReverseWinding = false) const {
-        if (mNodes.empty() || !(ClosestDistance >= 0.0f)) return false;
-        return BVH8::RaycastTriangles(mNodes.data(), mRootReference, BVH8::FRayData{Ray}, Ray, ClosestDistance, Triangles, ReverseWinding);
     }
 
     template<class TNode, class TIsLeaf, class TAddLeaf> void Build(const TArray<TNode>& BinaryNodes, TIsLeaf IsLeaf, TAddLeaf AddLeaf) {
@@ -131,6 +115,7 @@ public:
             return BVH8::MakeReference(Index, Count);
         };
         mRootReference = Collapse(Collapse, 0);
+        mNodes.shrink_to_fit();
     }
 
     template<class TVisitLeaf> bool Raycast(const FRay& Ray, float& ClosestDistance, TVisitLeaf VisitLeaf) const {

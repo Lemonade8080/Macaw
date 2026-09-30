@@ -202,7 +202,7 @@ bool UMesh::Initialize(ID3D11Device* Device, const std::filesystem::path& Source
         Console::AddLog(Console::STDOutHandle, ELogLevel::Warning, ELogCategory::Etc, "Failed to create a Bounding Box for model: %s", AssetPath.generic_string().c_str());
     }
 
-    if (!RaycastAccelerationStructure.BuildStructure(*this)) {
+    if (!RebuildPickingStructure()) {
         Console::AddLog(Console::STDOutHandle, ELogLevel::Warning, ELogCategory::Etc, "Failed to create a RaycastAS for model: %s", AssetPath.generic_string().c_str());
     }
 
@@ -757,6 +757,8 @@ bool UMesh::CreateIndexBuffer(ID3D11Device* Device, const std::span<const Uint32
 }
 
 void UMesh::Reset() {
+    mPickingSource->Nodes = nullptr;
+    mPickingSource->Packets = nullptr;
     RaycastAccelerationStructure = FMeshRaycastAccelerationStructure{};
 
     for (Microsoft::WRL::ComPtr<ID3D11Buffer>& Buffer : mVertexBuffers) {
@@ -792,7 +794,26 @@ void UMesh::SetSubMeshes(const std::span<FSubMesh>& InSubMeshes) {
 }
 
 bool UMesh::Raycast(const FRay& Ray, float& OutDistance, float MaxDistance, bool ReverseWinding) const {
-    return RaycastAccelerationStructure.Raycast(*this, Ray, OutDistance, MaxDistance, ReverseWinding);
+    return RaycastAccelerationStructure.Raycast(Ray, OutDistance, MaxDistance, ReverseWinding);
+}
+
+bool UMesh::RebuildPickingStructure() {
+    mPickingSource->Nodes = nullptr;
+    mPickingSource->Packets = nullptr;
+    if (!RaycastAccelerationStructure.BuildStructure(*this)) return false;
+    const auto& Tree = RaycastAccelerationStructure.mTree;
+    mPickingSource->Nodes = Tree.GetNodes().empty() ? nullptr : Tree.GetNodes().data();
+    mPickingSource->Packets = RaycastAccelerationStructure.mTrianglePackets.data();
+    mPickingSource->RootReference = Tree.GetRootReference();
+    return true;
+}
+
+bool FMeshPickingSource::Raycast(const FRay& Ray, float& OutDistance, float MaxDistance, bool ReverseWinding) const {
+    if (Mesh == nullptr || Nodes == nullptr || !(MaxDistance >= 0.0f)) return false;
+    float Distance = MaxDistance;
+    if (!BVH8::RaycastTrianglePackets(Nodes, RootReference, BVH8::FRayData{Ray}, Ray, Distance, Packets, ReverseWinding)) return false;
+    OutDistance = Distance;
+    return true;
 }
 
 bool FMeshRaycastAccelerationStructure::BuildStructure(UMesh& Mesh) {
@@ -843,6 +864,7 @@ bool FMeshRaycastAccelerationStructure::BuildStructure(UMesh& Mesh) {
         }
         return BVH8::FLeaf{Index, Node.mIndexCount};
     }, [](const FNode& Node) { return Node.mIndexCount <= MaxTrianglesPerPacket; });
+    mTrianglePackets.shrink_to_fit();
     TArray<Uint32>{}.swap(mIndexGroups);
     return true;
 }
@@ -934,7 +956,7 @@ Uint32 FMeshRaycastAccelerationStructure::MakeChild(TArray<FNode>& BuildNodes, c
     return retIndex;
 }
 
-bool FMeshRaycastAccelerationStructure::Raycast(const UMesh&, const FRay& Ray, float& OutDistance, float MaxDistance, bool ReverseWinding) const {
+bool FMeshRaycastAccelerationStructure::Raycast(const FRay& Ray, float& OutDistance, float MaxDistance, bool ReverseWinding) const {
     float ClosestDistance = MaxDistance;
     const bool Hit = mTree.RaycastTrianglePackets(Ray, ClosestDistance, mTrianglePackets.data(), ReverseWinding);
     if (Hit) OutDistance = ClosestDistance;

@@ -12,8 +12,9 @@ struct FMeshPickingProxy {
     DirectX::XMFLOAT4 Rotation{};
     bool Valid = false, ReverseWinding = false;
 
-    static void InitializeRaycast(bool Scalar = false);
     const UMesh* GetMesh() const;
     void Update(const UMesh* InMesh, const FTransform& Transform);
+    bool PrepareRay(const FRay& Ray, FRay& LocalRay, double& DirectionLength) const;
+    bool RaycastPrepared(const FRay& LocalRay, double DirectionLength, float& OutDistance, float MaxDistance) const;
     bool Raycast(const FRay& Ray, float& OutDistance, float MaxDistance) const;
 };

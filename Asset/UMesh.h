@@ -24,11 +24,17 @@
 #include "Core/Base/TypeInfo.h"
 
 class UMesh;
-struct FMeshPickingSource { const UMesh* Mesh = nullptr; };
+struct alignas(64) FMeshPickingSource {
+    const UMesh* Mesh = nullptr;
+    const BVH8::FNode* Nodes = nullptr;
+    const BVH8::FTrianglePacket* Packets = nullptr;
+    Uint32 RootReference = 0;
+    bool Raycast(const FRay& Ray, float& OutDistance, float MaxDistance, bool ReverseWinding) const;
+};
 
 class FMeshRaycastAccelerationStructure {
+    friend class UMesh;
 private:
-    // BVH Build Parameters - DO: Benchmark
     static constexpr Uint32 Slice = 32;
     static constexpr Uint32 MaxTrianglesPerPacket = 8;
 
@@ -101,7 +107,7 @@ private:
     };
 public:
     bool BuildStructure(UMesh& Mesh);
-    bool Raycast(const UMesh& Mesh, const FRay& Ray, float& OutDistance, float MaxDistance = std::numeric_limits<float>::max(), bool ReverseWinding = false) const;
+    bool Raycast(const FRay& Ray, float& OutDistance, float MaxDistance = std::numeric_limits<float>::max(), bool ReverseWinding = false) const;
 private:
     Uint32 MakeChild(TArray<FNode>& BuildNodes, const TArray<DirectX::BoundingBox>& TriangleBounds, Uint32 First, Uint32 Count, const MinMaxBox& Bounds);
     TArray<Uint32> mIndexGroups;
@@ -136,6 +142,7 @@ public:
     UMesh() = default;
     ~UMesh() override { mPickingSource->Mesh = nullptr; }
     std::shared_ptr<const FMeshPickingSource> GetPickingSource() const { return mPickingSource; }
+    bool RebuildPickingStructure();
 
     UMesh(const UMesh&) = delete;
     UMesh& operator=(const UMesh&) = delete;

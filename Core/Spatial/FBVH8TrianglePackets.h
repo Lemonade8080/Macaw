@@ -3,10 +3,10 @@
 #include "FBVH8.h"
 
 namespace BVH8 {
-    struct alignas(64) FTrianglePacket {
+    struct alignas(32) FTrianglePacket {
         float Edge1[3][8]{}, Edge2[3][8]{}, V0[3][8]{};
     };
-    static_assert(sizeof(FTrianglePacket) == 320);
+    static_assert(sizeof(FTrianglePacket) == 288);
 
     template<class S> struct TTrianglePacketVisitor {
         using V = typename S::V;
@@ -28,8 +28,8 @@ namespace BVH8 {
                 const V PY = S::Sub(S::Mul(Direction[2], E2X), S::Mul(Direction[0], E2Z));
                 const V PZ = S::Sub(S::Mul(Direction[0], E2Y), S::Mul(Direction[1], E2X));
                 const V Det = S::Xor(Dot(E1X, E1Y, E1Z, PX, PY, PZ), Sign);
-                V Valid = S::And(S::GE(Det, S::Set(DirectX::XMVectorGetX(DirectX::g_RayEpsilon))), S::Mask(Active));
-                if (S::Bits(Valid) == 0) continue;
+                V Valid = S::GE(Det, S::Set(DirectX::XMVectorGetX(DirectX::g_RayEpsilon)));
+                if ((S::Bits(Valid) & Active) == 0) continue;
                 const V SX = S::Sub(Origin[0], S::Load(Packet.V0[0] + Base)), SY = S::Sub(Origin[1], S::Load(Packet.V0[1] + Base)), SZ = S::Sub(Origin[2], S::Load(Packet.V0[2] + Base));
                 const V QX = S::Sub(S::Mul(SY, E1Z), S::Mul(SZ, E1Y));
                 const V QY = S::Sub(S::Mul(SZ, E1X), S::Mul(SX, E1Z));
@@ -38,11 +38,12 @@ namespace BVH8 {
                 const V T = S::Xor(Dot(E2X, E2Y, E2Z, QX, QY, QZ), Sign), Zero = S::Set(0.0f);
                 Valid = S::And(Valid, S::And(S::GE(U, Zero), S::GE(B, Zero)));
                 Valid = S::And(Valid, S::And(S::LE(S::Add(U, B), Det), S::GE(T, Zero)));
-                if (S::Bits(Valid) == 0) continue;
+                if ((S::Bits(Valid) & Active) == 0) continue;
                 const V Distance = S::Div(T, S::Select(Valid, Det, S::Set(1.0f)));
                 Valid = S::And(Valid, S::LE(Distance, S::Set(Limit)));
-                if (S::Bits(Valid) == 0) continue;
-                Limit = S::MinLane(S::Select(Valid, Distance, S::Set(Limit)));
+                const Uint32 Hits = S::Bits(Valid) & Active;
+                if (Hits == 0) continue;
+                Limit = S::MinLane(S::Select(S::Mask(Hits), Distance, S::Set(Limit)));
                 Hit = true;
             }
             return Hit;

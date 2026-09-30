@@ -3,23 +3,27 @@
 #include "UPickingSubsystem.h"
 
 #include "Core/Stat/Stat.h"
+#include "Core/Spatial/FBVHBuildOptimization.h"
 #include "World/Component/UMeshComponent.h"
 #include "World/Component/UBillboardComponent.h"
 #include "World/Component/UPrimitiveComponent.h"
 
 #include <chrono>
 #include <cmath>
-#include "Core/Spatial/FPickingMath.h"
 
-// Temporary picking breakdown: set to 0 to disable the extra timers and overlay rows.
-#ifndef MACAW_PICKING_PHASE_TIMING
-#define MACAW_PICKING_PHASE_TIMING 1
-#endif
+namespace {
+    bool AreBoundsFinite(const DirectX::BoundingBox& Box) {
+        const float C[]{Box.Center.x, Box.Center.y, Box.Center.z}, E[]{Box.Extents.x, Box.Extents.y, Box.Extents.z};
+        for (Uint32 i = 0; i < 3; ++i) if (!(E[i] >= 0.0f) || !std::isfinite(C[i] - E[i]) || !std::isfinite(C[i] + E[i])) return false;
+        return true;
+    }
+}
 
-FWorldRaycastAccelerationStructure::FProxy FWorldRaycastAccelerationStructure::MakeProxy(UPrimitiveComponent* Component) {
+FWorldRaycastAccelerationStructure::FProxy FWorldRaycastAccelerationStructure::MakeProxy(UPrimitiveComponent* Component, DirectX::BoundingBox& Bounds) {
     FProxy Proxy{};
     Proxy.Component.Set(Component);
     Proxy.Enabled = Component->IsActive() && Component->IsVisible();
+    const Uint64 Key = ComponentKey(Component->GetHandle());
     if (Component->GetTypeInfo()->IsA(UBillboardComponent::StaticTypeInfo())) {
         Proxy.Kind = EProxyKind::Billboard;
         const auto* Billboard = static_cast<const UBillboardComponent*>(Component);
@@ -28,32 +32,40 @@ FWorldRaycastAccelerationStructure::FProxy FWorldRaycastAccelerationStructure::M
         const bool Renderable = Billboard->MakeBillboardRender(Probe);
         Proxy.Enabled = Proxy.Enabled && Renderable && Proxy.BillboardSize.mX > 0.0f && Proxy.BillboardSize.mY > 0.0f;
         Proxy.Box.Center = Renderable ? Probe.mWorld.Translation().ToSimpleMath() : Component->GetComponentLocation().ToSimpleMath();
+        const float Radius = 0.5f * (std::abs(Proxy.BillboardSize.mX) + std::abs(Proxy.BillboardSize.mY));
+        Bounds = {Proxy.Box.Center, {Radius, Radius, Radius}};
     } else {
-        Proxy.Box = Component->GetWorldOBB();
+        DirectX::XMFLOAT3 Corners[8];
         if (Component->GetTypeInfo()->IsA(UMeshComponent::StaticTypeInfo())) {
             Proxy.Kind = EProxyKind::Mesh;
+            const auto& LocalBox = Component->GetPickingBox();
+            const auto& Q = LocalBox.Orientation;
+            Proxy.HasCustomBox = Q.x != 0.0f || Q.y != 0.0f || Q.z != 0.0f;
+            if (Proxy.HasCustomBox) mLocalBoxes[Key] = LocalBox; else mLocalBoxes.erase(Key);
+            LocalBox.GetCorners(Corners);
+            DirectX::BoundingBox::CreateFromPoints(Proxy.Box, 8, Corners, sizeof(Corners[0]));
+            const auto Matrix = Component->GetComponentToWorld().ToSimpleMath();
+            for (auto& Corner : Corners) DirectX::XMStoreFloat3(&Corner, DirectX::XMVector3TransformCoord(DirectX::XMLoadFloat3(&Corner), Matrix));
             Proxy.Mesh.Update(static_cast<const UMeshComponent*>(Component)->ResolveMesh(), Component->GetComponentTransform());
+        } else {
+            const auto& WorldBox = Component->GetWorldOBB();
+            Proxy.Box = {{0, 0, 0}, WorldBox.Extents};
+            Proxy.Mesh.Update(nullptr, FTransform{FVector3{WorldBox.Center}, FQuat{WorldBox.Orientation}, FVector3{1.0f}});
+            WorldBox.GetCorners(Corners);
         }
+        DirectX::BoundingBox::CreateFromPoints(Bounds, 8, Corners, sizeof(Corners[0]));
+        const float Pad = 4.0f * std::numeric_limits<float>::epsilon();
+        Bounds.Extents.x += Pad * (std::abs(Bounds.Center.x) + Bounds.Extents.x);
+        Bounds.Extents.y += Pad * (std::abs(Bounds.Center.y) + Bounds.Extents.y);
+        Bounds.Extents.z += Pad * (std::abs(Bounds.Center.z) + Bounds.Extents.z);
     }
+    if (!AreBoundsFinite(Bounds)) Proxy.Enabled = false;
     return Proxy;
 }
 
-bool FWorldRaycastAccelerationStructure::GetProxyBounds(const FProxy& Proxy, DirectX::BoundingBox& Box) {
-    if (Proxy.Kind == EProxyKind::Billboard) {
-        const float Radius = 0.5f * (std::abs(Proxy.BillboardSize.mX) + std::abs(Proxy.BillboardSize.mY));
-        Box = {Proxy.Box.Center, {Radius, Radius, Radius}};
-    } else {
-        DirectX::XMFLOAT3 Corners[8];
-        Proxy.Box.GetCorners(Corners);
-        DirectX::BoundingBox::CreateFromPoints(Box, 8, Corners, sizeof(Corners[0]));
-    }
-    const float Values[]{Box.Center.x, Box.Center.y, Box.Center.z, Box.Extents.x, Box.Extents.y, Box.Extents.z};
-    for (float Value : Values) if (!std::isfinite(Value)) return false;
-    return true;
-}
-
-bool FWorldRaycastAccelerationStructure::RaycastProxy(const FProxy& Proxy, const FRay& Ray, float& OutDistance, const FMatrix* CameraWorld, double* NarrowPhaseMilliseconds) {
+bool FWorldRaycastAccelerationStructure::RaycastProxy(const FProxy& Proxy, const FRay& Ray, float& OutDistance, const FMatrix* CameraWorld) const {
     if (!Proxy.Enabled) return false;
+    if (Proxy.Mesh.Source != nullptr) _mm_prefetch(reinterpret_cast<const char*>(Proxy.Mesh.Source.get()), _MM_HINT_T0);
     if (Proxy.Kind == EProxyKind::Billboard) {
         if (CameraWorld == nullptr) return false;
         FVector3 Right{CameraWorld->m_[0][0], CameraWorld->m_[0][1], CameraWorld->m_[0][2]};
@@ -74,18 +86,17 @@ bool FWorldRaycastAccelerationStructure::RaycastProxy(const FProxy& Proxy, const
         OutDistance = HitDistance;
         return true;
     }
-    float HitDistance = 0.0f;
-    if (!PickingMath::IntersectBox(Proxy.Box, Ray, HitDistance) || HitDistance > OutDistance) return false;
-    HitDistance = (std::max)(HitDistance, 0.0f);
+    FRay LocalRay; double DirectionLength;
+    if (!Proxy.Mesh.PrepareRay(Ray, LocalRay, DirectionLength)) return false;
+    float LocalDistance = 0.0f;
+    if (!Proxy.Box.Intersects(LocalRay.position, LocalRay.direction, LocalDistance) || LocalDistance > static_cast<double>(OutDistance) * DirectionLength) return false;
+    if (Proxy.HasCustomBox) {
+        const auto It = mLocalBoxes.find(ComponentKey(Proxy.Component.GetHandle()));
+        if (It == mLocalBoxes.end() || !It->second.Intersects(LocalRay.position, LocalRay.direction, LocalDistance) || LocalDistance > static_cast<double>(OutDistance) * DirectionLength) return false;
+    }
+    float HitDistance = static_cast<float>((std::max)(LocalDistance, 0.0f) / DirectionLength);
     if (Proxy.Kind == EProxyKind::Mesh) {
-#if MACAW_PICKING_PHASE_TIMING
-        const auto Start = std::chrono::steady_clock::now();
-#endif
-        const bool Hit = Proxy.Mesh.Raycast(Ray, HitDistance, OutDistance);
-#if MACAW_PICKING_PHASE_TIMING
-        if (NarrowPhaseMilliseconds != nullptr) *NarrowPhaseMilliseconds += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count();
-#endif
-        if (!Hit) return false;
+        if (!Proxy.Mesh.RaycastPrepared(LocalRay, DirectionLength, HitDistance, OutDistance)) return false;
     }
     if (HitDistance >= OutDistance) return false;
     OutDistance = HitDistance;
@@ -94,10 +105,11 @@ bool FWorldRaycastAccelerationStructure::RaycastProxy(const FProxy& Proxy, const
 
 void FWorldRaycastAccelerationStructure::Clear() {
     mTree.Clear();
+    mLocalBoxes.clear();
     mLeaves.clear();
-    mLeafParents.clear();
-    mNodeParents.clear();
+    mFreeLeaves.clear();
     mLeafIndices.clear();
+    mBuilt = false;
 }
 
 bool FWorldRaycastAccelerationStructure::BuildStructure(const TArray<TObjectRef<UPrimitiveComponent>>& Components) {
@@ -109,59 +121,64 @@ bool FWorldRaycastAccelerationStructure::BuildStructure(const TArray<TObjectRef<
         UPrimitiveComponent* Component = Ref.Get();
         if (Component == nullptr) continue;
         DirectX::BoundingBox Box{};
-        if (!GetProxyBounds(MakeProxy(Component), Box)) { Clear(); return false; }
+        MakeProxy(Component, Box);
+        if (!AreBoundsFinite(Box)) { Clear(); return false; }
         Items.push_back({Box, Ref});
         Bounds.Expand(Box);
     }
-    if (Items.empty()) return true;
+    if (Items.empty()) { mBuilt = true; return true; }
     if (Items.size() > (static_cast<std::size_t>(InvalidIndex) + 1) / 2) return false;
     TArray<FNode> BuildNodes;
     BuildNodes.reserve(Items.size() * 2 - 1);
     MakeChild(BuildNodes, Items, 0, static_cast<Uint32>(Items.size()), Bounds);
+    BVH8::OptimizeBuildTreelets(BuildNodes);
     mLeaves.reserve(Items.size());
     mTree.Build(BuildNodes, [](const FNode& Node) { return Node.mLeft == InvalidIndex; }, [&](const FNode& Node) {
         const Uint32 Index = static_cast<Uint32>(mLeaves.size());
-        mLeaves.push_back(MakeProxy(Node.Component.Get()));
+        DirectX::BoundingBox Box;
+        mLeaves.push_back(MakeProxy(Node.Component.Get(), Box));
         mLeafIndices.emplace(ComponentKey(Node.Component.GetHandle()), Index);
         return Index;
     });
-    mLeafParents.resize(mLeaves.size());
-    mNodeParents.resize(mTree.GetNodes().size());
-    const auto MapParents = [&](auto&& Self, Uint32 Reference) -> void {
-        const auto& Node = mTree.GetNodes()[Reference & BVH8::IndexMask];
-        for (Uint32 Lane = 0; Lane < BVH8::GetCount(Reference); ++Lane) {
-            const Uint32 Child = Node.Children[Lane], Index = Child & BVH8::IndexMask;
-            if (Child & BVH8::LeafBit) mLeafParents[Index] = {Reference, Lane};
-            else { mNodeParents[Index] = {Reference, Lane}; Self(Self, Child); }
-        }
-    };
-    MapParents(MapParents, mTree.GetRootReference());
+    mBuilt = true;
     return true;
 }
 
-void FWorldRaycastAccelerationStructure::UpdateComponent(UPrimitiveComponent* Component) {
-    if (Component == nullptr) return;
-    const auto It = mLeafIndices.find(ComponentKey(Component->GetHandle()));
-    if (It == mLeafIndices.end()) return;
-    auto& Proxy = mLeaves[It->second];
-    DirectX::BoundingBox PreviousBox;
-    const bool HadBounds = GetProxyBounds(Proxy, PreviousBox);
-    Proxy = MakeProxy(Component);
+void FWorldRaycastAccelerationStructure::InsertComponent(UPrimitiveComponent* Component) {
+    if (!mBuilt || Component == nullptr) return;
+    const Uint64 Key = ComponentKey(Component->GetHandle());
+    if (mLeafIndices.contains(Key)) return;
     DirectX::BoundingBox Box;
-    if (!GetProxyBounds(Proxy, Box)) { Proxy.Enabled = false; return; }
-    if (HadBounds && DirectX::XMVector3Equal(DirectX::XMLoadFloat3(&Box.Center), DirectX::XMLoadFloat3(&PreviousBox.Center)) && DirectX::XMVector3Equal(DirectX::XMLoadFloat3(&Box.Extents), DirectX::XMLoadFloat3(&PreviousBox.Extents))) return;
-    FParent Parent = mLeafParents[It->second];
-    while (Parent.Reference != InvalidIndex) {
-        Box = mTree.RefitChild(Parent.Reference, Parent.Lane, Box);
-        Parent = mNodeParents[Parent.Reference & BVH8::IndexMask];
-    }
+    auto Proxy = MakeProxy(Component, Box);
+    if (!AreBoundsFinite(Box)) { mLocalBoxes.erase(Key); return; }
+    const Uint32 Index = mFreeLeaves.empty() ? static_cast<Uint32>(mLeaves.size()) : mFreeLeaves.back();
+    if (Index > BVH8::IndexMask) throw std::length_error("World BVH leaf capacity");
+    if (mFreeLeaves.empty()) mLeaves.push_back(std::move(Proxy));
+    else { mFreeLeaves.pop_back(); mLeaves[Index] = std::move(Proxy); }
+    mTree.Insert(Index, Box);
+    mLeafIndices.emplace(Key, Index);
+}
+
+void FWorldRaycastAccelerationStructure::UpdateComponent(UPrimitiveComponent* Component) {
+    if (!mBuilt || Component == nullptr) return;
+    const auto It = mLeafIndices.find(ComponentKey(Component->GetHandle()));
+    if (It == mLeafIndices.end()) { InsertComponent(Component); return; }
+    auto& Proxy = mLeaves[It->second];
+    DirectX::BoundingBox Box;
+    Proxy = MakeProxy(Component, Box);
+    if (!AreBoundsFinite(Box)) { RemoveComponent(Component); return; }
+    mTree.Update(It->second, Box);
 }
 
 void FWorldRaycastAccelerationStructure::RemoveComponent(UPrimitiveComponent* Component) {
     if (Component == nullptr) return;
+    mLocalBoxes.erase(ComponentKey(Component->GetHandle()));
     const auto It = mLeafIndices.find(ComponentKey(Component->GetHandle()));
     if (It == mLeafIndices.end()) return;
-    mLeaves[It->second].Enabled = false;
+    const Uint32 Index = It->second;
+    mTree.Remove(Index);
+    mLeaves[Index] = {};
+    mFreeLeaves.push_back(Index);
     mLeafIndices.erase(It);
 }
 
@@ -175,6 +192,7 @@ Uint32 FWorldRaycastAccelerationStructure::MakeChild(TArray<FNode>& BuildNodes, 
     const Uint32 NodeIndex = static_cast<Uint32>(BuildNodes.size());
     BuildNodes.push_back(Node);
     if (Count == 1) {
+        BuildNodes[NodeIndex].BoundingBox = Items[First].BoundingBox;
         BuildNodes[NodeIndex].Component = Items[First].Component;
         return NodeIndex;
     }
@@ -251,17 +269,16 @@ Uint32 FWorldRaycastAccelerationStructure::MakeChild(TArray<FNode>& BuildNodes, 
     return NodeIndex;
 }
 
-bool FWorldRaycastAccelerationStructure::Raycast(const FRay& Ray, UPrimitiveComponent*& OutComponent, float& OutDistance, const FMatrix* CameraWorld, double* OutNarrowPhaseMilliseconds) const {
+bool FWorldRaycastAccelerationStructure::Raycast(const FRay& Ray, UPrimitiveComponent*& OutComponent, float& OutDistance, const FMatrix* CameraWorld) const {
     OutComponent = nullptr;
     OutDistance = std::numeric_limits<float>::max();
-    if (OutNarrowPhaseMilliseconds != nullptr) *OutNarrowPhaseMilliseconds = 0.0;
     TArray<Uint32> StaleLeaves;
     for (;;) {
         Uint32 Winner = InvalidIndex;
         OutDistance = std::numeric_limits<float>::max();
         mTree.Raycast(Ray, OutDistance, [&](Uint32 LeafIndex, float& ClosestDistance) {
             if (std::find(StaleLeaves.begin(), StaleLeaves.end(), LeafIndex) != StaleLeaves.end()) return false;
-            if (!RaycastProxy(mLeaves[LeafIndex], Ray, ClosestDistance, CameraWorld, OutNarrowPhaseMilliseconds)) return false;
+            if (!RaycastProxy(mLeaves[LeafIndex], Ray, ClosestDistance, CameraWorld)) return false;
             Winner = LeafIndex;
             return true;
         });
@@ -272,12 +289,62 @@ bool FWorldRaycastAccelerationStructure::Raycast(const FRay& Ray, UPrimitiveComp
     }
 }
 
+void FWorldRaycastAccelerationStructure::WarmupRaycast() const {
+    (void)std::chrono::steady_clock::now();
+    BVH8::FNode Node{}; BVH8::FTrianglePacket Packet{};
+    for (Uint32 i = 0; i < 8; ++i) {
+        Node.MinX[i] = Node.MinY[i] = -1.0f; Node.MaxX[i] = Node.MaxY[i] = 1.0f;
+        Node.MinZ[i] = -0.01f; Node.MaxZ[i] = 0.01f; Node.Children[i] = BVH8::MakeReference(0, 8, true);
+        Packet.V0[0][i] = Packet.V0[1][i] = -1.0f; Packet.Edge1[1][i] = 2.0f; Packet.Edge2[0][i] = 2.0f;
+    }
+    for (bool Parallel : {false, true}) for (bool Reverse : {false, true}) {
+        const auto Direction = DirectX::XMVector3Normalize(DirectX::XMVectorSet(Parallel ? 0.0f : 0.1f, Parallel ? 0.0f : 0.1f, Reverse ? -1.0f : 1.0f, 0.0f));
+        const FRay Ray{DirectX::XMVectorSubtract(DirectX::XMVectorSet(-0.25f, -0.25f, 0, 0), DirectX::XMVectorScale(Direction, 2.0f)), Direction};
+        float Distance = 10.0f;
+        BVH8::RaycastTrianglePackets(&Node, BVH8::MakeReference(0, 8), BVH8::FRayData{Ray}, Ray, Distance, &Packet, Reverse);
+    }
+    const FMatrix Camera = FMatrix::Identity;
+    const size_t Count = (std::min)(mLeaves.size(), size_t{16});
+    for (size_t i = 0; i < Count; ++i) {
+        const auto& Proxy = mLeaves[i * mLeaves.size() / Count];
+        if (!Proxy.Enabled) continue;
+        auto Center = DirectX::XMLoadFloat3(&Proxy.Box.Center);
+        float Radius = (std::max)(Proxy.BillboardSize.mX, Proxy.BillboardSize.mY);
+        if (Proxy.Kind != EProxyKind::Billboard) {
+            if (!Proxy.Mesh.Valid) continue;
+            const auto Scale = DirectX::XMVectorSetW(DirectX::XMLoadFloat3(&Proxy.Mesh.InverseScale), 1.0f), Rotation = DirectX::XMLoadFloat4(&Proxy.Mesh.Rotation);
+            Center = DirectX::XMVectorAdd(DirectX::XMVector3Rotate(DirectX::XMVectorDivide(Center, Scale), Rotation), DirectX::XMLoadFloat3(&Proxy.Mesh.Position));
+            const auto Extents = DirectX::XMVectorAbs(DirectX::XMVectorDivide(DirectX::XMLoadFloat3(&Proxy.Box.Extents), Scale));
+            Radius = (std::max)({DirectX::XMVectorGetX(Extents), DirectX::XMVectorGetY(Extents), DirectX::XMVectorGetZ(Extents)}) * 2.0f;
+        }
+        if (!std::isfinite(Radius) || Radius > std::numeric_limits<float>::max() * 0.5f || DirectX::XMVector3IsNaN(Center) || DirectX::XMVector3IsInfinite(Center)) continue;
+        Radius = (std::max)(Radius, 1.0f);
+        for (bool Parallel : {false, true}) {
+            const auto Direction = DirectX::XMVector3Normalize(DirectX::XMVectorSet(Parallel ? 0.0f : 0.3f, Parallel ? 0.0f : 0.2f, 1.0f, 0.0f));
+            const FRay Ray{DirectX::XMVectorSubtract(Center, DirectX::XMVectorScale(Direction, Radius * 2.0f)), Direction};
+            float Distance = std::numeric_limits<float>::max();
+            RaycastProxy(Proxy, Ray, Distance, &Camera);
+            if (i % 4 == 0) { UPrimitiveComponent* Component = nullptr; Raycast(Ray, Component, Distance, &Camera); }
+        }
+    }
+}
+
 void UPickingSubsystem::RegisterComponent(UPrimitiveComponent* Component) {
-    if (Component == nullptr || ContainsComponent(Component)) return;
+    if (Component == nullptr) return;
+    const auto Handle = Component->GetHandle();
+    const Uint64 Key = (static_cast<Uint64>(Handle.mGeneration) << 32) | Handle.mIndex;
+    if (!mRegisteredComponentKeys.insert(Key).second) return;
     mComponents.emplace_back(Component);
+    if (RaycastAccelerationStructure.IsBuilt()) UpdateComponent(Component);
 }
 
 void UPickingSubsystem::UnregisterComponent(UPrimitiveComponent* Component) {
+    if (Component == nullptr) return;
+    const auto Handle = Component->GetHandle();
+    const Uint64 Key = (static_cast<Uint64>(Handle.mGeneration) << 32) | Handle.mIndex;
+    mRegisteredComponentKeys.erase(Key);
+    mDirtyComponentKeys.erase(Key);
+    std::erase_if(mDirtyComponents, [Handle](const auto& Ref) { return Ref.GetHandle().mIndex == Handle.mIndex && Ref.GetHandle().mGeneration == Handle.mGeneration; });
     RaycastAccelerationStructure.RemoveComponent(Component);
     std::erase_if(mComponents, [Component](const TObjectRef<UPrimitiveComponent>& Ref) { return Ref.Get() == Component; });
 }
@@ -286,14 +353,12 @@ bool UPickingSubsystem::RebuildAccelerationStructure() {
     if (!RaycastAccelerationStructure.BuildStructure(mComponents)) return false;
     mDirtyComponents.clear();
     mDirtyComponentKeys.clear();
-    volatile double WarmupInput = 1.0;
-    volatile double WarmupLength = std::hypot(WarmupInput, WarmupInput, WarmupInput);
-    volatile float WarmupDistance = std::nextafter(static_cast<float>(WarmupLength), std::numeric_limits<float>::infinity());
+    RaycastAccelerationStructure.WarmupRaycast();
     return true;
 }
 
 void UPickingSubsystem::UpdateComponent(UPrimitiveComponent* Component) {
-    if (Component == nullptr) return;
+    if (Component == nullptr || !ContainsComponent(Component)) return;
     const auto Handle = Component->GetHandle();
     const Uint64 Key = (static_cast<Uint64>(Handle.mGeneration) << 32) | Handle.mIndex;
     if (mDirtyComponentKeys.insert(Key).second) mDirtyComponents.emplace_back(Component);
@@ -306,25 +371,18 @@ void UPickingSubsystem::SynchronizeProxies() const {
 }
 
 bool UPickingSubsystem::Raycast(const FRay& Ray, UPrimitiveComponent*& OutComponent, float& OutDistance, const FMatrix* CameraWorld) const {
-    const auto Start = std::chrono::steady_clock::now();
     SynchronizeProxies();
-    double NarrowPhaseMilliseconds = 0.0;
-    double* NarrowPhase = nullptr;
-#if MACAW_PICKING_PHASE_TIMING
-    NarrowPhase = &NarrowPhaseMilliseconds;
-#endif
-    RaycastAccelerationStructure.Raycast(Ray, OutComponent, OutDistance, CameraWorld, NarrowPhase);
+    const auto Start = std::chrono::steady_clock::now();
+    RaycastAccelerationStructure.Raycast(Ray, OutComponent, OutDistance, CameraWorld);
     const double Milliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count();
-#if MACAW_PICKING_PHASE_TIMING
-    Stat::RecordPickingTime(Milliseconds, NarrowPhaseMilliseconds);
-#else
     Stat::RecordPickingTime(Milliseconds);
-#endif
     return OutComponent != nullptr;
 }
 
 bool UPickingSubsystem::ContainsComponent(const UPrimitiveComponent* Component) const {
-    return std::ranges::any_of(mComponents, [Component](const TObjectRef<UPrimitiveComponent>& Ref) { return Ref.Get() == Component; });
+    if (Component == nullptr) return false;
+    const auto Handle = Component->GetHandle();
+    return mRegisteredComponentKeys.contains((static_cast<Uint64>(Handle.mGeneration) << 32) | Handle.mIndex);
 }
 
 const TArray<TObjectRef<UPrimitiveComponent>>& UPickingSubsystem::GetRegisteredComponents() const {
@@ -333,6 +391,7 @@ const TArray<TObjectRef<UPrimitiveComponent>>& UPickingSubsystem::GetRegisteredC
 
 void UPickingSubsystem::OnDeinitialize() {
     mComponents.clear();
+    mRegisteredComponentKeys.clear();
     mDirtyComponents.clear();
     mDirtyComponentKeys.clear();
     RaycastAccelerationStructure.Clear();

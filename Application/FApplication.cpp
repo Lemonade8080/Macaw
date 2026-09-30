@@ -2,8 +2,6 @@
 #include "FApplication.h"
 #include "Core/Stat/Stat.h"
 #include "Core/Spatial/FBVH8.h"
-#include "Core/Spatial/FPickingMath.h"
-#include "World/Component/FMeshPickingProxy.h"
 
 #include "Resource.h"
 #include "Render/FLoadingScreen.h"
@@ -34,8 +32,6 @@ FApplication::~FApplication() {
 
 int FApplication::Run(HINSTANCE Instance, int ShowCommand) {
     BVH8::Initialize();
-    PickingMath::Initialize();
-    FMeshPickingProxy::InitializeRaycast();
     if (!RegisterWindowClass(Instance) || !CreateApplicationWindow(Instance, ShowCommand)) {
         return FALSE;
     }

@@ -1,7 +1,6 @@
 #include "pch.h"
 #include "Core/Property/IPropertyEditorContext.h"
 #include "UMeshComponent.h"
-#include "Core/Spatial/FPickingMath.h"
 
 #include "World/AActor.h"
 #include "World/UWorld.h"
@@ -50,7 +49,7 @@ const UMesh* FMeshPickingProxy::GetMesh() const { return Source != nullptr ? Sou
 void FMeshPickingProxy::Update(const UMesh* InMesh, const FTransform& Transform) {
     Source = InMesh != nullptr ? InMesh->GetPickingSource() : nullptr;
     const FVector3& Scale = Transform.GetScale();
-    Valid = InMesh != nullptr && std::isfinite(Scale.mX) && std::isfinite(Scale.mY) && std::isfinite(Scale.mZ) && Scale.mX != 0.0f && Scale.mY != 0.0f && Scale.mZ != 0.0f;
+    Valid = std::isfinite(Scale.mX) && std::isfinite(Scale.mY) && std::isfinite(Scale.mZ) && Scale.mX != 0.0f && Scale.mY != 0.0f && Scale.mZ != 0.0f;
     if (!Valid) return;
     ReverseWinding = (Scale.mX < 0.0f) ^ (Scale.mY < 0.0f) ^ (Scale.mZ < 0.0f);
     InverseScale = {1.0f / Scale.mX, 1.0f / Scale.mY, 1.0f / Scale.mZ};
@@ -69,44 +68,34 @@ bool UMeshComponent::RaycastMesh(const FRay& Ray, float& OutDistance, float MaxD
     return mRaycastProxy.Raycast(Ray, OutDistance, MaxDistance);
 }
 
-template<bool Scalar> static bool RaycastMeshProxy(const FMeshPickingProxy& Proxy, const FRay& Ray, float& OutDistance, float MaxDistance) {
-    const UMesh* Mesh = Proxy.GetMesh();
-    if (!Proxy.Valid || Mesh == nullptr || !(MaxDistance >= 0.0f)) return false;
-    DirectX::XMFLOAT3 LocalOrigin, LocalDirectionValue;
-    if constexpr (Scalar) {
-        LocalOrigin = PickingMath::InverseRotateScalar({PickingMath::ScalarSubtract(Ray.position.x, Proxy.Position.x), PickingMath::ScalarSubtract(Ray.position.y, Proxy.Position.y), PickingMath::ScalarSubtract(Ray.position.z, Proxy.Position.z)}, Proxy.Rotation);
-        LocalDirectionValue = PickingMath::InverseRotateScalar({Ray.direction.x, Ray.direction.y, Ray.direction.z}, Proxy.Rotation);
-        LocalOrigin.x = PickingMath::ScalarMultiply(LocalOrigin.x, Proxy.InverseScale.x); LocalOrigin.y = PickingMath::ScalarMultiply(LocalOrigin.y, Proxy.InverseScale.y); LocalOrigin.z = PickingMath::ScalarMultiply(LocalOrigin.z, Proxy.InverseScale.z);
-        LocalDirectionValue.x = PickingMath::ScalarMultiply(LocalDirectionValue.x, Proxy.InverseScale.x); LocalDirectionValue.y = PickingMath::ScalarMultiply(LocalDirectionValue.y, Proxy.InverseScale.y); LocalDirectionValue.z = PickingMath::ScalarMultiply(LocalDirectionValue.z, Proxy.InverseScale.z);
-    } else {
-        const auto Scale = DirectX::XMLoadFloat3(&Proxy.InverseScale), Rotation = DirectX::XMLoadFloat4(&Proxy.Rotation);
-        const auto Offset = DirectX::XMVectorSubtract(Ray.position, DirectX::XMLoadFloat3(&Proxy.Position));
-        DirectX::XMStoreFloat3(&LocalOrigin, DirectX::XMVectorMultiply(DirectX::XMVector3InverseRotate(Offset, Rotation), Scale));
-        DirectX::XMStoreFloat3(&LocalDirectionValue, DirectX::XMVectorMultiply(DirectX::XMVector3InverseRotate(Ray.direction, Rotation), Scale));
-    }
-    const double DirectionX = LocalDirectionValue.x, DirectionY = LocalDirectionValue.y, DirectionZ = LocalDirectionValue.z;
-    const double LocalDirectionLength{ std::hypot(DirectionX, DirectionY, DirectionZ) };
-    if (!std::isfinite(LocalDirectionLength) || LocalDirectionLength <= 0.0f ||
-        !std::isfinite(LocalOrigin.x) || !std::isfinite(LocalOrigin.y) || !std::isfinite(LocalOrigin.z)) {
-        return false;
-    }
-    const FRay LocalRay{{LocalOrigin.x, LocalOrigin.y, LocalOrigin.z}, {static_cast<float>(DirectionX / LocalDirectionLength), static_cast<float>(DirectionY / LocalDirectionLength), static_cast<float>(DirectionZ / LocalDirectionLength)}};
-    const double LocalLimit = static_cast<double>(MaxDistance) * LocalDirectionLength;
-    const float LocalMaxDistance = LocalLimit >= std::numeric_limits<float>::max() ? std::numeric_limits<float>::max() : std::nextafter(static_cast<float>(LocalLimit), std::numeric_limits<float>::infinity());
-    float ClosestDistance{ 0.0f };
-    const bool BHit = Mesh->Raycast(LocalRay, ClosestDistance, LocalMaxDistance, Proxy.ReverseWinding);
-
-    if (BHit) {
-        const float WorldDistance = static_cast<float>(ClosestDistance / LocalDirectionLength);
-        if (WorldDistance > MaxDistance) return false;
-        OutDistance = WorldDistance;
-    }
-    return BHit;
+bool FMeshPickingProxy::PrepareRay(const FRay& Ray, FRay& LocalRay, double& DirectionLength) const {
+    if (!Valid) return false;
+    const auto Scale = DirectX::XMLoadFloat3(&InverseScale), Q = DirectX::XMLoadFloat4(&Rotation);
+    const auto Origin = DirectX::XMVectorMultiply(DirectX::XMVector3InverseRotate(DirectX::XMVectorSubtract(Ray.position, DirectX::XMLoadFloat3(&Position)), Q), Scale);
+    const auto Direction = DirectX::XMVectorMultiply(DirectX::XMVector3InverseRotate(Ray.direction, Q), Scale);
+    const double DX = DirectX::XMVectorGetX(Direction), DY = DirectX::XMVectorGetY(Direction), DZ = DirectX::XMVectorGetZ(Direction);
+    DirectionLength = std::sqrt(DX * DX + DY * DY + DZ * DZ);
+    if (!std::isfinite(DirectionLength) || DirectionLength <= 0.0 || DirectX::XMVector3IsNaN(Origin) || DirectX::XMVector3IsInfinite(Origin)) return false;
+    LocalRay = FRay{Origin, DirectX::XMVectorSet(static_cast<float>(DX / DirectionLength), static_cast<float>(DY / DirectionLength), static_cast<float>(DZ / DirectionLength), 0.0f)};
+    return true;
 }
 
-namespace { auto MeshProxyRaycaster = RaycastMeshProxy<false>; }
-void FMeshPickingProxy::InitializeRaycast(bool Scalar) { MeshProxyRaycaster = Scalar ? RaycastMeshProxy<true> : RaycastMeshProxy<false>; }
-bool FMeshPickingProxy::Raycast(const FRay& Ray, float& OutDistance, float MaxDistance) const { return MeshProxyRaycaster(*this, Ray, OutDistance, MaxDistance); }
+bool FMeshPickingProxy::RaycastPrepared(const FRay& LocalRay, double DirectionLength, float& OutDistance, float MaxDistance) const {
+    if (Source == nullptr || !(MaxDistance >= 0.0f)) return false;
+    const double Limit = static_cast<double>(MaxDistance) * DirectionLength;
+    const float LocalLimit = Limit >= std::numeric_limits<float>::max() ? std::numeric_limits<float>::max() : std::bit_cast<float>(std::bit_cast<Uint32>((std::max)(0.0f, static_cast<float>(Limit))) + 1u);
+    float Distance = 0.0f;
+    if (!Source->Raycast(LocalRay, Distance, LocalLimit, ReverseWinding)) return false;
+    const float WorldDistance = static_cast<float>(Distance / DirectionLength);
+    if (WorldDistance > MaxDistance) return false;
+    OutDistance = WorldDistance;
+    return true;
+}
+
+bool FMeshPickingProxy::Raycast(const FRay& Ray, float& OutDistance, float MaxDistance) const {
+    FRay LocalRay; double DirectionLength;
+    return PrepareRay(Ray, LocalRay, DirectionLength) && RaycastPrepared(LocalRay, DirectionLength, OutDistance, MaxDistance);
+}
 
 void UMeshComponent::Serialize(FArchive& Archive) {
     UPrimitiveComponent::Serialize(Archive);

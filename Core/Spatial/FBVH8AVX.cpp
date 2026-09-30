@@ -1,10 +1,7 @@
 #include "FBVH8Traversal.h"
-#include "FBVH8Triangles.h"
 #include "FBVH8TrianglePackets.h"
 #include "FBVH8PacketSIMD.h"
 #include <immintrin.h>
-#include "FBVH8PreparedSSE.h"
-#include "FBVH8Scalar.h"
 
 namespace {
     struct FPreparedRayAVX {
@@ -55,30 +52,13 @@ namespace {
     };
 }
 
-Uint32 BVH8::IntersectAVX(const FNode& Node, const FRayData& Ray, float MaxDistance, float* EntryDistances, Uint32 Count) {
-    return FPreparedRayAVX{Ray}.Intersect<true>(Node, MaxDistance, EntryDistances, Count);
-}
-
 bool BVH8::RaycastAVX(const FNode* Nodes, Uint32 RootReference, const FRayData& Ray, float& ClosestDistance, void* Context, FVisitLeaf VisitLeaf) {
     if (Ray.Parallel[0] || Ray.Parallel[1] || Ray.Parallel[2]) return Traverse<FPreparedRayAVX, true>(Nodes, RootReference, Ray, ClosestDistance, [&](Uint32 Leaf, Uint32, float& Distance) { return VisitLeaf(Context, Leaf, Distance); });
     return Traverse<FPreparedRayAVX, false>(Nodes, RootReference, Ray, ClosestDistance, [&](Uint32 Leaf, Uint32, float& Distance) { return VisitLeaf(Context, Leaf, Distance); });
-}
-
-bool BVH8::RaycastTrianglesAVX(const FNode* Nodes, Uint32 RootReference, const FRayData& RayData, const FRay& Ray, float& ClosestDistance, const FTriangle* Triangles, bool ReverseWinding) {
-    const FTriangleVisitor Visitor{Triangles, Ray, ReverseWinding};
-    if (RayData.Parallel[0] || RayData.Parallel[1] || RayData.Parallel[2]) return Traverse<FPreparedRayAVX, true>(Nodes, RootReference, RayData, ClosestDistance, Visitor);
-    return Traverse<FPreparedRayAVX, false>(Nodes, RootReference, RayData, ClosestDistance, Visitor);
 }
 
 bool BVH8::RaycastTrianglePacketsAVX(const FNode* Nodes, Uint32 RootReference, const FRayData& RayData, const FRay& Ray, float& ClosestDistance, const FTrianglePacket* Packets, bool ReverseWinding) {
     const TTrianglePacketVisitor<FSIMD8> Visitor{Packets, Ray, ReverseWinding};
     if (RayData.Parallel[0] || RayData.Parallel[1] || RayData.Parallel[2]) return Traverse<FPreparedRayAVX, true>(Nodes, RootReference, RayData, ClosestDistance, Visitor);
     return Traverse<FPreparedRayAVX, false>(Nodes, RootReference, RayData, ClosestDistance, Visitor);
-}
-
-BVH8::FTrianglePacketRaycaster BVH8::SelectPacketAVX(EKernel Nodes, EKernel Triangles) {
-    if (Nodes == EKernel::Scalar) return CastPackets<FPreparedRayScalar, TTrianglePacketVisitor<FSIMD8>>;
-    if (Nodes == EKernel::SSE) return CastPackets<FPreparedRaySSE, TTrianglePacketVisitor<FSIMD8>>;
-    if (Triangles == EKernel::Scalar) return CastPackets<FPreparedRayAVX, FScalarTrianglePacketVisitor>;
-    return Triangles == EKernel::SSE ? CastPackets<FPreparedRayAVX, TTrianglePacketVisitor<FSIMD4>> : RaycastTrianglePacketsAVX;
 }

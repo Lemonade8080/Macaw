@@ -13,7 +13,7 @@ struct FLODSetting
 inline constexpr FLODSetting GLODSettings[]{
     { 0.5f, 1.0f },
     { 0.25f, 0.5f },
-    { 0.12f, 0.2f },
+    { 0.12f, 0.3f },
     { 0.06f, 0.1f },
 };
 

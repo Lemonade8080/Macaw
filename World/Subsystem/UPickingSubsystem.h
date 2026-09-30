@@ -3,7 +3,7 @@
 #include "UWorldSubsystem.h"
 
 #include "Core/Base/TObjectRef.h"
-#include "Core/Spatial/FBVH8.h"
+#include "Core/Spatial/FDynamicBVH8.h"
 #include "World/Component/UPrimitiveComponent.h"
 #include <limits>
 #include <unordered_map>
@@ -85,31 +85,34 @@ private:
     };
 public:
     bool BuildStructure(const TArray<TObjectRef<UPrimitiveComponent>>& Components);
-    bool Raycast(const FRay& Ray, UPrimitiveComponent*& OutComponent, float& OutDistance, const FMatrix* CameraWorld = nullptr, double* OutNarrowPhaseMilliseconds = nullptr) const;
+    bool Raycast(const FRay& Ray, UPrimitiveComponent*& OutComponent, float& OutDistance, const FMatrix* CameraWorld = nullptr) const;
+    void WarmupRaycast() const;
     void Clear();
+    bool IsBuilt() const { return mBuilt; }
+    void InsertComponent(UPrimitiveComponent* Component);
     void UpdateComponent(UPrimitiveComponent* Component);
     void RemoveComponent(UPrimitiveComponent* Component);
 private:
     Uint32 MakeChild(TArray<FNode>& BuildNodes, TArray<FBuildItem>& Items, Uint32 First, Uint32 Count, const MinMaxBox& Bounds);
     enum class EProxyKind : Uint8 { Box, Mesh, Billboard };
     struct alignas(64) FProxy {
-        DirectX::BoundingOrientedBox Box;
+        FMeshPickingProxy Mesh;
+        DirectX::BoundingBox Box;
+        TObjectRef<UPrimitiveComponent> Component;
         FVector2 BillboardSize;
         EProxyKind Kind = EProxyKind::Box;
-        bool Enabled = false;
-        TObjectRef<UPrimitiveComponent> Component;
-        FMeshPickingProxy Mesh;
+        bool Enabled = false, HasCustomBox = false;
     };
     static_assert(sizeof(FProxy) == 128);
-    struct FParent { Uint32 Reference = InvalidIndex, Lane = 0; };
     static Uint64 ComponentKey(FObjectHandle Handle) { return (static_cast<Uint64>(Handle.mGeneration) << 32) | Handle.mIndex; }
-    static FProxy MakeProxy(UPrimitiveComponent* Component);
-    static bool GetProxyBounds(const FProxy& Proxy, DirectX::BoundingBox& Box);
-    static bool RaycastProxy(const FProxy& Proxy, const FRay& Ray, float& Distance, const FMatrix* CameraWorld, double* NarrowPhaseMilliseconds);
+    FProxy MakeProxy(UPrimitiveComponent* Component, DirectX::BoundingBox& Bounds);
+    bool RaycastProxy(const FProxy& Proxy, const FRay& Ray, float& Distance, const FMatrix* CameraWorld) const;
+    std::unordered_map<Uint64, DirectX::BoundingOrientedBox> mLocalBoxes;
     TArray<FProxy> mLeaves;
-    TArray<FParent> mLeafParents, mNodeParents;
+    TArray<Uint32> mFreeLeaves;
     std::unordered_map<Uint64, Uint32> mLeafIndices;
-    FBVH8 mTree;
+    FDynamicBVH8 mTree;
+    bool mBuilt = false;
 };
 
 /// <summary>Provides editor picking over registered primitive component volumes.</summary>
@@ -135,6 +138,7 @@ protected:
 
 private:
     TArray<TObjectRef<UPrimitiveComponent>> mComponents{};
+    std::unordered_set<Uint64> mRegisteredComponentKeys;
     mutable FWorldRaycastAccelerationStructure RaycastAccelerationStructure{};
     mutable TArray<TObjectRef<UPrimitiveComponent>> mDirtyComponents;
     mutable std::unordered_set<Uint64> mDirtyComponentKeys;
