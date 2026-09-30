@@ -388,3 +388,5 @@ FodyWeavers.xsd
 # Locally restored vcpkg tool and packages
 /.tools/
 /vcpkg_installed/
+imgui.ini
+Tests
