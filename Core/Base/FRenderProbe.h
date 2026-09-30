@@ -1,4 +1,5 @@
 #pragma once
+
 #include "Core/Base/FAssetHandle.h"
 #include "Core/Base/FObjectHandle.h"
 
@@ -50,15 +51,25 @@ Uint32 operator|(ERenderObjectFlags Left, ERenderObjectFlags Right);
 
 struct FActorProbe {
     FMatrix mWorld{};
+
     FAssetHandle mMeshHandle{};
     FAssetHandle mMaterialHandle{};
     FAssetHandle mPipelineHandle{};
     Uint32 mFlags{0x0000'0000};
     FObjectHandle mOwnerHandle{};
+
     DirectX::BoundingSphere mWorldSphereBounds{};
     DirectX::BoundingOrientedBox mWorldOBB{};
     DirectX::BoundingBox mWorldAABB{};
 };
+
+struct FRenderObjectUpdate {
+    FObjectHandle mComponentHandle{};
+    FActorProbe mProbe{};
+    bool mRemoved{};
+};
+
+Uint64 AllocateRenderSceneId();
 
 struct CameraProbe {
     FMatrix mViewProjection{};
@@ -87,7 +98,11 @@ struct FLightProbe {
 static_assert(sizeof(FLightProbe) == 64);
 
 struct FSceneRenderData {
-    TArray<FActorProbe> mActorProbes{};
+    Uint64 mSceneId{};
+    Uint64 mRevision{};
+
+    TArray<FRenderObjectUpdate> mObjectUpdates{};
+
     TArray<FTextProbe> mTextProbes{};
     TArray<FBillboardProbe> mBillboardProbes{};
     TArray<FLightProbe> mLightProbes{};

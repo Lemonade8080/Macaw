@@ -67,10 +67,10 @@ namespace {
 }
 
 FEditorViewport::FEditorViewport(FViewportId InViewportId, ID3D11Device* InDevice, FWorldEditorContext& InEditorContext)
-    : mDevice(InDevice),
-      mEditorContext(&InEditorContext),
-      mViewportId(InViewportId),
-      mProjectionType(InViewportId == 0 ? EProjectionType::Perspective : EProjectionType::Orthographic) {
+    :	mDevice{InDevice},
+		mEditorContext{&InEditorContext},
+		mViewportId{InViewportId},
+		mProjectionType{InViewportId == 0 ? EProjectionType::Perspective : EProjectionType::Orthographic} {
     mCameraRotation.Normalize();
     mRenderSettings.mBRenderSky = mProjectionType == EProjectionType::Perspective;
 
@@ -339,23 +339,46 @@ bool FEditorViewport::BuildCameraProbe(CameraProbe& OutCamera) {
         return false;
     }
 
-    const FTransform CameraTransform{mCameraPosition, mCameraRotation, FVector3{1.0f, 1.0f, 1.0f}};
-    const float AspectRatio{static_cast<float>(mWidth) / static_cast<float>(mHeight)};
-    OutCamera.mView = (UCameraComponent::CameraBasis * CameraTransform.ToMatrixNoScale()).Invert();
+    if (!IsCameraProbeCurrent()) {
+        const FTransform CameraTransform{mCameraPosition, mCameraRotation, FVector3{1.0f, 1.0f, 1.0f}};
+        const FMatrix CameraWorld{UCameraComponent::CameraBasis * CameraTransform.ToMatrixNoScale()};
+        const float AspectRatio{static_cast<float>(mWidth) / static_cast<float>(mHeight)};
+        mCachedCameraProbe.mView = CameraWorld.Inverse();
 
-    if (mProjectionType == EProjectionType::Perspective) {
-        OutCamera.mProjection = FMatrix::CreatePerspectiveFieldOfView(mFieldOfView, AspectRatio, mNearPlane, mFarPlane);
-    } else {
-        OutCamera.mProjection = FMatrix::CreateOrthographic(mOrthographicWidth, mOrthographicWidth / AspectRatio, mNearPlane, mFarPlane);
+        if (mProjectionType == EProjectionType::Perspective) {
+            mCachedCameraProbe.mProjection = FMatrix::CreatePerspectiveFieldOfView(mFieldOfView, AspectRatio, mNearPlane, mFarPlane);
+
+            FFrustum LocalFrustum{};
+            FFrustum::CreateFromMatrix(LocalFrustum, mCachedCameraProbe.mProjection.ToSimpleMath());
+            LocalFrustum.Transform(mCachedCameraProbe.mViewFrustum, CameraWorld.ToSimpleMath());
+        } else {
+            mCachedCameraProbe.mProjection = FMatrix::CreateOrthographic(mOrthographicWidth, mOrthographicWidth / AspectRatio, mNearPlane, mFarPlane);
+            mCachedCameraProbe.mViewFrustum = {};
+        }
+
+        mCachedCameraProbe.mViewProjection = mCachedCameraProbe.mView * mCachedCameraProbe.mProjection;
+        mCachedCameraPosition = mCameraPosition;
+        mCachedCameraRotation = mCameraRotation;
+        mCachedProjectionType = mProjectionType;
+        mCachedFieldOfView = mFieldOfView;
+        mCachedOrthographicWidth = mOrthographicWidth;
+        mCachedNearPlane = mNearPlane;
+        mCachedFarPlane = mFarPlane;
+        mCachedWidth = mWidth;
+        mCachedHeight = mHeight;
+        mHasCachedCameraProbe = true;
     }
 
-    OutCamera.mViewProjection = OutCamera.mView * OutCamera.mProjection;
-
-    FFrustum LocalFrustum{};
-    FFrustum::CreateFromMatrix(LocalFrustum, OutCamera.mProjection.ToSimpleMath());
-    LocalFrustum.Transform(OutCamera.mViewFrustum, OutCamera.mView.Inverse().ToSimpleMath());
-
+    OutCamera = mCachedCameraProbe;
     return true;
+}
+
+bool FEditorViewport::IsCameraProbeCurrent() const {
+    const bool PositionMatches{mCachedCameraPosition == mCameraPosition};
+    const bool RotationMatches{mCachedCameraRotation.mX == mCameraRotation.mX && mCachedCameraRotation.mY == mCameraRotation.mY && mCachedCameraRotation.mZ == mCameraRotation.mZ && mCachedCameraRotation.mW == mCameraRotation.mW};
+    const bool ProjectionMatches{mCachedProjectionType == mProjectionType && mCachedFieldOfView == mFieldOfView && mCachedOrthographicWidth == mOrthographicWidth && mCachedNearPlane == mNearPlane && mCachedFarPlane == mFarPlane};
+    const bool SizeMatches{mCachedWidth == mWidth && mCachedHeight == mHeight};
+    return mHasCachedCameraProbe && PositionMatches && RotationMatches && ProjectionMatches && SizeMatches;
 }
 
 void FEditorViewport::ApplyMouseNavigation(const FViewportMouseNavigationInput& NavigationInput) {

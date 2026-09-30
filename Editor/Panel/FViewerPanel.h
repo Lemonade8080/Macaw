@@ -25,6 +25,7 @@ public:
 public:
     void RenderOffscreen(FRenderer& InRenderer, FAssetRegistry& InRegistry) override;
     void ReleaseRenderResources() override;
+
     void SetMesh(FAssetHandle InMeshHandle);
     void SetMaterial(FAssetHandle InMaterialHandle);
     bool HandleExternalFileDrop(const std::filesystem::path& FilePath, const ImVec2& ScreenPosition);
@@ -34,9 +35,11 @@ private:
     void DrawMenuBar();
     void DrawProperties();
     void DrawPreview();
+
     void ResizeSurfaceIfNeeded(ID3D11Device* Device, Uint32 Width, Uint32 Height);
     FSceneRenderData BuildPreviewScene();
     CameraProbe BuildPreviewCamera() const;
+
     void ProcessInput();
     FMatrix MakeCameraWorldMatrix(const FVector3& Eye) const;
     bool OpenViewerFile(const std::filesystem::path& FilePath);
@@ -47,17 +50,23 @@ private:
     HWND mWindowHandle{nullptr};
     FWorldEditorContext& mEditorContext;
     FPropertyEditorContext mPropertyEditor{};
+
     FSceneRenderSurface mSurface{};
+    Uint64 mRenderSceneId{AllocateRenderSceneId()};
+    Uint64 mRenderSceneRevision{};
     FAssetHandle mMeshHandle{};
     FAssetHandle mMaterialHandle{};
+
     Uint32 mSurfaceWidth{};
     Uint32 mSurfaceHeight{};
     Uint32 mDesiredWidth{};
     Uint32 mDesiredHeight{};
+
     float mDistance{5.0f};
     FVector3 mTarget{0.0f, 0.0f, 0.0f};
     float mFieldOfView{1.0472f};
     FQuat mOrbitRotation{};
+
     ImVec2 mDropTargetMin{};
     ImVec2 mDropTargetMax{};
 };

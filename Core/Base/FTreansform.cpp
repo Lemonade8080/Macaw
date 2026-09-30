@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "Math/FMath.h"
 #include "FTransform.h"
 #include "Core/Archive/FArchive.h"
@@ -24,26 +24,58 @@ namespace {
 }
 
 void FTransform::SetRotation(const FRotator& InRotation) {
+    if (mRotationEuler.Pitch == InRotation.Pitch && mRotationEuler.Yaw == InRotation.Yaw && mRotationEuler.Roll == InRotation.Roll) {
+        return;
+    }
+
     mRotationEuler = InRotation;
     mRotation = FQuat::FromRotator(InRotation);
+    InvalidateMatrices(true);
+    ++mRevision;
 }
 
 void FTransform::SetRotation(const FQuat& InRotation) {
-    mRotation = InRotation;
-    mRotation.Normalize();
+    if (mRotation.X == InRotation.X && mRotation.Y == InRotation.Y && mRotation.Z == InRotation.Z && mRotation.W == InRotation.W) {
+        return;
+    }
+
+    FQuat Rotation{InRotation};
+    Rotation.Normalize();
+    if (mRotation.X == Rotation.X && mRotation.Y == Rotation.Y && mRotation.Z == Rotation.Z && mRotation.W == Rotation.W) {
+        return;
+    }
+
+    mRotation = Rotation;
     mRotationEuler = mRotation.ToRotator();
+    InvalidateMatrices(true);
+    ++mRevision;
 }
 
 FMatrix FTransform::ToMatrixWithScale() const {
-    return MakeTransformMatrix(mPosition, mRotation, mScale);
+    if (mMatrixWithScaleDirty) {
+        mMatrixWithScale = MakeTransformMatrix(mPosition, mRotation, mScale);
+        mMatrixWithScaleDirty = false;
+    }
+
+    return mMatrixWithScale;
 }
 
 FMatrix FTransform::ToMatrixNoScale() const {
-    return MakeTransformMatrix(mPosition, mRotation, {1.0f, 1.0f, 1.0f});
+    if (mMatrixNoScaleDirty) {
+        mMatrixNoScale = MakeTransformMatrix(mPosition, mRotation, {1.0f, 1.0f, 1.0f});
+        mMatrixNoScaleDirty = false;
+    }
+
+    return mMatrixNoScale;
 }
 
 FMatrix FTransform::ToInverseMatrixWithScale() const {
-    return ToMatrixWithScale().Invert();
+    if (mInverseMatrixWithScaleDirty) {
+        mInverseMatrixWithScale = ToMatrixWithScale().Invert();
+        mInverseMatrixWithScaleDirty = false;
+    }
+
+    return mInverseMatrixWithScale;
 }
 
 FTransform FTransform::Compose(const FTransform& Parent) const {
@@ -62,8 +94,7 @@ FTransform FTransform::Compose(const FTransform& Parent) const {
 
 bool FTransform::MakeRelativeTo(const FTransform& Parent, FTransform& OutRelative) const {
     constexpr float Epsilon{1e-6f};
-    if ((!mBAbsoluteLocation || !mBAbsoluteScale) &&
-        (std::abs(Parent.mScale.mX) <= Epsilon || std::abs(Parent.mScale.mY) <= Epsilon || std::abs(Parent.mScale.mZ) <= Epsilon)) {
+    if ((!mBAbsoluteLocation || !mBAbsoluteScale) && (std::abs(Parent.mScale.mX) <= Epsilon || std::abs(Parent.mScale.mY) <= Epsilon || std::abs(Parent.mScale.mZ) <= Epsilon)) {
         return false;
     }
 
@@ -86,14 +117,24 @@ bool FTransform::MakeRelativeTo(const FTransform& Parent, FTransform& OutRelativ
 }
 
 void FTransform::Serialize(FArchive& Archive) {
-    Archive.Serialize("Position", mPosition);
-    Archive.Serialize("Rotation", mRotation);
-    Archive.Serialize("Scale", mScale);
-    Archive.Serialize("bAbsoluteLocation", mBAbsoluteLocation);
-    Archive.Serialize("bAbsoluteRotation", mBAbsoluteRotation);
-    Archive.Serialize("bAbsoluteScale", mBAbsoluteScale);
+    FVector3 Position{mPosition};
+    FQuat Rotation{mRotation};
+    FVector3 Scale{mScale};
+    bool AbsoluteLocation{mBAbsoluteLocation};
+    bool AbsoluteRotation{mBAbsoluteRotation};
+    bool AbsoluteScale{mBAbsoluteScale};
+    Archive.Serialize("Position", Position);
+    Archive.Serialize("Rotation", Rotation);
+    Archive.Serialize("Scale", Scale);
+    Archive.Serialize("bAbsoluteLocation", AbsoluteLocation);
+    Archive.Serialize("bAbsoluteRotation", AbsoluteRotation);
+    Archive.Serialize("bAbsoluteScale", AbsoluteScale);
 
     if (Archive.IsLoading()) {
-        SetRotation(mRotation);
+        FTransform LoadedTransform{Position, Rotation, Scale};
+        LoadedTransform.SetAbsoluteLocation(AbsoluteLocation);
+        LoadedTransform.SetAbsoluteRotation(AbsoluteRotation);
+        LoadedTransform.SetAbsoluteScale(AbsoluteScale);
+        *this = LoadedTransform;
     }
 }

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <d3d11.h>
 #include <cstddef>
@@ -53,6 +53,8 @@ private:
 private:
     FRenderer* mRenderer{nullptr};
     FAssetRegistry* mAssetRegistry{nullptr};
+    Uint64 mRenderSceneId{AllocateRenderSceneId()};
+    Uint64 mRenderSceneRevision{};
 
     TMap<Uint64, FThumbnail> mThumbnails{};
     TArray<FAssetHandle> mPendingAssetHandles{};

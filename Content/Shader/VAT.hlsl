@@ -1,9 +1,4 @@
-struct FModelContext
-{
-    row_major float4x4 World;
-    uint MaterialIndex;
-    uint Flags;
-};
+#include "ModelResource.hlsli"
 
 struct FMaterial
 {
@@ -19,7 +14,6 @@ struct FMaterial
     float4 Parameters6;
 };
 
-StructuredBuffer<FModelContext> ModelContexts : register(t0); // ModelContext[] 
 StructuredBuffer<FMaterial> MaterialBuffer : register(t1);
 #include "Lighting.hlsli"
 
@@ -50,7 +44,7 @@ struct PS_INPUT
     nointerpolation float3 ColorCoefficient : Jungle2;
 };
 
-PS_INPUT mainVS(VS_INPUT Input, uint ModelIndex : MODEL_INDEX)
+PS_INPUT mainVS(VS_INPUT Input, uint DrawRecordIndex : MODEL_INDEX)
 {
     PS_INPUT Output;
 
@@ -60,7 +54,6 @@ PS_INPUT mainVS(VS_INPUT Input, uint ModelIndex : MODEL_INDEX)
 
     float3 BoundsSize = MaxBound - MinBound;
            
-    
     float TotalFrame = 250.0;
 
     //버텍스 컬러에 0 ~ 1로 저장된 인덱스 값
@@ -71,7 +64,6 @@ PS_INPUT mainVS(VS_INPUT Input, uint ModelIndex : MODEL_INDEX)
 
     //VAT 텍스처 샘플링 할 uv
     float2 VATUV = float2(IndexNormalize, FrameNormalize);   
-    
     
     //VATTexture에서 버텍스의 위치값을 산출한다.
     //float3 VATPosition = VATTexture.Sample(LinearWrap, VATUV).rgb;
@@ -85,18 +77,18 @@ PS_INPUT mainVS(VS_INPUT Input, uint ModelIndex : MODEL_INDEX)
     //좌표계 변환
     float3 VATPosition = float3(-BlenderLocalPos.z, BlenderLocalPos.x, BlenderLocalPos.y);
     
-    
-    FModelContext ModelContext = ModelContexts[ModelIndex];
+    FModelContext ModelContext = {GetModelContext(DrawRecordIndex)};
 
     //VAT에서 뽑은 위치값에 World 행렬 곱해주기
-    float4 WorldPosition = mul(float4(VATPosition, 1.0f), ModelContext.World);
+
+    float4 WorldPosition = mul(float4(VATPosition, 1.0f), ModelContext.mWorld);
 
     Output.Position = mul(WorldPosition, ViewProjection);
-    Output.Normal = mul(Input.Normal, (float3x3) ModelContext.World);
+    Output.Normal = mul(Input.Normal, (float3x3) ModelContext.mWorld);
     Output.UV = Input.UV;
     Output.Color = Input.Color;
     Output.WorldPosition = WorldPosition.xyz;
-    Output.MaterialIndex = ModelContext.MaterialIndex;
+    Output.MaterialIndex = ModelContext.mMaterialIndex;
     Output.ColorCoefficient = float3(1.0f, 1.0f, 1.0f);
 
     return Output;
@@ -105,7 +97,7 @@ PS_INPUT mainVS(VS_INPUT Input, uint ModelIndex : MODEL_INDEX)
 float4 mainPS(PS_INPUT Input) : SV_TARGET
 {
     float4 Color = BaseColorTexture.Sample(LinearWrap, Input.UV);
+
     return Color;
  
-
 }

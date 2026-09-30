@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Math/FMath.h"
 #include "Core/Archive/FArchive.h"
@@ -10,6 +10,14 @@ public:
     FTransform(const FVector3& InPosition, const FRotator& InRotation, const FVector3& InScale);
 
     FTransform(const FVector3& InPosition, const FQuat& InRotation, const FVector3& InScale);
+
+    FTransform(const FTransform& Other) = default;
+    FTransform& operator=(const FTransform& Other);
+    FTransform(FTransform&& Other) noexcept = default;
+    FTransform& operator=(FTransform&& Other) noexcept;
+
+public:
+    Uint64 GetRevision() const;
 
     const FVector3& GetPosition() const;
 
@@ -54,6 +62,10 @@ public:
     void Serialize(FArchive& Archive);
 
 private:
+    bool HasSameState(const FTransform& Other) const;
+    void InvalidateMatrices(bool IncludeNoScale);
+
+private:
     FVector3 mPosition{0.0f, 0.0f, 0.0f};
     FQuat mRotation{};
     FRotator mRotationEuler{};
@@ -61,4 +73,11 @@ private:
     bool mBAbsoluteLocation{false};
     bool mBAbsoluteRotation{false};
     bool mBAbsoluteScale{false};
+    Uint64 mRevision{};
+    mutable FMatrix mMatrixWithScale{};
+    mutable FMatrix mMatrixNoScale{};
+    mutable FMatrix mInverseMatrixWithScale{};
+    mutable bool mMatrixWithScaleDirty{true};
+    mutable bool mMatrixNoScaleDirty{true};
+    mutable bool mInverseMatrixWithScaleDirty{true};
 };

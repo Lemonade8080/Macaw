@@ -265,6 +265,10 @@ bool UMesh::HasLOD(int Level) const
     return LOD && LOD->IsValid();
 }
 
+Uint64 UMesh::GetRenderRevision() const {
+    return mRenderRevision;
+}
+
 bool UMesh::HasVertexAttribute(EVertexAttribute Attribute) const {
     const std::size_t Index{GetAttributeIndex(Attribute)};
 
@@ -320,6 +324,7 @@ bool UMesh::GenerateLOD(ID3D11Device* Device, Uint32 Level, float TargetRatio) {
 
     FGeneratedLOD& OutputLOD{ mGeneratedLODs[Level - 1] };
     OutputLOD.Reset();
+    ++mRenderRevision;
 
     // 같은 위치의 렌더 정점을 하나의 기하 정점으로 묶는다.
     std::map<std::tuple<float, float, float>, Uint32> PositionMap{};
@@ -753,6 +758,7 @@ bool UMesh::CreateIndexBuffer(ID3D11Device* Device, const std::span<const Uint32
 
 void UMesh::Reset() {
     RaycastAccelerationStructure = FMeshRaycastAccelerationStructure{};
+
     for (Microsoft::WRL::ComPtr<ID3D11Buffer>& Buffer : mVertexBuffers) {
         Buffer.Reset();
     }
@@ -782,6 +788,7 @@ const TArray<UMesh::FSubMesh>& UMesh::GetSubMeshes() const {
 
 void UMesh::SetSubMeshes(const std::span<FSubMesh>& InSubMeshes) {
     mSubMeshes.assign(InSubMeshes.begin(), InSubMeshes.end());
+    ++mRenderRevision;
 }
 
 bool UMesh::Raycast(const FRay& Ray, float& OutDistance, float MaxDistance) const {

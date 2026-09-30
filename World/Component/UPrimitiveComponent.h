@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "UActorComponent.h"
 #include "USceneComponent.h"
@@ -10,11 +10,14 @@ public:
     UPrimitiveComponent() = default;
     ~UPrimitiveComponent() override = default;
 
+public:
     JG_DECLARE_ABSTRACT_DERIVED_TYPEINFO(UPrimitiveComponent, USceneComponent)
 
     bool IsVisible() const;
     void SetVisible(bool BInVisible);
+
     void DrawPanels(IPropertyEditorContext* Context) override;
+
     void OnRegister() override;
     void OnUnregister() override;
     
@@ -27,6 +30,7 @@ public:
     const DirectX::BoundingOrientedBox& GetPickingBox() const;
 
     void BuildBoundsFromOBB();
+
     const DirectX::BoundingSphere& GetBoundingSphere() const;
 
     const DirectX::BoundingBox& GetWorldAABB() const;
@@ -35,11 +39,11 @@ public:
 
     virtual void OnTransformUpdate() override;
 
-protected:
     void Serialize(FArchive& Archive) override;
 
 private:
     bool mBVisible{true};
+
     DirectX::BoundingBox mLocalAABB{};
     DirectX::BoundingOrientedBox mPickingBox{DirectX::XMFLOAT3{0.f, 0.f, 0.f}, DirectX::XMFLOAT3{0.f, 0.f, 0.f}, DirectX::XMFLOAT4{0.f, 0.f, 0.f, 1.f}};
     DirectX::BoundingSphere mLocalSphere{};
@@ -48,5 +52,6 @@ private:
     DirectX::BoundingOrientedBox mWorldOBB{};
     DirectX::BoundingSphere mWorldSphere{};
 
+    Uint64 mWorldBoundsTransformRevision{};
     bool mWorldBoundsDirty{ true };
 };

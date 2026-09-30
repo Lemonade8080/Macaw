@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "Core/Property/IPropertyEditorContext.h"
 #include "UActorComponent.h"
 #include "../AActor.h"
@@ -33,12 +33,20 @@ void UActorComponent::Tick(float /*DeltaTime*/  ) {
 void UActorComponent::OnUnregister() {
 }
 
+void UActorComponent::OnRenderStateChanged() {
+}
+
 bool UActorComponent::IsActive() const {
     return mBActive;
 }
 
 void UActorComponent::SetActive(bool BInActive) {
+    if (mBActive == BInActive) {
+        return;
+    }
+
     mBActive = BInActive;
+    OnRenderStateChanged();
 }
 
 bool UActorComponent::IsRegistered() const {
@@ -60,6 +68,7 @@ UWorld* UActorComponent::GetBelongingWorld() const {
 void UActorComponent::RegisterComponent(UWorld* World) {
     ErrorHandler::Report(mOwner == nullptr and mParentWorld == nullptr, "[ UActorComponent ]", "Owner and ParentWorld must not be null.", ErrorHandler::EErrorLevel::Critical);
     ErrorHandler::Report(World != mOwner->GetWorld(), "[ UActorComponent ]", "World must match Owner's world.", ErrorHandler::EErrorLevel::Critical);
+
     if (mBRegistered)
         return;
 
@@ -81,6 +90,7 @@ void UActorComponent::UnregisterComponent() {
     }
 
     this->OnUnregister();
+
     mBRegistered = false;
     mParentWorld = nullptr;
 }
@@ -91,6 +101,7 @@ void UActorComponent::DestroyComponent(bool /*bPromoteChildren*/  ) {
     }
 
     mBIsBeingDestroyed = true;
+
     UnregisterComponent();
 
     if (mOwner != nullptr) {
@@ -106,6 +117,10 @@ void UActorComponent::Serialize(FArchive& Archive) {
     UObject::Serialize(Archive);
 
     Archive.Serialize("bActive", mBActive);
+
+    if (Archive.IsLoading()) {
+        OnRenderStateChanged();
+    }
 }
 
 void UActorComponent::DrawPanels(IPropertyEditorContext* Context) {

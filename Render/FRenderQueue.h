@@ -1,41 +1,62 @@
 #pragma once
 
 #include "FRenderView.h"
-#include "Asset/FMaterialChunkSignature.h"
-#include "FBVHTree.h"
+#include "FRenderScene.h"
 
 class IAssetRegistry;
 
-struct FMeshDrawItem {
-    FActorProbe mProbe{};
-    FMaterialChunkSignature mTextureSignature{};
+struct FMeshDrawRecord {
+    Uint32 mObjectIndex{};
     Uint32 mMaterialIndex{};
-    Uint32 mMaterialGroupIndex{};
-    Uint32 mFirstIndex{};
-    Uint32 mIndexCount{};
-    Uint32 mLODLevel{};
-    Uint32 mModelIndex{};
-    bool HasSameBatch(const FMeshDrawItem& Other) const;
+    Uint32 mFlags{};
+    Uint32 mPadding{};
+};
+
+static_assert(sizeof(FMeshDrawRecord) == 16);
+
+struct FMeshDrawBatch {
+    FMeshDrawState mState{};
+
+    Uint32 mFirstRecord{};
+    Uint32 mRecordCount{};
+    Uint32 mFlags{};
 };
 
 class FRenderQueue {
+private:
+    struct FVisibleObject {
+        Uint32 mObjectIndex{};
+        Uint32 mLODLevel{};
+        Uint32 mFlags{};
+    };
+
 public:
-    void Build(const IAssetRegistry* Registry, const FSceneRenderData& Scene, const FRenderView& View);
-    const TArray<FMeshDrawItem>& GetItems(ERenderPass Pass) const;
+    void Build(const IAssetRegistry* Registry, const FRenderScene& Scene, const FRenderView& View);
+
+    const TArray<FMeshDrawBatch>& GetItems(ERenderPass Pass) const;
+    const TArray<FMeshDrawRecord>& GetDrawRecords() const;
+    const TArray<FMatrix>& GetGizmoTransforms() const;
 
 private:
-    void BuildItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, TArray<FMeshDrawItem>& Items, bool RenderSky, const CameraProbe& Camera, bool BUseLOD);
-    void AddItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, std::size_t Begin, std::size_t End, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, Uint32 LODLevel, TArray<FMeshDrawItem>& Items);
+    void BuildSceneItems(const FRenderScene& Scene, const FRenderView& View);
+    void BuildGizmoItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes);
 
-    void FrustumCulling(const TArray<FActorProbe>& BeforeCullingProbes, const FFrustum& Frustum);
+    Uint32 SelectLODLevel(const FRenderSceneObject& Object, const FRenderTemplateGroup& Group, const CameraProbe& Camera, float ProjectionScale, bool Perspective) const;
+
 private:
-    TArray<FMeshDrawItem> mSceneItems{};
-    TArray<FMeshDrawItem> mOutlineItems{};
-    TArray<FMeshDrawItem> mGizmoItems{};
-    TArray<FMeshDrawItem> mEmptyItems{};
-    
-    // ÄÃ¸µµÈ ActorProbes 
-    TArray<FActorProbe> mVisibleProbes{};
-    FBVHTree mBVHTree;  
-    size_t mCachedProbeCount{ 0 };
+    TArray<FMeshDrawBatch> mSceneItems{};
+    TArray<FMeshDrawBatch> mOutlineItems{};
+    TArray<FMeshDrawBatch> mGizmoItems{};
+    TArray<FMeshDrawBatch> mEmptyItems{};
+
+    TArray<FMeshDrawRecord> mDrawRecords{};
+
+    TArray<Uint32> mVisibleObjectIndices{};
+    TArray<FVisibleObject> mVisibleObjects{};
+
+    TArray<Uint32> mBucketCounts{};
+    TArray<Uint32> mBucketWritePositions{};
+
+    TArray<FMatrix> mGizmoTransforms{};
+    TArray<FRenderBatchTemplate> mGizmoTemplates{};
 };

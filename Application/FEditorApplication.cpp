@@ -13,6 +13,7 @@ void FEditorApplication::InitializeMode(FApplicationContext& Context, HWND Windo
     if (Context.mEditorContext->GetEditorSettings().mControlPanelEnabled) {
         Context.mMenuPanel = std::make_unique<FControlPanel>(*Context.mEditorContext, WindowHandle, Context.mEditorContext->GetEditorToWorldSender());
     }
+
     Context.mEditorUIManager->Initialize(*Context.mWorld, Context.mRenderer, *Context.mAssetRegistry, *Context.mEditorContext, WindowHandle, Context.mEditorView->GetGizmoMode(), Context.mEditorView->GetGizmoCoordinateSpace(), Context.mThumbnailRenderer.get());
 }
 
@@ -23,6 +24,7 @@ void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime)
         if (ViewportHostWindow != nullptr) {
             ViewportHostWindow->ProcessInput(*Context.mEditorView, Context.mKeyboardInput, Context.mMouseInput, DeltaTime);
         }
+
         Context.mWorldCommandChannel->Dispatch();
         Context.mWorld->Tick(DeltaTime);
         Context.mEditorContext->Dispatch();
@@ -31,11 +33,13 @@ void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime)
     if (ViewportHostWindow == nullptr) {
         return;
     }
+
     const Stat::FScopedSystemStatTimer RenderStat{ Stat::ESystemStatStage::RenderPreparation };
-    FSceneRenderData Scene{};
     const AActor* SelectedActor{ Context.mEditorContext->GetSelectedActor() };
     const FObjectHandle SelectedActorHandle{ SelectedActor != nullptr ? SelectedActor->GetHandle() : FObjectHandle{} };
-    Context.mWorld->BuildSceneRenderData(Scene);
+
+    Context.mWorld->BuildSceneRenderData(mSceneData);
+    const FRenderScene& RenderScene{Context.mRenderer.SynchronizeScene(mSceneData)};
 
     for (FViewportId Id{}; Id < FViewportHostWindow::MaximumViewportCount; ++Id) {
         FEditorViewport* Viewport{ViewportHostWindow->PrepareViewportForRender(Id)};
@@ -54,7 +58,8 @@ void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime)
         View.mSettings = Viewport->GetRenderSettings();
         View.mRenderMode = static_cast<ERenderMode>(Context.mEditorContext->GetRenderModeState());
         View.mSelectedActorHandle = SelectedActorHandle;
+
         Context.mEditorView->BuildViewRenderData(View, Camera, Viewport->GetCameraPosition(), Viewport->GetRenderViewport());
-        Context.mRenderer.RenderView(View, Scene);
+        Context.mRenderer.RenderView(View, RenderScene);
     }
 }

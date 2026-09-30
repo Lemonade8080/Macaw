@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "UWorld.h"
 #include "FTemporarySceneLoader.h"
 
@@ -283,11 +283,20 @@ const ULightSubsystem& UWorld::GetLightSubsystem() const {
     return *mLightSubsystem;
 }
 
-void UWorld::BuildSceneRenderData(FSceneRenderData& Scene) const {
+void UWorld::BuildSceneRenderData(FSceneRenderData& Scene) {
     mRenderSubsystem->BuildRenderProbes(Scene);
+
     mLightSubsystem->BuildLightProbes(Scene);
     mTextSubsystem->BuildTextProbes(Scene);
     mBillboardSubsystem->BuildRenderProbes(Scene);
+}
+
+void UWorld::MarkOutlinerDirty() {
+    ++mOutlinerRevision;
+}
+
+uint64 UWorld::GetOutlinerRevision() const {
+    return mOutlinerRevision;
 }
 
 void UWorld::SetEditorContext(FWorldEditorContext* InEditorContext) {
@@ -563,7 +572,7 @@ void UWorld::HandleMouseCameraRotateRequest(const FMouseCameraRotateRequestMessa
     const FEditorSettings Settings{mEditorContext != nullptr ? mEditorContext->GetEditorSettings() : FEditorSettings{}};
     const float RotationSensitivity{Settings.mRotationSensitivity * 0.001f};
     constexpr float MaximumForwardUp{0.99f};
-    FTransform& CameraTransform{Camera->GetRelativeTransform()};
+    FTransform CameraTransform{Camera->GetRelativeTransform()};
     FVector3 Forward{CameraTransform.ToMatrixNoScale().Forward()};
     Forward.Normalize();
 
@@ -578,6 +587,8 @@ void UWorld::HandleMouseCameraRotateRequest(const FMouseCameraRotateRequestMessa
     FQuat NewRotation{FQuat::Concatenate(YawRotation, PitchRotation)};
     NewRotation.Normalize();
     CameraTransform.SetRotation(NewRotation);
+
+    Camera->SetRelativeTransform(CameraTransform);
 }
 
 void UWorld::HandleKeyboardCameraMoveRequest(const FKeyboardCameraMoveRequestMessage& Message) {
@@ -594,8 +605,8 @@ void UWorld::HandleKeyboardCameraMoveRequest(const FKeyboardCameraMoveRequestMes
 
     MoveDirection.Normalize();
     const FEditorSettings Settings{mEditorContext != nullptr ? mEditorContext->GetEditorSettings() : FEditorSettings{}};
-    FTransform& CameraTransform{Camera->GetRelativeTransform()};
-    CameraTransform.SetPosition(CameraTransform.GetPosition() + MoveDirection * Settings.mMoveSensitivity * Message.DeltaTime);
+
+    Camera->SetRelativeLocation(Camera->GetRelativeLocation() + MoveDirection * Settings.mMoveSensitivity * Message.DeltaTime);
 }
 
 void UWorld::HandleMouseCameraMoveRequestMessage(const FMouseCameraMoveRequestMessage& Message) {
@@ -611,9 +622,9 @@ void UWorld::HandleMouseCameraMoveRequestMessage(const FMouseCameraMoveRequestMe
     Up.Normalize();
     const FEditorSettings Settings{mEditorContext != nullptr ? mEditorContext->GetEditorSettings() : FEditorSettings{}};
     const float PanScale{Settings.mMoveSensitivity * 0.01f};
-    FTransform& CameraTransform{Camera->GetRelativeTransform()};
     const FVector3 Offset{Right * (-Message.DeltaX * PanScale) + Up * (-Message.DeltaY * PanScale)};
-    CameraTransform.SetPosition(CameraTransform.GetPosition() + Offset);
+
+    Camera->SetRelativeLocation(Camera->GetRelativeLocation() + Offset);
 }
 
 void UWorld::HandleMouseCameraDollyRequestMessage(const FMouseCameraDollyRequestMessage& Message) {
@@ -626,8 +637,8 @@ void UWorld::HandleMouseCameraDollyRequestMessage(const FMouseCameraDollyRequest
     ForwardDirection.Normalize();
     const FEditorSettings Settings{mEditorContext != nullptr ? mEditorContext->GetEditorSettings() : FEditorSettings{}};
     const float DollySpeed{Settings.mMoveSensitivity * 0.3f};
-    FTransform& CameraTransform{Camera->GetRelativeTransform()};
-    CameraTransform.SetPosition(CameraTransform.GetPosition() + ForwardDirection * (Message.Steps * DollySpeed));
+
+    Camera->SetRelativeLocation(Camera->GetRelativeLocation() + ForwardDirection * (Message.Steps * DollySpeed));
 }
 #endif
 

@@ -67,6 +67,7 @@ bool FViewerPanel::OpenViewerFile(const std::filesystem::path& FilePath) {
     }
     if (Extension != ".mtl" && mRegistry->ResolveAsset<UMesh>(Handle) != nullptr) {
         SetMesh(Handle);
+
         const UMesh* Mesh{mRegistry->ResolveAsset<UMesh>(mMeshHandle)};
         const Uint32 VertexCount{Mesh->GetVertexAttributeCount(EVertexAttribute::Position)};
         const Uint32 VertexStride{Mesh->GetVertexStride(EVertexAttribute::Position)};
@@ -198,6 +199,10 @@ FMatrix FViewerPanel::MakeCameraWorldMatrix(const FVector3& Eye) const {
 
 FSceneRenderData FViewerPanel::BuildPreviewScene() {
     FSceneRenderData Scene{};
+    Scene.mSceneId = mRenderSceneId;
+    Scene.mRevision = ++mRenderSceneRevision;
+    Scene.mObjectUpdates.push_back(FRenderObjectUpdate{FObjectHandle{0, 1}, {}, true});
+
     if (mRegistry == nullptr || mSurfaceWidth == 0 || mSurfaceHeight == 0) {
         return Scene;
     }
@@ -219,13 +224,19 @@ FSceneRenderData FViewerPanel::BuildPreviewScene() {
         }
     }
     const FAssetHandle PipelineHandle{mRegistry->FindAsset(FAssetPath{HasTexture ? TexturedPipelinePath : DefaultPipelinePath})};
-    UPipeline* Pipeline{mRegistry->ResolveAsset<UPipeline>(PipelineHandle)};
-    if (mMeshHandle && mMaterialHandle && Pipeline != nullptr) {
-        FActorProbe ActorProbe{};
+    const UPipeline* Pipeline{mRegistry->ResolveAsset<UPipeline>(PipelineHandle)};
+    const UMesh* Mesh{mRegistry->ResolveAsset<UMesh>(mMeshHandle)};
+    const UMaterial* Material{mRegistry->ResolveAsset<UMaterial>(mMaterialHandle)};
+    if (Mesh != nullptr && Material != nullptr && Pipeline != nullptr) {
+        FRenderObjectUpdate& Update{Scene.mObjectUpdates.front()};
+        FActorProbe& ActorProbe{Update.mProbe};
         ActorProbe.mMeshHandle = mMeshHandle;
         ActorProbe.mMaterialHandle = mMaterialHandle;
         ActorProbe.mPipelineHandle = PipelineHandle;
-        Scene.mActorProbes.push_back(ActorProbe);
+        Mesh->GetBoundingBox().Transform(ActorProbe.mWorldOBB, ActorProbe.mWorld.ToSimpleMath());
+        DirectX::BoundingSphere::CreateFromBoundingBox(ActorProbe.mWorldSphereBounds, ActorProbe.mWorldOBB);
+        DirectX::BoundingBox::CreateFromSphere(ActorProbe.mWorldAABB, ActorProbe.mWorldSphereBounds);
+        Update.mRemoved = false;
     }
 
     FLightProbe LightProbe{};
@@ -248,6 +259,11 @@ CameraProbe FViewerPanel::BuildPreviewCamera() const {
     Camera.mView = MakeCameraWorldMatrix(Eye).Invert();
     Camera.mProjection = FMatrix::CreatePerspectiveFieldOfView(mFieldOfView, Aspect, 0.1f, std::max(1000.0f, mDistance * 4.0f));
     Camera.mViewProjection = Camera.mView * Camera.mProjection;
+
+    FFrustum LocalFrustum{};
+    FFrustum::CreateFromMatrix(LocalFrustum, Camera.mProjection.ToSimpleMath());
+    LocalFrustum.Transform(Camera.mViewFrustum, Camera.mView.Inverse().ToSimpleMath());
+
     return Camera;
 }
 
@@ -281,11 +297,14 @@ void FViewerPanel::RenderOffscreen(FRenderer& InRenderer, FAssetRegistry&) {
     }
 
     FSceneRenderData PreviewScene{BuildPreviewScene()};
+
     FRenderSettings PreviewSettings{};
     PreviewSettings.mClearColor = FVector4{0.12f, 0.13f, 0.15f, 1.0f};
+
     FRenderView View{};
     View.mTarget = &mSurface;
     View.mCamera = BuildPreviewCamera();
+    View.mUseLOD = false;
     View.mSettings = PreviewSettings;
     View.mOrientationAxisSize = 100.0f;
     View.mPasses.reset();

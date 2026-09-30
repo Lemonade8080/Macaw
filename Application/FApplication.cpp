@@ -58,6 +58,7 @@ int FApplication::Run(HINSTANCE Instance, int ShowCommand) {
         Progress.SetProgress(0.96f + ThumbnailProgress * 0.04f, Finished ? "Ready" : "Generating thumbnails");
         return Finished;
     })};
+
     mEditorLogo = LoadingScreen.TakeLogoShaderResourceView();
     if (!Loaded) {
         Shutdown();
@@ -70,11 +71,14 @@ int FApplication::Run(HINSTANCE Instance, int ShowCommand) {
     mFrameTimer.Reset();
     Stat::ResetFrameStats();
     mWindowState.mFrameEnabled = true;
+    
     const int ExitCode{RunMessageLoop(AcceleratorTable)};
+    
     mWindowState.mFrameEnabled = false;
     SaveState();
     Shutdown();
     mContext.mRenderer.ReportLiveObjects();
+    
     return ExitCode;
 }
 
