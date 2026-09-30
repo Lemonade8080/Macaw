@@ -238,8 +238,8 @@ void FRenderer::DrawOrientationAxis(const FRenderView& View) {
     mLineRenderer.AddRay(FVector3{}, FVector3{0.0f, 1.0f, 0.0f}, 1.0f, FVector4{0.0f, 1.0f, 0.0f, 1.0f}, 3.0f);
     mLineRenderer.AddRay(FVector3{}, FVector3{0.0f, 0.0f, 1.0f}, 1.0f, FVector4{0.0f, 0.0f, 1.0f, 1.0f}, 3.0f);
     const CameraProbe AxisCamera{AxisView * Projection, AxisView, Projection};
-    if (mCurrentFrameResource->UpdateView(mDeviceContext.Get(), AxisCamera, AxisViewport, FVector4{})) {
-        mLineRenderer.Render(mDeviceContext.Get(), *mCurrentFrameResource);
+    if (mCurrentFrameResource->PrepareOrientationAxis(mDeviceContext.Get(), AxisCamera, AxisViewport)) {
+        mLineRenderer.RenderOrientationAxis(mDeviceContext.Get(), *mCurrentFrameResource);
     }
 }
 
@@ -324,6 +324,15 @@ void FRenderer::CreateDeviceAndSwapChain(HWND WindowHandle) {
     }
     ErrorHandler::ReportHRESULT(Result, "[ FRenderer ]", "Failed to create Direct3D device and swap chain.", ErrorHandler::EErrorLevel::Critical);
     mSwapChain->GetDesc(&SwapChainDesc);
+
+
+    Microsoft::WRL::ComPtr<IDXGIDevice1> DxgiDevice{};
+    if (SUCCEEDED(mDevice.As(&DxgiDevice))) {
+        const HRESULT LatencyResult{DxgiDevice->SetMaximumFrameLatency(1)};
+        ErrorHandler::ReportHRESULT(LatencyResult, "[ FRenderer ]", "Failed to set the maximum frame latency.", ErrorHandler::EErrorLevel::Warning);
+        const HRESULT PriorityResult{DxgiDevice->SetGPUThreadPriority(0)};
+        ErrorHandler::ReportHRESULT(PriorityResult, "[ FRenderer ]", "Failed to restore the default GPU thread priority.", ErrorHandler::EErrorLevel::Warning);
+    }
 }
 
 bool FRenderer::CreateSamplerStates() {

@@ -10,6 +10,8 @@
 class FFrameResource;
 
 enum class ERenderMode : std::size_t;
+class UPipeline;
+class UTexture;
 
 struct FBillboardData {
     FMatrix mWorld{};
@@ -21,6 +23,32 @@ struct FBillboardData {
 };
 
 class FBillboardRenderer {
+private:
+    struct FBatchKey {
+        FAssetHandle mPipelineHandle{};
+        FAssetHandle mTextureHandle{};
+
+        bool operator==(const FBatchKey& Other) const;
+    };
+
+    struct FBatchKeyHash {
+        std::size_t operator()(const FBatchKey& Key) const noexcept;
+    };
+
+    struct FBillboardDraw {
+        const UPipeline* mPipeline{};
+        const UTexture* mTexture{};
+        Uint32 mFirstInstance{};
+        Uint32 mInstanceCount{};
+    };
+
+    struct FBillboardBatch {
+        FBillboardDraw mDraw{};
+        Uint32 mWriteCount{};
+    };
+
+    static_assert(sizeof(FBillboardData) == 112);
+
 public:
     FBillboardRenderer() = default;
     ~FBillboardRenderer() = default;
@@ -31,5 +59,6 @@ public:
 
 private:
     ID3D11Device* mDevice{nullptr};
-
+    TArray<FBillboardData> mInstances{};
+    TArray<FBillboardDraw> mDraws{};
 };

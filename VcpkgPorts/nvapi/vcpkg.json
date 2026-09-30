@@ -1,0 +1,8 @@
+{
+  "name": "nvapi",
+  "version-date": "2026-09-18",
+  "description": "NVIDIA NVAPI SDK headers and driver API loader library",
+  "homepage": "https://github.com/NVIDIA/nvapi",
+  "license": "MIT",
+  "supports": "windows & x64 & !uwp & !xbox"
+}

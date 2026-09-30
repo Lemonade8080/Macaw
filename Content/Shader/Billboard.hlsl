@@ -1,24 +1,15 @@
-struct FBillboardData
-{
-    row_major float4x4 World;
-    float2 Size;
-    float2 UVMin;
-    float2 UVMax;
-    float2 Pad;
-    float4 Color;
-};
-
-StructuredBuffer<FBillboardData> Billboards : register(t0);
-
 Texture2D SpriteTexture : register(t3);
 SamplerState LinearWrap : register(s0);
 SamplerState LinearClamp : register(s1);
 
 #include "FrameResource.hlsli"
 
-struct VS_OUTPUT
-{
-    uint InstanceID : INSTANCE_ID;
+struct VS_INPUT {
+    float3 mOrigin : POSITION;
+    float2 mSize : SIZE;
+    float2 mUvMin : TEXCOORD0;
+    float2 mUvMax : TEXCOORD1;
+    float4 mColor : COLOR0;
 };
 
 struct PS_INPUT
@@ -28,26 +19,21 @@ struct PS_INPUT
     float4 Color : COLOR0;
 };
 
-VS_OUTPUT mainVS(uint InstanceID : SV_InstanceID)
-{
-    VS_OUTPUT Output;    
-    Output.InstanceID = InstanceID;    
-    return Output;
+VS_INPUT mainVS(VS_INPUT Input) {
+    return Input;
 }
 
 [maxvertexcount(4)] 
-void mainGS(point VS_OUTPUT Input[1], inout TriangleStream<PS_INPUT> Stream)
+void mainGS(point VS_INPUT Input[1], inout TriangleStream<PS_INPUT> Stream)
 {
-    uint BillboardIndex = Input[0].InstanceID;
-    FBillboardData Data = Billboards[BillboardIndex];
-
-    float3 Origin = mul(float4(0.0f, 0.0f, 0.0f, 1.0f), Data.World).xyz;
+    const VS_INPUT Data = {Input[0]};
+    const float3 Origin = {Data.mOrigin};
 
     float3 CameraRight = normalize(CameraWorld[0].xyz);
     float3 CameraUp = normalize(CameraWorld[1].xyz);
 
-    float HalfW = Data.Size.x * 0.5;
-    float HalfH = Data.Size.y * 0.5;
+    float HalfW = Data.mSize.x * 0.5;
+    float HalfH = Data.mSize.y * 0.5;
 
     float3 TopLeft = Origin - CameraRight * HalfW + CameraUp * HalfH;
     float3 BottomLeft = Origin - CameraRight * HalfW - CameraUp * HalfH;
@@ -55,22 +41,22 @@ void mainGS(point VS_OUTPUT Input[1], inout TriangleStream<PS_INPUT> Stream)
     float3 BottomRight = Origin + CameraRight * HalfW - CameraUp * HalfH;
 
     PS_INPUT Output;
-    Output.Color = Data.Color;
+    Output.Color = Data.mColor;
 
     Output.Position = mul(float4(TopLeft, 1.0f), ViewProjection);
-    Output.UV = float2(Data.UVMin.x, Data.UVMin.y);
+    Output.UV = float2(Data.mUvMin.x, Data.mUvMin.y);
     Stream.Append(Output);
 
     Output.Position = mul(float4(BottomLeft, 1.0f), ViewProjection);
-    Output.UV = float2(Data.UVMin.x, Data.UVMax.y);
+    Output.UV = float2(Data.mUvMin.x, Data.mUvMax.y);
     Stream.Append(Output);
 
     Output.Position = mul(float4(TopRight, 1.0f), ViewProjection);
-    Output.UV = float2(Data.UVMax.x, Data.UVMin.y);
+    Output.UV = float2(Data.mUvMax.x, Data.mUvMin.y);
     Stream.Append(Output);
 
     Output.Position = mul(float4(BottomRight, 1.0f), ViewProjection);
-    Output.UV = float2(Data.UVMax.x, Data.UVMax.y);
+    Output.UV = float2(Data.mUvMax.x, Data.mUvMax.y);
     Stream.Append(Output);
 
     Stream.RestartStrip();
