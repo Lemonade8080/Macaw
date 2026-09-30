@@ -2,6 +2,7 @@
 
 #include "FAssetThumbnailRenderer.h"
 #include "Render/Renderer.h"
+#include "Core/Stat/Stat.h"
 
 #include "Asset/UMaterial.h"
 #include "Asset/UMesh.h"
@@ -80,6 +81,7 @@ void FAssetThumbnailRenderer::RenderMaterialPreview(FAssetHandle MaterialHandle,
 }
 
 void FAssetThumbnailRenderer::RenderThumbnail(const FAssetEntry& Entry, FSceneRenderSurface* PreviewSurface) {
+    const Stat::FScopedSystemStatTimer StageStat{ Stat::ESystemStatStage::PreviewRender };
     if (mRenderer == nullptr || mAssetRegistry == nullptr || Entry.mAsset == nullptr) {
         return;
     }

@@ -101,7 +101,6 @@ void FRenderer::BeginFrame(float DeltaTime) {
         return;
     }
 
-    const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::RenderBeginFrame};
     if (std::isfinite(DeltaTime) && DeltaTime > 0.0f) {
         mAnimationTime = std::fmod(mAnimationTime + DeltaTime, 25.0f);
     }
@@ -113,7 +112,6 @@ void FRenderer::BeginFrame(float DeltaTime) {
         const HRESULT Result{mFrameFence->SetEventOnCompletion(CompletionValue, mFrameFenceEvent)};
         ErrorHandler::ReportHRESULT(Result, "[ FRenderer ]", "Failed to register the frame fence event.", ErrorHandler::EErrorLevel::Critical);
         mDeviceContext->Flush();
-        const Stat::FScopedSystemStatTimer WaitStat{Stat::ESystemStatStage::RenderFenceWait};
         for (;;) {
             const DWORD WaitResult{WaitForSingleObject(mFrameFenceEvent, 1000)};
             if (WaitResult == WAIT_OBJECT_0) {
@@ -136,12 +134,11 @@ void FRenderer::BeginFrame(float DeltaTime) {
 }
 
 void FRenderer::RenderView(const FRenderView& View, const FSceneRenderData& Scene) {
+    const Stat::FScopedSystemStatTimer RenderStat{ Stat::ESystemStatStage::RenderPreparation };
     if (View.mTarget == nullptr || !View.mTarget->IsValid() || mDeviceContext == nullptr || mCurrentFrameResource == nullptr) {
         return;
     }
-    const Stat::FScopedSystemStatTimer RenderStat{Stat::ESystemStatStage::RenderView};
     {
-        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::RenderTarget};
         ID3D11ShaderResourceView* NullResource{nullptr};
         mDeviceContext->PSSetShaderResources(0, 1, &NullResource);
         View.mTarget->Bind(mDeviceContext.Get());
@@ -151,26 +148,23 @@ void FRenderer::RenderView(const FRenderView& View, const FSceneRenderData& Scen
     if (mAssetRegistry == nullptr) {
         return;
     }
-    {
-        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::RenderMaterials};
-        mAssetRegistry->FlushMaterialBuffer(mDeviceContext.Get());
-    }
-    {
-        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::RenderQueue};
-        mRenderQueue.Build(mAssetRegistry, Scene, View);
-    }
-    {
-        const Stat::FScopedSystemStatTimer StageStat{Stat::ESystemStatStage::RenderViewUpload};
-        if (!mCurrentFrameResource->PrepareView(mDevice.Get(), mDeviceContext.Get(), View, Scene, mRenderQueue)) {
-            return;
-        }
+    mAssetRegistry->FlushMaterialBuffer(mDeviceContext.Get());
+    mRenderQueue.Build(mAssetRegistry, Scene, View);
+    if (!mCurrentFrameResource->PrepareView(mDevice.Get(), mDeviceContext.Get(), View, Scene, mRenderQueue)) {
+        return;
     }
     const FRenderContext Context{mDeviceContext.Get(), mAssetRegistry, mAssetRegistry->GetMaterialBufferSRV(), mCurrentFrameResource};
-    constexpr std::array Passes{std::pair{ERenderPass::SceneGeometry, Stat::ESystemStatStage::RenderGeometry}, std::pair{ERenderPass::SelectionOutline, Stat::ESystemStatStage::RenderSelectionOutline}, std::pair{ERenderPass::SceneGuides, Stat::ESystemStatStage::RenderSceneGuides}, std::pair{ERenderPass::Gizmo, Stat::ESystemStatStage::RenderGizmo}, std::pair{ERenderPass::Text, Stat::ESystemStatStage::RenderText}, std::pair{ERenderPass::Billboard, Stat::ESystemStatStage::RenderBillboard}, std::pair{ERenderPass::OrientationAxis, Stat::ESystemStatStage::RenderOrientationAxis}};
-    for (const auto& [Pass, Stage] : Passes) {
-        if (View.IsPassEnabled(Pass)) {
-            const Stat::FScopedSystemStatTimer StageStat{Stage};
-            ExecutePass(Pass, Context, View, Scene);
+    if (View.IsPassEnabled(ERenderPass::SceneGeometry)) {
+        const Stat::FScopedSystemStatTimer StageStat{ Stat::ESystemStatStage::Geometry };
+        ExecutePass(ERenderPass::SceneGeometry, Context, View, Scene);
+    }
+    {
+        const Stat::FScopedSystemStatTimer StageStat{ Stat::ESystemStatStage::EditorOverlays };
+        constexpr std::array Passes{ ERenderPass::SelectionOutline, ERenderPass::SceneGuides, ERenderPass::Gizmo, ERenderPass::Text, ERenderPass::Billboard, ERenderPass::OrientationAxis };
+        for (const ERenderPass Pass : Passes) {
+            if (View.IsPassEnabled(Pass)) {
+                ExecutePass(Pass, Context, View, Scene);
+            }
         }
     }
     View.mTarget->Bind(mDeviceContext.Get());
@@ -232,7 +226,7 @@ void FRenderer::DrawOrientationAxis(const FRenderView& View) {
     mDeviceContext->RSSetViewports(1, &AxisViewport);
     FMatrix AxisView{View.mCamera.mView};
     AxisView.Translation(FVector3{0.0f, 0.0f, 3.0f});
-    const FMatrix Projection{FMatrix::CreateOrthographic(2.5f, 2.5f, 0.1f, 10.0f)};
+    const FMatrix Projection{FMatrix::CreateOrthographic(2.5f, 2.5f, 0.5f, 10.0f)};
     mLineRenderer.Clear();
     mLineRenderer.AddRay(FVector3{}, FVector3{1.0f, 0.0f, 0.0f}, 1.0f, FVector4{1.0f, 0.0f, 0.0f, 1.0f}, 3.0f);
     mLineRenderer.AddRay(FVector3{}, FVector3{0.0f, 1.0f, 0.0f}, 1.0f, FVector4{0.0f, 1.0f, 0.0f, 1.0f}, 3.0f);

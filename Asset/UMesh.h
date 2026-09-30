@@ -106,6 +106,17 @@ private:
     TArray<FNode> Nodes;
 };
 
+/* LOD */
+struct FEdge
+{
+    Uint32 V0;
+    Uint32 V1;
+    Uint32 FaceCount{ 0 };
+
+    float Cost{ 0.0f };
+    FVector3 NewPosition;
+};
+
 class UMesh : public UAsset {
 private:
     struct FVertexAttributeStorageBase { virtual ~FVertexAttributeStorageBase() = default; virtual const void* GetData() const = 0; virtual Uint32 GetCount() const = 0; virtual Uint32 GetStride() const = 0; };
@@ -136,7 +147,11 @@ public:
     template <CVertexAttributeView... TAttributes> bool Make(ID3D11Device* Device, const std::span<const Uint32>& InIndices, const TAttributes&... InAttributes);
 
     ID3D11Buffer* GetVertexBuffer(EVertexAttribute Attribute) const;
+    ID3D11Buffer* GetVertexBuffer(EVertexAttribute Attribute, int Level) const;
     ID3D11Buffer* GetIndexBuffer() const;
+    ID3D11Buffer* GetIndexBuffer(int Level) const;
+    Uint32 GetIndexCount(int Level = 0) const;
+    bool HasLOD(int Level) const;
 
     bool HasVertexAttribute(EVertexAttribute Attribute) const;
 
@@ -156,6 +171,46 @@ public:
     bool Raycast(const FRay& Ray, float& OutDistance, float MaxDistance = std::numeric_limits<float>::max()) const;
 
     const inline DirectX::BoundingOrientedBox GetBoundingBox() const { return mBoundingBox; }
+
+    /* LOD */
+    bool GenerateLOD(ID3D11Device* Device, Uint32 Level, float TargetRatio);
+
+    TArray<FEdge> BuildEdges(const TArray<Uint32>& Indices);
+	FEdge FindShortestEdge(const TArray<FEdge>& Edges, const TArray<FVector3>& Positions);
+	bool CanCollapseEdge(const FEdge& Edge, TArray<FVector3>& LODPositions, TArray<Uint32>& LODIndices);
+
+private:
+    struct FGeneratedLOD
+    {
+        TArray<FVector3> mPositions{};
+        TArray<Uint32> mIndices{};
+
+        Microsoft::WRL::ComPtr<ID3D11Buffer> mVertexBuffer{};
+
+        Microsoft::WRL::ComPtr<ID3D11Buffer> mIndexBuffer{};
+
+        bool IsValid() const
+        {
+            return mVertexBuffer != nullptr && mIndexBuffer != nullptr && !mPositions.empty() && !mIndices.empty();
+        }
+
+        void Reset()
+        {
+            mVertexBuffer.Reset();
+            mIndexBuffer.Reset();
+            mPositions.clear();
+            mIndices.clear();
+        }
+    };
+
+    FGeneratedLOD* GetGeneratedLOD(int Level);
+    const FGeneratedLOD* GetGeneratedLOD(int Level) const;
+
+    bool CreateLODVertexBuffer(ID3D11Device* Device, FGeneratedLOD& LOD);
+    bool CreateLODIndexBuffer(ID3D11Device* Device, FGeneratedLOD& LOD);
+
+    // Level 1은 index 0, Level 2는 index 1
+    TArray<FGeneratedLOD> mGeneratedLODs{};
 
 protected:
     virtual void Serialize(FArchive& Ar) override;

@@ -12,13 +12,16 @@ namespace {
         FStats mStats{};
         FStatAverages mWindowTotals{};
         FStatAverages mAverages{};
+        std::chrono::steady_clock::time_point mFrameStartTime{};
+        std::chrono::steady_clock::time_point mLastSampleTime{};
+        ESystemStatStage mCurrentStage{ ESystemStatStage::Other };
         double mFrameWindowSeconds{};
         double mPickingWindowMilliseconds{};
         std::uint64_t mPickingWindowCount{};
         std::uint64_t mFrameWindowCount{};
         std::uint64_t mActiveFrameId{};
         bool mFrameActive{};
-        bool mPublishAverages{};
+        bool mFramePending{};
     };
 
     FStatState& GetStatState() {
@@ -31,10 +34,15 @@ namespace {
         ++Totals.mFrameCount;
         for (std::size_t Index{}; Index < Totals.mSystemSamples.size(); ++Index) {
             Totals.mSystemSamples[Index].mTotalMilliseconds += State.mCurrentSamples[Index].mTotalMilliseconds;
+            Totals.mSystemSamples[Index].mExclusiveMilliseconds += State.mCurrentSamples[Index].mExclusiveMilliseconds;
             Totals.mSystemSamples[Index].mCallCount += static_cast<double>(State.mCurrentSamples[Index].mCallCount);
         }
         Totals.mObjects.mObjectCount += static_cast<double>(State.mStats.mObjects.mObjectCount);
         Totals.mObjects.mActorCount += static_cast<double>(State.mStats.mObjects.mActorCount);
+        Totals.mLOD.mLevel = State.mStats.mLOD.mLevel;
+        Totals.mLOD.mRenderedTriangleCount += static_cast<double>(State.mStats.mLOD.mRenderedTriangleCount);
+        Totals.mLOD.mOriginalTriangleCount += static_cast<double>(State.mStats.mLOD.mOriginalTriangleCount);
+        Totals.mLOD.mDrawCallCount += static_cast<double>(State.mStats.mLOD.mDrawCallCount);
         const FMemoryStats& Memory{State.mStats.mMemory};
         Totals.mMemory.mAllocatedBytes += static_cast<double>(Memory.mAllocatedBytes);
         Totals.mMemory.mActiveAllocationCount += static_cast<double>(Memory.mActiveAllocationCount);
@@ -54,10 +62,14 @@ namespace {
         Averages.mFrame = State.mStats.mFrame;
         for (FSystemStatAverage& Sample : Averages.mSystemSamples) {
             Sample.mTotalMilliseconds /= FrameCount;
+            Sample.mExclusiveMilliseconds /= FrameCount;
             Sample.mCallCount /= FrameCount;
         }
         Averages.mObjects.mObjectCount /= FrameCount;
         Averages.mObjects.mActorCount /= FrameCount;
+        Averages.mLOD.mRenderedTriangleCount /= FrameCount;
+        Averages.mLOD.mOriginalTriangleCount /= FrameCount;
+        Averages.mLOD.mDrawCallCount /= FrameCount;
         Averages.mMemory.mAllocatedBytes /= FrameCount;
         Averages.mMemory.mActiveAllocationCount /= FrameCount;
         for (FTagStatAverage& Tag : Averages.mMemory.mTagStats) {
@@ -70,7 +82,11 @@ namespace {
         State.mWindowTotals = {};
         State.mPickingWindowMilliseconds = 0.0;
         State.mPickingWindowCount = 0;
-        State.mPublishAverages = false;
+    }
+
+    void RecordExclusiveTime(FStatState& State, std::chrono::steady_clock::time_point CurrentTime) {
+        State.mCurrentSamples[static_cast<std::size_t>(State.mCurrentStage)].mExclusiveMilliseconds += std::chrono::duration<double, std::milli>{ CurrentTime - State.mLastSampleTime }.count();
+        State.mLastSampleTime = CurrentTime;
     }
 
     void RecordSample(ESystemStatStage Stage, double Milliseconds, std::uint64_t FrameId) {
@@ -85,27 +101,41 @@ namespace {
     }
 }
 
-void Stat::BeginFrame(double DeltaSeconds) {
+void Stat::BeginFrame() {
     FStatState& State{GetStatState()};
     if (State.mFrameActive) {
         return;
     }
-    State.mCurrentSamples = {};
-    FFrameStats& Frame{State.mStats.mFrame};
-    Frame.mDeltaSeconds = std::isfinite(DeltaSeconds) && DeltaSeconds > 0.0 ? DeltaSeconds : 0.0;
-    Frame.mElapsedSeconds += Frame.mDeltaSeconds;
-    ++Frame.mFrameCount;
-    if (Frame.mDeltaSeconds > 0.0) {
+    const auto CurrentTime{ std::chrono::steady_clock::now() };
+    if (State.mFramePending) {
+        FFrameStats& Frame{ State.mStats.mFrame };
+        Frame.mDeltaSeconds = std::chrono::duration<double>{ CurrentTime - State.mFrameStartTime }.count();
+        Frame.mElapsedSeconds += Frame.mDeltaSeconds;
+        ++Frame.mFrameCount;
+        FSystemStatSample& Other{ State.mCurrentSamples[static_cast<std::size_t>(ESystemStatStage::Other)] };
+        const double GapMilliseconds{ std::chrono::duration<double, std::milli>{ CurrentTime - State.mLastSampleTime }.count() };
+        Other.mTotalMilliseconds += GapMilliseconds;
+        Other.mExclusiveMilliseconds += GapMilliseconds;
+        ++Other.mCallCount;
+        State.mStats.mSystem.mSamples = State.mCurrentSamples;
+        ++State.mStats.mSystem.mFrameCount;
+        AccumulateAverages(State);
         State.mFrameWindowSeconds += Frame.mDeltaSeconds;
         ++State.mFrameWindowCount;
-        if (Frame.mFramesPerSecond == 0.0 || State.mFrameWindowSeconds >= 0.5) {
-            State.mPublishAverages = true;
+        if (State.mFrameWindowSeconds > 0.0 && (Frame.mFramesPerSecond == 0.0 || State.mFrameWindowSeconds >= 0.5)) {
             Frame.mFramesPerSecond = static_cast<double>(State.mFrameWindowCount) / State.mFrameWindowSeconds;
             Frame.mAverageFrameMilliseconds = State.mFrameWindowSeconds * 1000.0 / static_cast<double>(State.mFrameWindowCount);
+            PublishAverages(State);
             State.mFrameWindowSeconds = 0.0;
             State.mFrameWindowCount = 0;
         }
     }
+    State.mCurrentSamples = {};
+    State.mStats.mLOD = {};
+    State.mFrameStartTime = CurrentTime;
+    State.mLastSampleTime = CurrentTime;
+    State.mCurrentStage = ESystemStatStage::Other;
+    State.mFramePending = false;
     ++State.mActiveFrameId;
     State.mFrameActive = true;
 }
@@ -115,13 +145,9 @@ void Stat::EndFrame() {
     if (!State.mFrameActive) {
         return;
     }
-    State.mStats.mSystem.mSamples = State.mCurrentSamples;
-    ++State.mStats.mSystem.mFrameCount;
-    AccumulateAverages(State);
-    if (State.mPublishAverages) {
-        PublishAverages(State);
-    }
+    RecordExclusiveTime(State, std::chrono::steady_clock::now());
     State.mFrameActive = false;
+    State.mFramePending = true;
 }
 
 void Stat::ResetFrameStats() {
@@ -131,10 +157,14 @@ void Stat::ResetFrameStats() {
     State.mAverages = {};
     State.mPickingWindowMilliseconds = 0.0;
     State.mPickingWindowCount = 0;
-    State.mPublishAverages = false;
+    State.mFramePending = false;
+    State.mFrameStartTime = {};
+    State.mLastSampleTime = {};
+    State.mCurrentStage = ESystemStatStage::Other;
     State.mStats.mSystem = {};
     State.mStats.mFrame = {};
     State.mStats.mPicking = {};
+    State.mStats.mLOD = {};
     State.mFrameWindowSeconds = 0.0;
     State.mFrameWindowCount = 0;
     ++State.mActiveFrameId;
@@ -157,56 +187,26 @@ FSystemStatSample Stat::GetSystemSample(ESystemStatStage Stage) {
 
 const char* Stat::GetSystemStageName(ESystemStatStage Stage) {
     switch (Stage) {
-        case ESystemStatStage::Frame:
-            return "Frame (inclusive)";
-        case ESystemStatStage::Thumbnails:
-            return "Thumbnails";
-        case ESystemStatStage::Offscreen:
-            return "Offscreen previews";
+        case ESystemStatStage::FrameSetup:
+            return "Frame setup / fence wait";
+        case ESystemStatStage::PreviewRender:
+            return "Preview render";
         case ESystemStatStage::EditorUi:
             return "Editor UI";
-        case ESystemStatStage::Input:
-            return "Editor input";
-        case ESystemStatStage::WorldCommands:
-            return "World commands";
-        case ESystemStatStage::WorldTick:
-            return "World tick";
-        case ESystemStatStage::EditorDispatch:
-            return "Editor dispatch";
-        case ESystemStatStage::SceneRender:
-            return "Scene render";
+        case ESystemStatStage::WorldUpdate:
+            return "Input / world update";
+        case ESystemStatStage::RenderPreparation:
+            return "Scene / render preparation";
+        case ESystemStatStage::Geometry:
+            return "Scene geometry";
+        case ESystemStatStage::EditorOverlays:
+            return "Editor overlays";
         case ESystemStatStage::UiRender:
             return "UI render";
         case ESystemStatStage::Present:
             return "Present / wait";
-        case ESystemStatStage::RenderBeginFrame:
-            return "Frame setup";
-        case ESystemStatStage::RenderFenceWait:
-            return "Fence wait";
-        case ESystemStatStage::RenderView:
-            return "View render (inclusive)";
-        case ESystemStatStage::RenderTarget:
-            return "Target bind / clear";
-        case ESystemStatStage::RenderMaterials:
-            return "Material upload";
-        case ESystemStatStage::RenderQueue:
-            return "Render queue build";
-        case ESystemStatStage::RenderViewUpload:
-            return "View / light / model upload";
-        case ESystemStatStage::RenderGeometry:
-            return "Scene geometry";
-        case ESystemStatStage::RenderSelectionOutline:
-            return "Selection outline";
-        case ESystemStatStage::RenderSceneGuides:
-            return "Scene guides";
-        case ESystemStatStage::RenderGizmo:
-            return "Gizmo";
-        case ESystemStatStage::RenderText:
-            return "Text";
-        case ESystemStatStage::RenderBillboard:
-            return "Billboard";
-        case ESystemStatStage::RenderOrientationAxis:
-            return "Orientation axis";
+        case ESystemStatStage::Other:
+            return "Other work / between frames";
         default:
             return "Unknown";
     }
@@ -214,14 +214,24 @@ const char* Stat::GetSystemStageName(ESystemStatStage Stage) {
 
 Stat::FScopedSystemStatTimer::FScopedSystemStatTimer(ESystemStatStage Stage)
 	: mStage{Stage},
+	  mPreviousStage{ GetStatState().mCurrentStage },
 	  mStartTime{std::chrono::steady_clock::now()},
 	  mFrameId{GetStatState().mActiveFrameId},
-	  mActive{GetStatState().mFrameActive} {
+	  mActive{ GetStatState().mFrameActive && static_cast<std::size_t>(Stage) < static_cast<std::size_t>(ESystemStatStage::Count) && mPreviousStage != ESystemStatStage::PreviewRender } {
+    if (mActive) {
+        FStatState& State{ GetStatState() };
+        RecordExclusiveTime(State, mStartTime);
+        State.mCurrentStage = mStage;
+    }
 }
 
 Stat::FScopedSystemStatTimer::~FScopedSystemStatTimer() {
-    if (mActive) {
-        const double Milliseconds{std::chrono::duration<double, std::milli>{std::chrono::steady_clock::now() - mStartTime}.count()};
+    FStatState& State{ GetStatState() };
+    if (mActive && State.mFrameActive && State.mActiveFrameId == mFrameId) {
+        const auto CurrentTime{ std::chrono::steady_clock::now() };
+        RecordExclusiveTime(State, CurrentTime);
+        State.mCurrentStage = mPreviousStage;
+        const double Milliseconds{ std::chrono::duration<double, std::milli>{ CurrentTime - mStartTime }.count() };
         RecordSample(mStage, Milliseconds, mFrameId);
     }
 }
@@ -280,6 +290,14 @@ void Stat::RecordPickingTime(double Milliseconds, double NarrowPhaseMilliseconds
     ++State.mPickingWindowCount;
 }
 
+void Stat::RecordLODStats(std::uint32_t Level, std::uint64_t RenderedTriangleCount, std::uint64_t OriginalTriangleCount, std::uint64_t DrawCallCount) {
+    FLODStats& Stats{GetStatState().mStats.mLOD};
+    Stats.mLevel = (std::max)(Stats.mLevel, Level);
+    Stats.mRenderedTriangleCount += RenderedTriangleCount;
+    Stats.mOriginalTriangleCount += OriginalTriangleCount;
+    Stats.mDrawCallCount += DrawCallCount;
+}
+
 Stat::FStats Stat::GetStats() {
     return GetStatState().mStats;
 }
@@ -302,6 +320,10 @@ Stat::FObjectStats Stat::GetObjectStats() {
 
 Stat::FPickingStats Stat::GetPickingStats() {
     return GetStatState().mStats.mPicking;
+}
+
+Stat::FLODStats Stat::GetLODStats() {
+    return GetStatState().mStats.mLOD;
 }
 
 const char* Stat::GetMemoryTagName(EMemoryTag Tag) {

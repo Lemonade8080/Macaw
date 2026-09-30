@@ -2,6 +2,7 @@
 #include "FAssetRegistry.h"
 
 #include "UFreeTypeFont.h"
+#include "FLODSettings.h"
 #include "UMesh.h"
 #include "USurfaceOpaque.h"
 #include "UTexture.h"
@@ -583,6 +584,26 @@ bool FAssetRegistry::LoadMesh(FAssetEntry& Entry, ID3D11Device* Device) {
     if (!BInitialized) {
         Console::AddLog(Console::STDOutHandle, ELogLevel::Error, ELogCategory::Etc, "Failed to load model: %s", Entry.mPhysicalPath.generic_string().c_str());
         return false;
+    }
+
+    // 설정된 비율로 LOD1부터 마지막 LOD까지 생성한다.
+    for (Uint32 Level{ 1 }; Level < GLODCount; ++Level)
+    {
+        const float TargetRatio{ GLODSettings[Level].mTargetRatio };
+
+        if (!Mesh->GenerateLOD(Device, Level, TargetRatio))
+        {
+            Console::AddLog(Console::STDOutHandle, ELogLevel::Warning, ELogCategory::Etc,
+                "Failed to generate LOD%u: %s", Level, Entry.mPhysicalPath.generic_string().c_str());
+            continue;
+        }
+
+        Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc,
+            "Generated LOD%u: %s (%u -> %u triangles)", Level,
+            Entry.mPhysicalPath.generic_string().c_str(),
+            Mesh->GetIndexCount(0) / 3,
+            Mesh->GetIndexCount(Level) / 3
+        );
     }
 
     Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "Loaded model: %s", Entry.mPhysicalPath.generic_string().c_str());

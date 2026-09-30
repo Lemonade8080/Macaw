@@ -77,4 +77,5 @@ struct FStatDisplayFlags {
     bool mBObjectSystem{false};
     bool mBShowPicking{false};
     bool mBShowRender{false};
+    bool mBShowLOD{false};
 };
