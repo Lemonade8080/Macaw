@@ -292,13 +292,13 @@ bool FFrameResource::UploadModels(ID3D11Device* Device, ID3D11DeviceContext* Con
 bool FFrameResource::PrepareSceneTransforms(ID3D11Device* Device, ID3D11DeviceContext* Context, const FRenderScene& Scene) {
     FSceneBuffers* Destination{nullptr};
     for (FSceneBuffers& Buffers : mScenes) {
-        if (Buffers.mSceneId == Scene.GetId() && Buffers.mRevision == Scene.GetRevision() && Buffers.mResourceView != nullptr) {
+        if (Buffers.mSceneId == Scene.GetId() && Buffers.mAppliedRevision.IsCurrent(Scene.GetRevision()) && Buffers.mResourceView != nullptr) {
             Buffers.mLastUsedFrame = mFrameSerial;
             mViews[mUsedViewCount - 1].mSceneTransforms = Buffers.mResourceView;
             return true;
         }
 
-        if (Buffers.mSceneId == Scene.GetId() && Buffers.mLastUsedFrame != mFrameSerial && (Destination == nullptr || Buffers.mRevision > Destination->mRevision)) {
+        if (Buffers.mSceneId == Scene.GetId() && Buffers.mLastUsedFrame != mFrameSerial && (Destination == nullptr || Buffers.mAppliedRevision.GetRevision() > Destination->mAppliedRevision.GetRevision())) {
             Destination = &Buffers;
         }
     }
@@ -314,7 +314,7 @@ bool FFrameResource::PrepareSceneTransforms(ID3D11Device* Device, ID3D11DeviceCo
     }
 
     Destination->mLastUsedFrame = mFrameSerial;
-    Destination->mRevision = Scene.GetRevision();
+    Destination->mAppliedRevision.Commit(Scene.GetRevision());
     mViews[mUsedViewCount - 1].mSceneTransforms = Destination->mResourceView;
     return true;
 }
@@ -326,7 +326,7 @@ bool FFrameResource::UpdateSceneTransforms(ID3D11Device* Device, ID3D11DeviceCon
     }
 
     mChangedObjects.clear();
-    bool FullUpload{Buffers.mResourceView == nullptr || Scene.CollectChangedObjects(Buffers.mRevision, mChangedObjects) == ERenderUpdateMode::Full};
+    bool FullUpload{Buffers.mResourceView == nullptr || Scene.CollectChangedObjects(Buffers.mAppliedRevision.GetRevision(), mChangedObjects) == ERenderUpdateMode::Full};
 
     if (Buffers.mCapacity < Transforms.size() || Buffers.mResourceView == nullptr) {
         Uint32 Capacity{std::max(Buffers.mCapacity, 1u)};
@@ -359,7 +359,7 @@ bool FFrameResource::UpdateSceneTransforms(ID3D11Device* Device, ID3D11DeviceCon
         Buffers.mTransforms = std::move(Buffer);
         Buffers.mResourceView = std::move(ResourceView);
         Buffers.mCapacity = Capacity;
-        Buffers.mRevision = 0;
+        Buffers.mAppliedRevision.Invalidate();
         FullUpload = true;
     }
 
@@ -410,7 +410,7 @@ void FFrameResource::PruneSceneBuffers() {
             return Left.mSceneId < Right.mSceneId;
         }
 
-        return Left.mRevision > Right.mRevision;
+        return Left.mAppliedRevision.GetRevision() > Right.mAppliedRevision.GetRevision();
     });
 
     mScenes.erase(std::unique(mScenes.begin(), mScenes.end(), [](const FSceneBuffers& Left, const FSceneBuffers& Right) {

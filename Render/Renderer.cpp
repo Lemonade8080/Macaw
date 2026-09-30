@@ -9,6 +9,8 @@
 #include <utility>
 #include <dxgi1_6.h>
 
+#include "../Core/Console/Console.h"
+
 FRenderer::~FRenderer() {
 #if EnableFrameResourceFence
     if (mFrameFenceEvent != nullptr) {
@@ -356,6 +358,9 @@ void FRenderer::CreateDeviceAndSwapChain(HWND WindowHandle) {
 
             DXGI_ADAPTER_DESC1 Description{};
             if (FAILED(Adapter->GetDesc1(&Description)) || (Description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) continue;
+
+			Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "Using GPU: %ls", Description.Description);
+
 
             Result = D3D11CreateDeviceAndSwapChain(Adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, DeviceFlags, FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION, &SwapChainDesc, mSwapChain.ReleaseAndGetAddressOf(), mDevice.ReleaseAndGetAddressOf(), nullptr, mDeviceContext.ReleaseAndGetAddressOf());
             if (SUCCEEDED(Result)) break;

@@ -41,9 +41,9 @@ void FRenderScene::Synchronize(const IAssetRegistry* Registry, FSceneRenderData&
     mChangedObjects.clear();
     mObjectsChanged = false;
 
-    if (!mSynchronized || mSourceRevision != Scene.mRevision) {
+    if (!mSourceRevision.IsCurrent(Scene.mRevision)) {
         ApplyObjectUpdates(Scene);
-        mSourceRevision = Scene.mRevision;
+        mSourceRevision.Commit(Scene.mRevision);
     }
 
     CommitObjectChanges();
@@ -51,7 +51,6 @@ void FRenderScene::Synchronize(const IAssetRegistry* Registry, FSceneRenderData&
     UpdateBounds();
 
     RefreshTemplates(Registry);
-    mSynchronized = true;
 }
 
 Uint64 FRenderScene::GetId() const {
@@ -294,12 +293,11 @@ void FRenderScene::RefreshTemplates(const IAssetRegistry* Registry) {
         const Uint64 MeshRevision{Mesh != nullptr ? Mesh->GetRenderRevision() : 0};
         const Uint64 MaterialRevision{Material != nullptr ? Material->GetRenderRevision() : 0};
 
-        if (Group.mMesh != Mesh || Group.mMaterial != Material || Group.mPipeline != Pipeline || Group.mMeshRevision != MeshRevision || Group.mMaterialRevision != MaterialRevision) {
-            Group.mMesh = Mesh;
-            Group.mMaterial = Material;
+        const bool MeshChanged{Group.mMesh.Update(Mesh, MeshRevision)};
+        const bool MaterialChanged{Group.mMaterial.Update(Material, MaterialRevision)};
+
+        if (MeshChanged || MaterialChanged || Group.mPipeline != Pipeline) {
             Group.mPipeline = Pipeline;
-            Group.mMeshRevision = MeshRevision;
-            Group.mMaterialRevision = MaterialRevision;
             mTemplatesDirty = true;
         }
     }
@@ -314,8 +312,8 @@ void FRenderScene::RefreshTemplates(const IAssetRegistry* Registry) {
         Group.mTemplateRangesByLOD.fill(FRenderTemplateRange{});
         Group.mAvailableLODMask = 0;
 
-        const UMesh* Mesh{Group.mMesh};
-        const UMaterial* Material{Group.mMaterial};
+        const UMesh* Mesh{Group.mMesh.GetValue()};
+        const UMaterial* Material{Group.mMaterial.GetValue()};
         if (Group.mReferenceCount == 0 || Mesh == nullptr || Material == nullptr || Group.mPipeline == nullptr) {
             continue;
         }
