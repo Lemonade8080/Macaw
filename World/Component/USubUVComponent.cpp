@@ -11,16 +11,26 @@
 #include "World/UWorld.h"
 #include "World/Subsystem/URenderSubsystem.h"
 
+USubUVComponent::USubUVComponent() {
+    UpdateTickEnabled();
+}
+
+void USubUVComponent::UpdateTickEnabled() {
+    SetTickEnabled(mBPlaying && mTotalFrame > 1 && mFrameRate > 0.0f);
+}
+
 void USubUVComponent::SetSubImage(Int32 InHorizontal, Int32 InVertical, Int32 InTotalFrame, float InFrameRate, bool BInLooping) {
     mSubImageHorizontal = InHorizontal;
     mSubImageVertical = InVertical;
     mTotalFrame = InTotalFrame;
     mFrameRate = InFrameRate;
     mBLooping = BInLooping;
+    UpdateTickEnabled();
 }
 
 void USubUVComponent::SetFrameRate(float InFrameRate) {
     mFrameRate = InFrameRate;
+    UpdateTickEnabled();
 }
 
 void USubUVComponent::SetCurrentFrame(Int32 InFrame) {
@@ -29,21 +39,25 @@ void USubUVComponent::SetCurrentFrame(Int32 InFrame) {
 
 void USubUVComponent::PlaySubUV() {
     mBPlaying = true;
+    UpdateTickEnabled();
 }
 
 void USubUVComponent::PauseSubUV() {
     mBPlaying = false;
+    UpdateTickEnabled();
 }
 
 void USubUVComponent::StopSubUV() {
     mBPlaying = false;
     SetCurrentFrame(0);
+    UpdateTickEnabled();
 }
 
 void USubUVComponent::RestartSubUV() {
     mElapsedTime = 0.0f;
     mCurrentFrameIndex = 0;
     mBPlaying = true;
+    UpdateTickEnabled();
 }
 
 bool USubUVComponent::IsPlaying() const {
@@ -86,6 +100,7 @@ void USubUVComponent::Tick(float DeltaTime) {
         mCurrentFrameIndex = std::min(TargetFrame, mTotalFrame - 1);
         if (TargetFrame >= mTotalFrame) {
             mBPlaying = false;
+            UpdateTickEnabled();
         }
     }
 
@@ -105,6 +120,7 @@ void USubUVComponent::Serialize(FArchive& Archive) {
         mElapsedTime = 0.0f;
         mCurrentFrameIndex = 0;
         UpdateUVFromCurrentFrame();
+        UpdateTickEnabled();
     }
 }
 

@@ -9,6 +9,8 @@
 #include <utility>
 #include <dxgi1_6.h>
 
+#include "../Core/Console/Console.h"
+
 FRenderer::~FRenderer() {
 #if EnableFrameResourceFence
     if (mFrameFenceEvent != nullptr) {
@@ -33,7 +35,7 @@ void FRenderer::Create(HWND WindowHandle, UINT Width, UINT Height) {
 }
 
 bool FRenderer::Initialize() {
-    if (!CreateSamplerStates() || !mTextRenderer.Initialize(mDevice.Get(), 256) || !mBillboardRenderer.Initialize(mDevice.Get(), 64)) {
+    if (!CreateSamplerStates() || !mTextRenderer.Initialize(mDevice.Get(), 256) || !mBillboardRenderer.Initialize(mDevice.Get(), 64) || !mOcclusionCulling.Initialize(mDevice.Get())) {
         return false;
     }
 
@@ -142,9 +144,13 @@ void FRenderer::BeginFrame(float DeltaTime) {
     }
 
     mCurrentFrameResource = &FrameResource;
+    ++mFrameSerial;
+    mOcclusionCulling.BeginFrame(mFrameSerial);
+    PruneRenderQueues();
 }
 
 const FRenderScene& FRenderer::SynchronizeScene(FSceneRenderData& Scene) {
+    const Stat::FScopedRenderPreparationStatTimer StageStat{Stat::ERenderPreparationStage::SceneSynchronization};
     const Uint64 SceneId{Scene.mSceneId != 0 ? Scene.mSceneId : mTransientSceneId};
     std::unique_ptr<FRenderScene>& RenderScene{mRenderScenes[SceneId]};
     if (RenderScene == nullptr) {
@@ -178,16 +184,28 @@ void FRenderer::RenderView(const FRenderView& View, const FRenderScene& Scene) {
         return;
     }
 
-    mAssetRegistry->FlushMaterialBuffer(mDeviceContext.Get());
-    mRenderQueue.Build(mAssetRegistry, Scene, View);
-    if (!mCurrentFrameResource->PrepareView(mDevice.Get(), mDeviceContext.Get(), View, Scene, mRenderQueue)) {
-        return;
+    {
+        const Stat::FScopedRenderPreparationStatTimer StageStat{Stat::ERenderPreparationStage::MaterialBuffer};
+        mAssetRegistry->FlushMaterialBuffer(mDeviceContext.Get());
+    }
+    FViewRenderQueue& ViewQueue{mRenderQueues[View.mTarget]};
+    ViewQueue.mLastUsedFrame = mFrameSerial;
+    FRenderQueue& Queue{ViewQueue.mQueue};
+    {
+        const Stat::FScopedRenderPreparationStatTimer StageStat{Stat::ERenderPreparationStage::RenderQueue};
+        Queue.Build(mAssetRegistry, Scene, View);
+    }
+    {
+        const Stat::FScopedRenderPreparationStatTimer StageStat{Stat::ERenderPreparationStage::ViewBuffers};
+        if (!mCurrentFrameResource->PrepareView(mDevice.Get(), mDeviceContext.Get(), View, Scene, Queue)) {
+            return;
+        }
     }
 
     const FRenderContext Context{mDeviceContext.Get(), mAssetRegistry, mAssetRegistry->GetMaterialBufferSRV(), mCurrentFrameResource};
     if (View.IsPassEnabled(ERenderPass::SceneGeometry)) {
         const Stat::FScopedSystemStatTimer StageStat{ Stat::ESystemStatStage::Geometry };
-        ExecutePass(ERenderPass::SceneGeometry, Context, View, Scene);
+        ExecutePass(ERenderPass::SceneGeometry, Context, View, Scene, Queue);
     }
 
     {
@@ -195,7 +213,7 @@ void FRenderer::RenderView(const FRenderView& View, const FRenderScene& Scene) {
         constexpr std::array Passes{ ERenderPass::SelectionOutline, ERenderPass::SceneGuides, ERenderPass::Gizmo, ERenderPass::Text, ERenderPass::Billboard, ERenderPass::OrientationAxis };
         for (const ERenderPass Pass : Passes) {
             if (View.IsPassEnabled(Pass)) {
-                ExecutePass(Pass, Context, View, Scene);
+                ExecutePass(Pass, Context, View, Scene, Queue);
             }
         }
     }
@@ -203,16 +221,20 @@ void FRenderer::RenderView(const FRenderView& View, const FRenderScene& Scene) {
     View.mTarget->Bind(mDeviceContext.Get());
 }
 
-void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FRenderScene& Scene) {
+void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FRenderScene& Scene, const FRenderQueue& Queue) {
     View.mTarget->Bind(mDeviceContext.Get());
     BindSamplerStates();
 
     switch (Pass) {
         case ERenderPass::SceneGeometry:
-            mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), View.mRenderMode);
+            if (mOcclusionCulling.Prepare(mDevice.Get(), Context.mDeviceContext, View, Scene, Queue)) {
+                mMeshRenderer.DrawOccluded(Context, View, Queue, mOcclusionCulling);
+            } else {
+                mMeshRenderer.Draw(Context, Queue.GetItems(Pass), View.mRenderMode);
+            }
             break;
         case ERenderPass::SelectionOutline:
-            mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), ERenderMode::Outline);
+            mMeshRenderer.Draw(Context, Queue.GetItems(Pass), ERenderMode::Outline);
             break;
         case ERenderPass::SceneGuides:
             DrawSceneGuides(View);
@@ -220,7 +242,7 @@ void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, con
         case ERenderPass::Gizmo:
             if (!View.mGizmoProbes.empty()) {
                 View.mTarget->ClearDepth(mDeviceContext.Get());
-                mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), ERenderMode::Lit);
+                mMeshRenderer.Draw(Context, Queue.GetItems(Pass), ERenderMode::Lit);
             }
             break;
         case ERenderPass::Text:
@@ -235,6 +257,13 @@ void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, con
         default:
             break;
     }
+}
+
+void FRenderer::PruneRenderQueues() {
+    constexpr Uint64 MaximumUnusedFrames{120};
+    std::erase_if(mRenderQueues, [this](const auto& Entry) {
+        return mFrameSerial - Entry.second.mLastUsedFrame > MaximumUnusedFrames;
+    });
 }
 
 void FRenderer::DrawSceneGuides(const FRenderView& View) {
@@ -291,7 +320,10 @@ void FRenderer::Terminate() {
     mDeviceContext->ClearState();
 
     mLineRenderer.Reset();
+    mOcclusionCulling.Reset();
+    mRenderQueues.clear();
     mRenderScenes.clear();
+    mFrameSerial = 0;
 
     for (FFrameResource& FrameResource : mFrameResources) {
         FrameResource.Reset();
@@ -356,6 +388,9 @@ void FRenderer::CreateDeviceAndSwapChain(HWND WindowHandle) {
 
             DXGI_ADAPTER_DESC1 Description{};
             if (FAILED(Adapter->GetDesc1(&Description)) || (Description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)) continue;
+
+			Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "Using GPU: %ls", Description.Description);
+
 
             Result = D3D11CreateDeviceAndSwapChain(Adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, DeviceFlags, FeatureLevels, ARRAYSIZE(FeatureLevels), D3D11_SDK_VERSION, &SwapChainDesc, mSwapChain.ReleaseAndGetAddressOf(), mDevice.ReleaseAndGetAddressOf(), nullptr, mDeviceContext.ReleaseAndGetAddressOf());
             if (SUCCEEDED(Result)) break;

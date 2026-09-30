@@ -9,9 +9,10 @@
 
 class USubUVComponent : public UBillboardComponent {
 public:
-    USubUVComponent() = default;
+    USubUVComponent();
     ~USubUVComponent() override = default;
 
+public:
     JG_DECLARE_DERIVED_TYPEINFO(USubUVComponent, UBillboardComponent);
 
     // SubUV
@@ -35,6 +36,9 @@ public:
 
 protected:
     void Serialize(FArchive& Archive) override;
+
+private:
+    void UpdateTickEnabled();
 
 private:
     Int32 mSubImageHorizontal{1};

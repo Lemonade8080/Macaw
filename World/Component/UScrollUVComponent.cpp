@@ -4,6 +4,14 @@
 
 #include "Core/Archive/FArchive.h"
 
+UScrollUVComponent::UScrollUVComponent() {
+    UpdateTickEnabled();
+}
+
+void UScrollUVComponent::UpdateTickEnabled() {
+    SetTickEnabled(mBPlaying && (mScrollSpeed.mX != 0.0f || mScrollSpeed.mY != 0.0f));
+}
+
 void UScrollUVComponent::Tick(float DeltaTime) {
     UBillboardComponent::Tick(DeltaTime);
 
@@ -39,6 +47,7 @@ void UScrollUVComponent::Serialize(FArchive& Archive) {
     if (Archive.IsLoading()) {
         mCurrentOffset = FVector2{0.0f, 0.0f};
         UpdateUVFromCurrentFrame();
+        UpdateTickEnabled();
     }
 }
 
@@ -52,14 +61,17 @@ bool UScrollUVComponent::IsLooping() const {
 
 void UScrollUVComponent::PlayScrollUV() {
     mBPlaying = true;
+    UpdateTickEnabled();
 }
 
 void UScrollUVComponent::PauseScrollUV() {
     mBPlaying = false;
+    UpdateTickEnabled();
 }
 
 void UScrollUVComponent::SetScrollSpeed(FVector2 InScrollSpeed) {
     mScrollSpeed.mX = InScrollSpeed.mX, mScrollSpeed.mY = InScrollSpeed.mY;
+    UpdateTickEnabled();
 }
 
 void UScrollUVComponent::DrawPanels(IPropertyEditorContext* Context) {

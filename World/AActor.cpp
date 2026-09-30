@@ -1,5 +1,6 @@
 ﻿#include "pch.h"
 #include "AActor.h"
+#include "Core/Stat/Stat.h"
 #include "World/UWorld.h"
 #include "Component/USceneComponent.h"
 #include "../Core/Base/TypeRegistry.h"
@@ -60,6 +61,7 @@ void AActor::RemoveOwnedComponent(UActorComponent* Component) {
         mRootComponent = nullptr;
     }
 
+    UnregisterTickComponent(Component);
     UObjectSystem::Unregister(Component, Component->GetHandle());
     mComponents.erase(It);
 }
@@ -98,6 +100,7 @@ void AActor::SetWorld(UWorld* InWorld) {
             mBHasBegunPlay = false;
         }
 
+        mWorld->UnregisterTickActor(this);
         for (const std::unique_ptr<UActorComponent>& Component : mComponents) {
             Component->UnregisterComponent();
         }
@@ -120,6 +123,7 @@ void AActor::SetWorld(UWorld* InWorld) {
     InitializeComponents();
     BeginPlay();
     mBHasBegunPlay = true;
+    UpdateTickRegistration();
 }
 
 UWorld* AActor::GetWorld() const {
@@ -255,16 +259,108 @@ bool AActor::HasBegunPlay() const {
     return mBHasBegunPlay;
 }
 
+bool AActor::IsTickEnabled() const {
+    return mBTickEnabled;
+}
+
+void AActor::SetTickEnabled(bool TickEnabled) {
+    if (mBTickEnabled == TickEnabled) {
+        return;
+    }
+
+    mBTickEnabled = TickEnabled;
+    UpdateTickRegistration();
+}
+
+void AActor::UpdateTickRegistration() {
+    if (mWorld == nullptr) {
+        return;
+    }
+
+    if (mBHasBegunPlay && (mBTickEnabled || mTickComponentCount > 0)) {
+        mWorld->RegisterTickActor(this);
+    } else {
+        mWorld->UnregisterTickActor(this);
+    }
+}
+
+void AActor::UpdateComponentTickRegistration(UActorComponent* Component) {
+    if (Component->mOwner != this || !Component->mBTickEnabled || !Component->mBActive || !Component->mBRegistered || !Component->mBHasBegunPlay || Component->mBIsBeingDestroyed) {
+        UnregisterTickComponent(Component);
+        return;
+    }
+
+    if (Component->mTickIndex != std::numeric_limits<std::size_t>::max()) {
+        return;
+    }
+
+    mTickComponents.push_back(Component);
+    Component->mTickIndex = mTickComponents.size() - 1;
+    ++mTickComponentCount;
+    UpdateTickRegistration();
+}
+
+void AActor::UnregisterTickComponent(UActorComponent* Component) {
+    const std::size_t Index{Component->mTickIndex};
+    if (Index == std::numeric_limits<std::size_t>::max()) {
+        return;
+    }
+
+    Component->mTickIndex = std::numeric_limits<std::size_t>::max();
+    --mTickComponentCount;
+    if (mBTickingComponents) {
+        mTickComponents[Index] = nullptr;
+        mTickComponentsNeedCompaction = true;
+    } else {
+        if (Index + 1 < mTickComponents.size()) {
+            UActorComponent* LastComponent{mTickComponents.back()};
+            mTickComponents[Index] = LastComponent;
+            LastComponent->mTickIndex = Index;
+        }
+        mTickComponents.pop_back();
+    }
+    UpdateTickRegistration();
+}
+
+void AActor::FinishComponentTicks(bool WasTicking) {
+    mBTickingComponents = WasTicking;
+    if (WasTicking || !mTickComponentsNeedCompaction) {
+        return;
+    }
+
+    std::erase(mTickComponents, nullptr);
+    for (std::size_t Index{}; Index < mTickComponents.size(); ++Index) {
+        mTickComponents[Index]->mTickIndex = Index;
+    }
+    mTickComponentsNeedCompaction = false;
+}
+
 void AActor::Tick(float DeltaTime) {
     if (!mBHasBegunPlay) {
         return;
     }
 
-    for (const std::unique_ptr<UActorComponent>& Component : mComponents) {
-        if (Component->IsActive()) {
+    Stat::FWorldTickStats* TickStats{Stat::GetActiveWorldTickStats()};
+    const bool WasTicking{mBTickingComponents};
+    mBTickingComponents = true;
+    const std::size_t ComponentCount{mTickComponents.size()};
+    try {
+        for (std::size_t Index{}; Index < ComponentCount && Index < mTickComponents.size(); ++Index) {
+            UActorComponent* Component{mTickComponents[Index]};
+            if (Component == nullptr) {
+                continue;
+            }
+            if (TickStats != nullptr) {
+                ++TickStats->mComponentVisitCount;
+                ++TickStats->mComponentTickCount;
+            }
             Component->Tick(DeltaTime);
         }
+    } catch (...) {
+        FinishComponentTicks(WasTicking);
+        throw;
     }
+    FinishComponentTicks(WasTicking);
 }
 
 void AActor::Serialize(FArchive& Archive) {
@@ -333,6 +429,10 @@ bool AActor::PreLoadComponents(FArchive& Archive) {
     std::size_t ArraySize{0};
     Archive.BeginArrayScope("Components", ArraySize);
 
+    mTickComponents.clear();
+    mTickComponentCount = 0;
+    mTickComponentsNeedCompaction = false;
+    UpdateTickRegistration();
     mComponents.clear();
     mComponents.reserve(ArraySize);
 

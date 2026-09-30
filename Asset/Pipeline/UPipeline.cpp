@@ -231,6 +231,9 @@ bool UPipeline::Make(ID3D11Device* Device, const FPipelineDescription& Descripti
 
     Pipeline.mPrimitiveTopology = ConvertPrimitiveTopology(Description.mPrimitiveTopology);
 
+    Pipeline.mOcclusionCullable = Description.mOcclusionCullable && !Description.mBHasGeometryShader && Description.mDepthStencil.mDepthEnable && (Description.mDepthStencil.mDepthFunc == ECompareFunc::Less || Description.mDepthStencil.mDepthFunc == ECompareFunc::LessEqual) && Description.mRasterizer.mFillMode == EFillMode::Solid && (Description.mPrimitiveTopology == EPrimitiveTopology::TriangleList || Description.mPrimitiveTopology == EPrimitiveTopology::TriangleStrip);
+    Pipeline.mOcclusionOccluder = Pipeline.mOcclusionCullable && Description.mOcclusionOccluder && !Description.mBlend.mBlendEnable && Description.mDepthStencil.mDepthWriteEnable;
+    Pipeline.mOcclusionDepthReusable = !Description.mBlend.mBlendEnable && (!Description.mDepthStencil.mDepthEnable || Description.mDepthStencil.mDepthFunc == ECompareFunc::LessEqual) && (!Description.mDepthStencil.mStencilEnable || (Description.mDepthStencil.mStencilFunc == ECompareFunc::Always && Description.mDepthStencil.mStencilFailOp == EStencillOp::Keep && Description.mDepthStencil.mStencilDepthFailOp == EStencillOp::Keep && (Description.mDepthStencil.mStencilPassOp == EStencillOp::Keep || Description.mDepthStencil.mStencilPassOp == EStencillOp::Zero || Description.mDepthStencil.mStencilPassOp == EStencillOp::Replace)));
     Pipeline.mInitialized = true;
     return true;
 }
@@ -284,6 +287,21 @@ void UPipeline::Reset() {
     mModeIndex = 0;
 }
 
+bool UPipeline::IsOcclusionCullable(ERenderMode Mode) const {
+    const std::size_t Index{static_cast<std::size_t>(ResolveRenderMode(Mode))};
+    return Index < mPipelines.size() && mPipelines[Index].mInitialized && mPipelines[Index].mOcclusionCullable;
+}
+
+bool UPipeline::CanWriteOcclusionDepth(ERenderMode Mode) const {
+    const std::size_t Index{static_cast<std::size_t>(ResolveRenderMode(Mode))};
+    return Index < mPipelines.size() && mPipelines[Index].mInitialized && mPipelines[Index].mOcclusionOccluder;
+}
+
+bool UPipeline::CanReuseOcclusionDepth(ERenderMode Mode) const {
+    const std::size_t Index{static_cast<std::size_t>(ResolveRenderMode(Mode))};
+    return Index < mPipelines.size() && mPipelines[Index].mInitialized && mPipelines[Index].mOcclusionDepthReusable;
+}
+
 void UPipeline::SetRenderMode(ERenderMode Mode) {
     const std::size_t RequestedIndex{static_cast<std::size_t>(Mode)};
     if (RequestedIndex < mPipelines.size() && mPipelines[RequestedIndex].mInitialized) {
@@ -330,6 +348,9 @@ bool UPipeline::LoadPipelineDescription(const std::filesystem::path& Path, FPipe
     }
 
     FPipelineDescription Description{};
+
+    Description.mOcclusionCullable = GetBool(Root, "OcclusionCullable", false);
+    Description.mOcclusionOccluder = GetBool(Root, "OcclusionOccluder", false);
 
     const rapidjson::Value* VS{GetObject(Root, "VertexShader")};
 

@@ -125,8 +125,11 @@ void FBVHTree::FrustumCull(const FFrustum& Frustum, TArray<Uint32>& OutIndices) 
     CullRecursive(mRootIndex, Frustum, OutIndices);
 }
 
-void FBVHTree::FrustumCull(const FMatrix& ViewProjection, TArray<Uint32>& OutIndices) const {
+void FBVHTree::FrustumCull(const FMatrix& ViewProjection, TArray<Uint32>& OutIndices, TArray<Uint32>* OutBoundaryPositions) const {
     OutIndices.clear();
+    if (OutBoundaryPositions != nullptr) {
+        OutBoundaryPositions->clear();
+    }
 
     if (mRootIndex == -1) {
         return;
@@ -153,7 +156,7 @@ void FBVHTree::FrustumCull(const FMatrix& ViewProjection, TArray<Uint32>& OutInd
     }
 
     OutIndices.reserve(mIndices.size());
-    CullRecursive(mRootIndex, Planes, OutIndices);
+    CullRecursive(mRootIndex, Planes, OutIndices, OutBoundaryPositions);
 }
 
 Int32 FBVHTree::BuildRecursive(std::span<const DirectX::BoundingBox> Bounds, std::size_t Start, std::size_t End, Int32 ParentIndex) {
@@ -271,7 +274,7 @@ void FBVHTree::CullRecursive(Int32 NodeIndex, const FFrustum& Frustum, TArray<Ui
     }
 }
 
-void FBVHTree::CullRecursive(Int32 NodeIndex, const std::array<DirectX::XMFLOAT4, 6>& Planes, TArray<Uint32>& OutIndices) const {
+void FBVHTree::CullRecursive(Int32 NodeIndex, const std::array<DirectX::XMFLOAT4, 6>& Planes, TArray<Uint32>& OutIndices, TArray<Uint32>* OutBoundaryPositions) const {
     if (NodeIndex == -1) {
         return;
     }
@@ -297,10 +300,13 @@ void FBVHTree::CullRecursive(Int32 NodeIndex, const std::array<DirectX::XMFLOAT4
     if (Contained) {
         CollectAllLeaves(NodeIndex, OutIndices);
     } else if (Node.IsLeaf()) {
+        if (OutBoundaryPositions != nullptr) {
+            OutBoundaryPositions->push_back(static_cast<Uint32>(OutIndices.size()));
+        }
         OutIndices.push_back(static_cast<Uint32>(Node.mProbeIndex));
     } else {
-        CullRecursive(Node.mLeftChild, Planes, OutIndices);
-        CullRecursive(Node.mRightChild, Planes, OutIndices);
+        CullRecursive(Node.mLeftChild, Planes, OutIndices, OutBoundaryPositions);
+        CullRecursive(Node.mRightChild, Planes, OutIndices, OutBoundaryPositions);
     }
 }
 

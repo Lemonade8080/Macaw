@@ -14,6 +14,7 @@
 #include <span>
 #include <type_traits>
 #include <utility>
+#include <unordered_map>
 #include <vector>
 
 #include <d3d11.h>
@@ -122,7 +123,7 @@ struct FEdge
     Uint32 V1;
     Uint32 FaceCount{ 0 };
 
-    float Cost{ 0.0f };
+    double Cost{ 0.0 };
     FVector3 NewPosition;
 };
 
@@ -133,7 +134,13 @@ private:
     template <typename T> struct TVertexAttributeStorage final : FVertexAttributeStorageBase { explicit TVertexAttributeStorage(std::span<const T> InData); const void* GetData() const override; Uint32 GetCount() const override; Uint32 GetStride() const override; std::vector<T> mData{}; };
 
 public:
-    struct FSubMesh { Uint32 mFirstIndex{0}; Uint32 mIndexCount{0}; Uint32 mMaterialGroupIndex{0}; };
+    struct FSubMesh {
+        Uint32 mFirstIndex{0};
+        Uint32 mIndexCount{0};
+        Uint32 mMaterialGroupIndex{0};
+        // 생성된 LOD의 통계용 원본 개수. 원본 SubMesh에서는 mIndexCount를 사용한다.
+        Uint32 mSourceIndexCount{0};
+    };
 
     using FMaterialResolver = std::function<FAssetHandle(const std::filesystem::path& MaterialPath)>;
     using FMaterialGroupResolver = std::function<std::optional<Uint32>(FAssetHandle MaterialHandle, const FString& GroupName)>;
@@ -177,7 +184,7 @@ public:
 
     const TArray<Uint32>& GetIndices() const;
 
-    const TArray<FSubMesh>& GetSubMeshes() const;
+    const TArray<FSubMesh>& GetSubMeshes(int Level = 0) const;
 
     void SetSubMeshes(const std::span<FSubMesh>& InSubMeshes);
 
@@ -190,37 +197,155 @@ public:
 
     TArray<FEdge> BuildEdges(const TArray<Uint32>& Indices);
 	FEdge FindShortestEdge(const TArray<FEdge>& Edges, const TArray<FVector3>& Positions);
-	bool CanCollapseEdge(const FEdge& Edge, TArray<FVector3>& LODPositions, TArray<Uint32>& LODIndices);
 
 private:
-    struct FGeneratedLOD
+    // 대칭 4x4 Quadric의 상삼각 성분만 저장한다. 생성 중 원본 평면 오차를 누적한다.
+    struct FLODQuadric
+    {
+        std::array<double, 10> mValues{};
+
+        void AddPlane(double X, double Y, double Z, double D);
+        FLODQuadric& operator+=(const FLODQuadric& Other);
+        double Evaluate(const FVector3& Position, const FVector3& Origin) const;
+        float FindEdgeInterpolation(const FVector3& P0, const FVector3& P1, const FVector3& Origin) const;
+    };
+
+    struct FLODAttributeGroup
+    {
+        FVector2D mUV{};
+        Uint32 mNormalGroup{ UINT32_MAX };
+    };
+
+    // Collapse 계산에만 사용하는 임시 데이터. 렌더 정점의 속성 경계는 별도로 유지한다.
+    struct FLODGeometry
     {
         TArray<FVector3> mPositions{};
         TArray<Uint32> mIndices{};
+        TArray<Uint32> mRenderIndices{};
+        TArray<FSubMesh> mSubMeshes{};
+        // 재질이 하나일 때는 삼각형별 구간과 경계 배열을 만들지 않는다.
+        TArray<Uint32> mTriangleSubMeshes{};
+        TArray<Uint8> mMaterialBoundaryVertices{};
+
+        // 같은 기하 위치에도 UV / Normal이 다른 렌더 그룹을 따로 유지한다.
+        TArray<FLODAttributeGroup> mAttributeGroups{};
+        TArray<Uint32> mRenderGroups{};
+        TArray<Uint32> mVertexGroupCounts{};
+        // UV만 갈라진 면은 Normal을 함께 계산하고, 원본의 각진 경계는 분리한다.
+        TArray<Uint32> mNormalParents{};
+        TArray<Uint8> mNormalRanks{};
+
+        // Corner 연결을 양방향으로 유지해 영향을 받은 면만 분리 / 재연결한다.
+        TArray<Uint32> mFirstCorners{};
+        TArray<Uint32> mNextCorners{};
+        TArray<Uint32> mPreviousCorners{};
+        TArray<Uint8> mActiveTriangles{};
+        std::span<const FVector2D> mSourceUVs{};
+    };
+
+    struct FLODCandidate
+    {
+        Uint32 mV0{};
+        Uint32 mV1{};
+        Uint32 mVersionV0{};
+        Uint32 mVersionV1{};
+        double mCost{};
+        float mLengthSquared{};
+        float mInterpolation{ 0.5f };
+    };
+
+    struct FLODCollapse
+    {
+        struct FAttributeMerge
+        {
+            Uint32 mKeepGroup{};
+            Uint32 mRemoveGroup{};
+            FVector2D mUV{};
+        };
+
+        // V0는 남길 정점, V1은 제거할 정점이다.
+        FEdge mEdge{};
+        // 공유 면 두 개에서 찾은 대응 관계. 이음매 양쪽을 서로 섞지 않는다.
+        std::array<FAttributeMerge, 2> mAttributeMerges{};
+        Uint32 mMergeCount{};
+        bool mFixedTarget{};
+    };
+
+    struct FLODSimplification
+    {
+        std::unordered_map<Uint64, Uint32> mEdgeFaceCounts{};
+        TArray<Uint32> mBoundaryEdgeCounts{};
+        TArray<Uint32> mNonManifoldEdgeCounts{};
+        TArray<Uint32> mVertexVersions{};
+        TArray<FLODCandidate> mCandidates{};
+        TArray<FLODQuadric> mQuadrics{};
+        FVector3 mQuadricOrigin{};
+        Uint32 mTriangleCount{};
+
+        // 매 후보 / Collapse마다 할당하지 않고 작업 공간을 재사용한다.
+        TArray<Uint32> mAffectedTriangles{};
+        TArray<Uint32> mAffectedVertices{};
+        TArray<Uint64> mAffectedEdges{};
+        TArray<Uint32> mNeighborsV0{};
+        TArray<Uint32> mNeighborsV1{};
+        TArray<Uint32> mOppositeVertices{};
+        TArray<Uint64> mRemainingFaces{};
+        TArray<Uint32> mVertexGroups{};
+    };
+
+    struct FLODRenderData
+    {
+        TArray<FVector3> mPositions{};
+        TArray<FVector3> mNormals{};
+        TArray<FVector2D> mUVs{};
+        TArray<Uint32> mIndices{};
+    };
+
+    struct FGeneratedLOD
+    {
+        Uint32 mIndexCount{};
+        TArray<FSubMesh> mSubMeshes{};
 
         Microsoft::WRL::ComPtr<ID3D11Buffer> mVertexBuffer{};
-
+        Microsoft::WRL::ComPtr<ID3D11Buffer> mNormalBuffer{};
+        Microsoft::WRL::ComPtr<ID3D11Buffer> mUVBuffer{};
         Microsoft::WRL::ComPtr<ID3D11Buffer> mIndexBuffer{};
 
         bool IsValid() const
         {
-            return mVertexBuffer != nullptr && mIndexBuffer != nullptr && !mPositions.empty() && !mIndices.empty();
+            return mVertexBuffer != nullptr && mIndexBuffer != nullptr && mIndexCount != 0;
         }
 
         void Reset()
         {
             mVertexBuffer.Reset();
+            mNormalBuffer.Reset();
+            mUVBuffer.Reset();
             mIndexBuffer.Reset();
-            mPositions.clear();
-            mIndices.clear();
+            mIndexCount = 0;
+            mSubMeshes.clear();
         }
     };
 
     FGeneratedLOD* GetGeneratedLOD(int Level);
     const FGeneratedLOD* GetGeneratedLOD(int Level) const;
 
-    bool CreateLODVertexBuffer(ID3D11Device* Device, FGeneratedLOD& LOD);
-    bool CreateLODIndexBuffer(ID3D11Device* Device, FGeneratedLOD& LOD);
+    bool BuildLODGeometry(FLODGeometry& Geometry) const;
+    bool BuildLODSubMeshes(FLODGeometry& Geometry) const;
+    void SimplifyLODGeometry(FLODGeometry& Geometry, Uint32 TargetTriangleCount);
+    static bool CompareLODCandidates(const FLODCandidate& Left, const FLODCandidate& Right);
+    static void UpdateLODEdge(FLODSimplification& State, Uint32 V0, Uint32 V1, bool BAddFace);
+    static void DetachLODCorner(FLODGeometry& Geometry, Uint32 Corner);
+    static void AttachLODCorner(FLODGeometry& Geometry, Uint32 Corner);
+    static void RefreshLODVertexGroups(FLODGeometry& Geometry, Uint32 Vertex, TArray<Uint32>& Groups);
+    static Uint32 FindLODNormalGroup(const FLODGeometry& Geometry, Uint32 Group);
+    static void MergeLODNormalGroups(FLODGeometry& Geometry, Uint32 Group0, Uint32 Group1);
+    bool MakeLODCandidate(Uint64 Key, const FLODGeometry& Geometry, const FLODSimplification& State, FLODCandidate& Candidate) const;
+    bool PrepareLODCollapse(const FLODCandidate& Candidate, const FLODGeometry& Geometry, const FLODSimplification& State, FLODCollapse& Collapse) const;
+    bool CanCollapseEdge(const FLODCollapse& Collapse, const FLODGeometry& Geometry, FLODSimplification& State) const;
+    void ApplyLODCollapse(const FLODCollapse& Collapse, FLODGeometry& Geometry, FLODSimplification& State);
+    FLODRenderData BuildLODRenderData(const FLODGeometry& Geometry) const;
+    bool CreateLODBuffers(ID3D11Device* Device, const FLODRenderData& RenderData, FGeneratedLOD& LOD);
 
     // Level 1은 index 0, Level 2는 index 1
     TArray<FGeneratedLOD> mGeneratedLODs{};

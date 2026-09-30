@@ -46,6 +46,16 @@ namespace Stat {
         Count
     };
 
+    enum class ERenderPreparationStage : std::size_t {
+        SceneData,
+        SceneSynchronization,
+        ViewSetup,
+        MaterialBuffer,
+        RenderQueue,
+        ViewBuffers,
+        Count
+    };
+
     struct FSystemStatSample {
         double mTotalMilliseconds{};
         double mExclusiveMilliseconds{};
@@ -70,6 +80,13 @@ namespace Stat {
         std::size_t mActorCount{};
     };
 
+    struct FWorldTickStats {
+        double mTotalMilliseconds{};
+        std::uint64_t mActorTickCount{};
+        std::uint64_t mComponentVisitCount{};
+        std::uint64_t mComponentTickCount{};
+    };
+
     struct FPickingStats {
         double mLastMilliseconds{};
         double mTotalMilliseconds{};
@@ -86,8 +103,10 @@ namespace Stat {
     struct FStats {
         FFrameStats mFrame{};
         FSystemStats mSystem{};
+        std::array<FSystemStatSample, static_cast<std::size_t>(ERenderPreparationStage::Count)> mRenderPreparationSamples{};
         FMemoryStats mMemory{};
         FObjectStats mObjects{};
+        FWorldTickStats mWorldTick{};
         FPickingStats mPicking{};
         FLODStats mLOD{};
     };
@@ -117,6 +136,13 @@ namespace Stat {
         double mActorCount{};
     };
 
+    struct FWorldTickStatAverage {
+        double mTotalMilliseconds{};
+        double mActorTickCount{};
+        double mComponentVisitCount{};
+        double mComponentTickCount{};
+    };
+
     struct FPickingStatAverage {
         double mAverageMilliseconds{};
         double mMillisecondsPerFrame{};
@@ -133,8 +159,10 @@ namespace Stat {
     struct FStatAverages {
         FFrameStats mFrame{};
         std::array<FSystemStatAverage, static_cast<std::size_t>(ESystemStatStage::Count)> mSystemSamples{};
+        std::array<FSystemStatAverage, static_cast<std::size_t>(ERenderPreparationStage::Count)> mRenderPreparationSamples{};
         FMemoryStatAverage mMemory{};
         FObjectStatAverage mObjects{};
+        FWorldTickStatAverage mWorldTick{};
         FPickingStatAverage mPicking{};
         FLODStatAverage mLOD{};
         std::uint64_t mFrameCount{};
@@ -156,12 +184,16 @@ namespace Stat {
     FFrameStats GetFrameStats();
     FSystemStats GetSystemStats();
     FSystemStatSample GetSystemSample(ESystemStatStage Stage);
+    FSystemStatSample GetRenderPreparationSample(ERenderPreparationStage Stage);
     FMemoryStats GetMemoryStats();
     FObjectStats GetObjectStats();
+    FWorldTickStats GetWorldTickStats();
+    FWorldTickStats* GetActiveWorldTickStats();
     FPickingStats GetPickingStats();
     FLODStats GetLODStats();
 
     const char* GetSystemStageName(ESystemStatStage Stage);
+    const char* GetRenderPreparationStageName(ERenderPreparationStage Stage);
     // 태그 이름을 문자열로 반환하는 헬퍼 함수
     const char* GetMemoryTagName(EMemoryTag Tag);
 
@@ -177,6 +209,38 @@ namespace Stat {
     private:
         ESystemStatStage mStage{};
         ESystemStatStage mPreviousStage{};
+        std::chrono::steady_clock::time_point mStartTime{};
+        std::uint64_t mFrameId{};
+        bool mActive{};
+    };
+
+    class FScopedWorldTickStatTimer {
+    public:
+        explicit FScopedWorldTickStatTimer(std::size_t ActorTickCount);
+        ~FScopedWorldTickStatTimer();
+        FScopedWorldTickStatTimer(const FScopedWorldTickStatTimer&) = delete;
+        FScopedWorldTickStatTimer& operator=(const FScopedWorldTickStatTimer&) = delete;
+        FScopedWorldTickStatTimer(FScopedWorldTickStatTimer&&) = delete;
+        FScopedWorldTickStatTimer& operator=(FScopedWorldTickStatTimer&&) = delete;
+
+    private:
+        FWorldTickStats mStats{};
+        std::chrono::steady_clock::time_point mStartTime{};
+        std::uint64_t mFrameId{};
+        bool mActive{};
+    };
+
+    class FScopedRenderPreparationStatTimer {
+    public:
+        explicit FScopedRenderPreparationStatTimer(ERenderPreparationStage Stage);
+        ~FScopedRenderPreparationStatTimer();
+        FScopedRenderPreparationStatTimer(const FScopedRenderPreparationStatTimer&) = delete;
+        FScopedRenderPreparationStatTimer& operator=(const FScopedRenderPreparationStatTimer&) = delete;
+        FScopedRenderPreparationStatTimer(FScopedRenderPreparationStatTimer&&) = delete;
+        FScopedRenderPreparationStatTimer& operator=(FScopedRenderPreparationStatTimer&&) = delete;
+
+    private:
+        ERenderPreparationStage mStage{};
         std::chrono::steady_clock::time_point mStartTime{};
         std::uint64_t mFrameId{};
         bool mActive{};

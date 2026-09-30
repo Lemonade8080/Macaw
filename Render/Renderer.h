@@ -21,8 +21,15 @@
 #include "FLineRenderer.h"
 #include "FSceneRenderSurface.h"
 #include "FFrameResource.h"
+#include "FGpuOcclusionCulling.h"
 
 class FRenderer {
+private:
+    struct FViewRenderQueue {
+        FRenderQueue mQueue{};
+        Uint64 mLastUsedFrame{};
+    };
+
 public:
     FRenderer() = default;
     ~FRenderer();
@@ -60,7 +67,8 @@ private:
 
     void BindSamplerStates();
 
-    void ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FRenderScene& Scene);
+    void ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FRenderScene& Scene, const FRenderQueue& Queue);
+    void PruneRenderQueues();
 
     void DrawSceneGuides(const FRenderView& View);
     void DrawOrientationAxis(const FRenderView& View);
@@ -101,9 +109,11 @@ private:
 
     TMap<Uint64, std::unique_ptr<FRenderScene>> mRenderScenes{};
     Uint64 mTransientSceneId{AllocateRenderSceneId()};
-    FRenderQueue mRenderQueue{};
+    TMap<IRenderSurface*, FViewRenderQueue> mRenderQueues{};
+    Uint64 mFrameSerial{};
 
     FMeshRenderer mMeshRenderer{};
+    FGpuOcclusionCulling mOcclusionCulling{};
     FTextRenderer mTextRenderer{};
     FBillboardRenderer mBillboardRenderer{};
     FLineRenderer mLineRenderer{};

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Core/Base/FRenderProbe.h"
+#include "Core/Base/FRevisionCursor.h"
+#include "Core/Base/TRevisioned.h"
 #include "Asset/FLODSettings.h"
 #include "FBVHTree.h"
 #include "FMeshDrawState.h"
@@ -51,10 +53,8 @@ struct FRenderTemplateGroup {
     FRenderTemplateGroupKey mKey{};
 
     const UPipeline* mPipeline{};
-    const UMaterial* mMaterial{};
-    const UMesh* mMesh{};
-    Uint64 mMaterialRevision{};
-    Uint64 mMeshRevision{};
+    TRevisioned<const UMaterial*> mMaterial{};
+    TRevisioned<const UMesh*> mMesh{};
 
     std::array<FRenderTemplateRange, GLODCount> mTemplateRangesByLOD{};
     Uint32 mAvailableLODMask{};
@@ -78,6 +78,7 @@ public:
 
     Uint64 GetId() const;
     Uint64 GetRevision() const;
+    Uint64 GetTemplateRevision() const;
     const TArray<FMatrix>& GetObjectTransforms() const;
 
     ERenderUpdateMode CollectChangedObjects(Uint64 SinceRevision, TArray<Uint32>& OutIndices) const;
@@ -92,6 +93,7 @@ public:
 
     void CollectVisibleObjects(const FFrustum& Frustum, TArray<Uint32>& OutIndices) const;
     void CollectVisibleObjects(const FMatrix& ViewProjection, TArray<Uint32>& OutIndices) const;
+    void CollectVisibleObjects(const CameraProbe& Camera, TArray<Uint32>& OutIndices, TArray<Uint32>& OutBoundaryPositions) const;
 
 private:
     void ApplyObjectUpdates(const FSceneRenderData& Scene);
@@ -111,10 +113,10 @@ private:
 private:
     Uint64 mSceneId{};
     Uint64 mRevision{1};
-    Uint64 mSourceRevision{};
+    Uint64 mTemplateRevision{};
+    FRevisionCursor mSourceRevision{};
     Uint64 mJournalFloor{};
 
-    bool mSynchronized{};
     bool mTopologyDirty{};
     bool mObjectsChanged{};
     bool mTemplatesDirty{true};

@@ -1,4 +1,6 @@
 {
+  "OcclusionCullable": true,
+  "OcclusionOccluder": true,
   "VertexShader": {
     "Source": "./Content/Shader/TexturedBase.hlsl",
     "EntryPoint": "mainVS",

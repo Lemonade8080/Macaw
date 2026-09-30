@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Core/Base/FRevisionCursor.h"
 #include "FRenderQueue.h"
 #include "FRenderScene.h"
 #include "Buffer/TGraphicsArray.h"
@@ -42,7 +43,7 @@ private:
 
     struct FSceneBuffers {
         Uint64 mSceneId{};
-        Uint64 mRevision{};
+        FRevisionCursor mAppliedRevision{};
         Uint64 mLastUsedFrame{};
 
         FGraphicsBuffer mTransforms{};

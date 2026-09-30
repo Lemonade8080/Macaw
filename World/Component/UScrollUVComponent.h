@@ -5,16 +5,17 @@
 
 class UScrollUVComponent final : public UBillboardComponent {
 public:
-    UScrollUVComponent() = default;
-    ~UScrollUVComponent() = default;
-
-    JG_DECLARE_DERIVED_TYPEINFO(UScrollUVComponent, UBillboardComponent);
+    UScrollUVComponent();
+    ~UScrollUVComponent() override = default;
 
     UScrollUVComponent(const UScrollUVComponent&) = delete;
     UScrollUVComponent& operator=(const UScrollUVComponent&) = delete;
 
     UScrollUVComponent(const UScrollUVComponent&&) = delete;
     UScrollUVComponent& operator=(const UScrollUVComponent&&) = delete;
+
+public:
+    JG_DECLARE_DERIVED_TYPEINFO(UScrollUVComponent, UBillboardComponent);
 
     bool IsPlaying() const;
 
@@ -32,6 +33,9 @@ public:
 
 protected:
     void Serialize(FArchive& Archive) override;
+
+private:
+    void UpdateTickEnabled();
 
 private:
     FVector2 mScrollSpeed{0.1f, 0.1f}; // 초당 UV 이동량

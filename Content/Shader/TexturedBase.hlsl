@@ -46,6 +46,7 @@ struct PS_INPUT {
     float2 UV : TEXCOORD0;
     float3 WorldPosition : TEXCOORD1;
     nointerpolation uint MaterialIndex : Jungle1;
+    nointerpolation float LODDither : TEXCOORD7;
 };
 
 PS_INPUT mainVS(VS_INPUT Input, uint DrawRecordIndex : MODEL_INDEX) {
@@ -59,16 +60,18 @@ PS_INPUT mainVS(VS_INPUT Input, uint DrawRecordIndex : MODEL_INDEX) {
     Output.UV = Input.UV;
     Output.WorldPosition = WorldPosition.xyz;
     Output.MaterialIndex = ModelContext.mMaterialIndex;
+    Output.LODDither = ModelContext.mLODDither;
 
     return Output;
 }
 
 float4 mainPS(PS_INPUT Input) : SV_TARGET {
+    ApplyLODDither(Input.Position.xy, Input.LODDither);
     FSurfaceOpaqueMaterial Material = MaterialBuffer[Input.MaterialIndex];
 
-    float4 BaseColor = DiffuseTexture.Sample(LinearWrap, Input.UV) * Material.DiffuseColorAndOpacity;
+    float4 BaseColor = DiffuseTexture.Sample(LinearWrap, Input.UV);
     
-    BaseColor.rgb *= CalculateDirectLighting(Input.WorldPosition, Input.Normal, LightCount);
+   // BaseColor.rgb *= CalculateDirectLighting(Input.WorldPosition, Input.Normal, LightCount);
 
     return BaseColor;
 }

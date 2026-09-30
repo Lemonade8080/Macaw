@@ -81,6 +81,7 @@ struct CameraProbe {
 struct FRenderSettings {
     FVector4 mClearColor{0.2f, 0.2f, 0.7f, 1.0f};
     bool mBRenderSky{true};
+    bool mOcclusionCulling{true};
 };
 
 struct FLightProbe {

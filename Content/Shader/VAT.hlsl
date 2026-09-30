@@ -41,6 +41,7 @@ struct PS_INPUT
     float4 Color : COLOR;
     float3 WorldPosition : TEXCOORD1;
     nointerpolation uint MaterialIndex : Jungle1;
+    nointerpolation float LODDither : TEXCOORD7;
     nointerpolation float3 ColorCoefficient : Jungle2;
 };
 
@@ -89,6 +90,7 @@ PS_INPUT mainVS(VS_INPUT Input, uint DrawRecordIndex : MODEL_INDEX)
     Output.Color = Input.Color;
     Output.WorldPosition = WorldPosition.xyz;
     Output.MaterialIndex = ModelContext.mMaterialIndex;
+    Output.LODDither = ModelContext.mLODDither;
     Output.ColorCoefficient = float3(1.0f, 1.0f, 1.0f);
 
     return Output;
@@ -96,6 +98,7 @@ PS_INPUT mainVS(VS_INPUT Input, uint DrawRecordIndex : MODEL_INDEX)
 
 float4 mainPS(PS_INPUT Input) : SV_TARGET
 {
+    ApplyLODDither(Input.Position.xy, Input.LODDither);
     float4 Color = BaseColorTexture.Sample(LinearWrap, Input.UV);
 
     return Color;

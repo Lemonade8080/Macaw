@@ -147,7 +147,7 @@ void FAssetThumbnailRenderer::RenderThumbnail(const FAssetEntry& Entry, FSceneRe
     FRenderView View{};
     View.mTarget = Surface;
     View.mCamera = BuildCamera();
-    View.mUseLOD = false;
+    View.mUseLOD = true;
     View.mSettings = RenderSettings;
     View.mPasses.reset();
     View.SetPassEnabled(ERenderPass::SceneGeometry, true);
