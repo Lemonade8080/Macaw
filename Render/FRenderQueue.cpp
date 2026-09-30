@@ -5,27 +5,45 @@
 #include "Asset/UMesh.h"
 
 #include <algorithm>
+#include <cstring>
+
+namespace {
+    bool IsSameMatrix(const FMatrix& Left, const FMatrix& Right) {
+        return std::memcmp(Left.M, Right.M, sizeof(Left.M)) == 0;
+    }
+
+    bool IsSameFrustum(const FFrustum& Left, const FFrustum& Right) {
+        return Left.Origin.x == Right.Origin.x && Left.Origin.y == Right.Origin.y && Left.Origin.z == Right.Origin.z && Left.Orientation.x == Right.Orientation.x && Left.Orientation.y == Right.Orientation.y && Left.Orientation.z == Right.Orientation.z && Left.Orientation.w == Right.Orientation.w && Left.RightSlope == Right.RightSlope && Left.LeftSlope == Right.LeftSlope && Left.TopSlope == Right.TopSlope && Left.BottomSlope == Right.BottomSlope && Left.Near == Right.Near && Left.Far == Right.Far;
+    }
+}
 
 void FRenderQueue::Build(const IAssetRegistry* Registry, const FRenderScene& Scene, const FRenderView& View) {
-    mSceneItems.clear();
-    mOutlineItems.clear();
     mGizmoItems.clear();
     mGizmoTransforms.clear();
 
-    if (View.IsPassEnabled(ERenderPass::SceneGeometry)) {
-        BuildSceneItems(Scene, View);
-    } else {
-        mDrawRecords.clear();
-    }
+    if (!IsSceneCacheCurrent(Scene, View)) {
+        mSceneItems.clear();
+        mOutlineItems.clear();
 
-    if (View.IsPassEnabled(ERenderPass::SelectionOutline)) {
-        for (const FMeshDrawBatch& Item : mSceneItems) {
-            if ((Item.mFlags & static_cast<Uint32>(ERenderObjectFlags::Selected)) != 0) {
-                mOutlineItems.push_back(Item);
+        if (View.IsPassEnabled(ERenderPass::SceneGeometry)) {
+            BuildSceneItems(Scene, View);
+        } else {
+            mDrawRecords.clear();
+        }
+
+        if (View.IsPassEnabled(ERenderPass::SelectionOutline)) {
+            for (const FMeshDrawBatch& Item : mSceneItems) {
+                if ((Item.mFlags & static_cast<Uint32>(ERenderObjectFlags::Selected)) != 0) {
+                    mOutlineItems.push_back(Item);
+                }
             }
         }
+
+        mSceneRecordCount = mDrawRecords.size();
+        CommitSceneCache(Scene, View);
     }
 
+    mDrawRecords.resize(mSceneRecordCount);
     if (View.IsPassEnabled(ERenderPass::Gizmo)) {
         BuildGizmoItems(Registry, View.mGizmoProbes);
     }
@@ -52,6 +70,14 @@ const TArray<FMatrix>& FRenderQueue::GetGizmoTransforms() const {
     return mGizmoTransforms;
 }
 
+bool FRenderQueue::IsSceneCacheCurrent(const FRenderScene& Scene, const FRenderView& View) const {
+    return mSceneCacheKey.mScene == &Scene && mSceneCacheKey.mSceneId == Scene.GetId() && mSceneCacheKey.mObjectRevision == Scene.GetRevision() && mSceneCacheKey.mTemplateRevision == Scene.GetTemplateRevision() && IsSameMatrix(mSceneCacheKey.mCamera.mView, View.mCamera.mView) && IsSameMatrix(mSceneCacheKey.mCamera.mProjection, View.mCamera.mProjection) && IsSameMatrix(mSceneCacheKey.mCamera.mViewProjection, View.mCamera.mViewProjection) && IsSameFrustum(mSceneCacheKey.mCamera.mViewFrustum, View.mCamera.mViewFrustum) && mSceneCacheKey.mSelectedActorHandle == View.mSelectedActorHandle && mSceneCacheKey.mUseLOD == View.mUseLOD && mSceneCacheKey.mRenderSky == View.mSettings.mBRenderSky && mSceneCacheKey.mSceneGeometry == View.IsPassEnabled(ERenderPass::SceneGeometry) && mSceneCacheKey.mSelectionOutline == View.IsPassEnabled(ERenderPass::SelectionOutline);
+}
+
+void FRenderQueue::CommitSceneCache(const FRenderScene& Scene, const FRenderView& View) {
+    mSceneCacheKey = FSceneCacheKey{&Scene, Scene.GetId(), Scene.GetRevision(), Scene.GetTemplateRevision(), View.mCamera, View.mSelectedActorHandle, View.mUseLOD, View.mSettings.mBRenderSky, View.IsPassEnabled(ERenderPass::SceneGeometry), View.IsPassEnabled(ERenderPass::SelectionOutline)};
+}
+
 void FRenderQueue::BuildSceneItems(const FRenderScene& Scene, const FRenderView& View) {
     const TArray<FRenderSceneObject>& Objects{Scene.GetObjects()};
     const TArray<FRenderTemplateGroup>& Groups{Scene.GetTemplateGroups()};
@@ -64,11 +90,7 @@ void FRenderQueue::BuildSceneItems(const FRenderScene& Scene, const FRenderView&
     const bool Perspective{std::abs(View.mCamera.mProjection.M[2][3]) > 1e-6f};
     const float ProjectionScale{std::abs(View.mCamera.mProjection.M[1][1])};
 
-    if (Perspective) {
-        Scene.CollectVisibleObjects(View.mCamera.mViewFrustum, mVisibleObjectIndices);
-    } else {
-        Scene.CollectVisibleObjects(View.mCamera.mViewProjection, mVisibleObjectIndices);
-    }
+    Scene.CollectVisibleObjects(View.mCamera, mVisibleObjectIndices, mBoundaryObjectPositions);
 
     mVisibleObjects.clear();
     mVisibleObjects.reserve(mVisibleObjectIndices.size());
@@ -183,8 +205,7 @@ Uint32 FRenderQueue::SelectLODLevel(const FRenderSceneObject& Object, const FRen
     if (Perspective) {
         // LOD 선택에 쓰는 카메라 깊이만 계산한다.
         const FMatrix& View{Camera.mView};
-        const float ViewDepth{Bounds.Center.x * View.M[0][2] + Bounds.Center.y * View.M[1][2] +
-            Bounds.Center.z * View.M[2][2] + View.M[3][2]};
+        const float ViewDepth{Bounds.Center.x * View.M[0][2] + Bounds.Center.y * View.M[1][2] + Bounds.Center.z * View.M[2][2] + View.M[3][2]};
         ScreenSize /= (std::max)(std::abs(ViewDepth), 1e-4f);
     }
 

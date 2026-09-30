@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstddef>
+#include <limits>
+
 #include "Core/Base/UObject.h"
 #include "Core/Archive/FArchive.h"
 #include "Core/Property/IPropertyEditorContext.h"
@@ -37,6 +40,9 @@ public:
     bool IsActive() const;
     void SetActive(bool BInActive);
 
+    bool IsTickEnabled() const;
+    void SetTickEnabled(bool TickEnabled);
+
     bool IsRegistered() const;
     bool IsInitialized() const;
     bool HasBegunPlay() const;
@@ -57,12 +63,15 @@ private:
     friend class AActor;
 
     void SetOwner(AActor* InOwner);
+    void UpdateTickRegistration();
 
 private:
     AActor* mOwner{nullptr};
     UWorld* mParentWorld{nullptr};
+    std::size_t mTickIndex{std::numeric_limits<std::size_t>::max()};
 
     bool mBActive{true};
+    bool mBTickEnabled{};
     bool mBRegistered{false};
     bool mBInitialized{false};
     bool mBHasBegunPlay{false};

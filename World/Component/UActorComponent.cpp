@@ -9,7 +9,14 @@ AActor* UActorComponent::GetOwner() const {
 }
 
 void UActorComponent::SetOwner(AActor* InOwner) {
+    if (mOwner == InOwner) {
+        return;
+    }
+    if (mOwner != nullptr) {
+        mOwner->UnregisterTickComponent(this);
+    }
     mOwner = InOwner;
+    UpdateTickRegistration();
 }
 
 void UActorComponent::OnRegister() {
@@ -21,10 +28,12 @@ void UActorComponent::InitializeComponent() {
 
 void UActorComponent::BeginPlay() {
     mBHasBegunPlay = true;
+    UpdateTickRegistration();
 }
 
 void UActorComponent::EndPlay() {
     mBHasBegunPlay = false;
+    UpdateTickRegistration();
 }
 
 void UActorComponent::Tick(float /*DeltaTime*/  ) {
@@ -46,7 +55,27 @@ void UActorComponent::SetActive(bool BInActive) {
     }
 
     mBActive = BInActive;
+    UpdateTickRegistration();
     OnRenderStateChanged();
+}
+
+bool UActorComponent::IsTickEnabled() const {
+    return mBTickEnabled;
+}
+
+void UActorComponent::SetTickEnabled(bool TickEnabled) {
+    if (mBTickEnabled == TickEnabled) {
+        return;
+    }
+
+    mBTickEnabled = TickEnabled;
+    UpdateTickRegistration();
+}
+
+void UActorComponent::UpdateTickRegistration() {
+    if (mOwner != nullptr) {
+        mOwner->UpdateComponentTickRegistration(this);
+    }
 }
 
 bool UActorComponent::IsRegistered() const {
@@ -76,6 +105,7 @@ void UActorComponent::RegisterComponent(UWorld* World) {
     mBRegistered = true;
 
     this->OnRegister();
+    UpdateTickRegistration();
 }
 
 void UActorComponent::UnregisterComponent() {
@@ -93,6 +123,7 @@ void UActorComponent::UnregisterComponent() {
 
     mBRegistered = false;
     mParentWorld = nullptr;
+    UpdateTickRegistration();
 }
 
 void UActorComponent::DestroyComponent(bool /*bPromoteChildren*/  ) {
@@ -119,6 +150,7 @@ void UActorComponent::Serialize(FArchive& Archive) {
     Archive.Serialize("bActive", mBActive);
 
     if (Archive.IsLoading()) {
+        UpdateTickRegistration();
         OnRenderStateChanged();
     }
 }

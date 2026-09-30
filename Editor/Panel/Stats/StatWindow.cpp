@@ -111,6 +111,24 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
             AddRow(Rows, RowCount, Stat::GetSystemStageName(static_cast<Stat::ESystemStatStage>(Index)), 0, TextColor, "%.3f / %.1f%%", (RoundedMicroseconds - PreviousMicroseconds) / 1000.0, (RoundedShareTenths - PreviousShareTenths) / 10.0);
             PreviousMicroseconds = RoundedMicroseconds;
             PreviousShareTenths = RoundedShareTenths;
+            if (Index == static_cast<std::size_t>(Stat::ESystemStatStage::WorldUpdate)) {
+                const Stat::FWorldTickStatAverage& Tick{Snapshot.mWorldTick};
+                AddRow(Rows, RowCount, "  Actor tick loop", 1, MutedColor, "%.3f / %.1f%%", Tick.mTotalMilliseconds, TotalMilliseconds > 0.0 ? Tick.mTotalMilliseconds * 100.0 / TotalMilliseconds : 0.0);
+                AddRow(Rows, RowCount, "    Actor ticks / frame", 1, MutedColor, "%.0f", Tick.mActorTickCount);
+                AddRow(Rows, RowCount, "    Component visits / frame", 1, MutedColor, "%.0f", Tick.mComponentVisitCount);
+                AddRow(Rows, RowCount, "    Component ticks / frame", 1, MutedColor, "%.0f", Tick.mComponentTickCount);
+                AddRow(Rows, RowCount, "    Inactive components / frame", 1, MutedColor, "%.0f", Tick.mComponentVisitCount - Tick.mComponentTickCount);
+            }
+            if (Index == static_cast<std::size_t>(Stat::ESystemStatStage::RenderPreparation)) {
+                double DetailedMilliseconds{};
+                for (std::size_t DetailIndex{}; DetailIndex < Snapshot.mRenderPreparationSamples.size(); ++DetailIndex) {
+                    const double DetailMilliseconds{Snapshot.mRenderPreparationSamples[DetailIndex].mTotalMilliseconds};
+                    DetailedMilliseconds += DetailMilliseconds;
+                    AddRow(Rows, RowCount, Stat::GetRenderPreparationStageName(static_cast<Stat::ERenderPreparationStage>(DetailIndex)), 1, MutedColor, "%.3f / %.1f%%", DetailMilliseconds, TotalMilliseconds > 0.0 ? DetailMilliseconds * 100.0 / TotalMilliseconds : 0.0);
+                }
+                const double RemainingMilliseconds{Snapshot.mSystemSamples[Index].mExclusiveMilliseconds > DetailedMilliseconds ? Snapshot.mSystemSamples[Index].mExclusiveMilliseconds - DetailedMilliseconds : 0.0};
+                AddRow(Rows, RowCount, "  Other preparation", 1, MutedColor, "%.3f / %.1f%%", RemainingMilliseconds, TotalMilliseconds > 0.0 ? RemainingMilliseconds * 100.0 / TotalMilliseconds : 0.0);
+            }
         }
     }
 

@@ -38,7 +38,10 @@ void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime)
     const AActor* SelectedActor{ Context.mEditorContext->GetSelectedActor() };
     const FObjectHandle SelectedActorHandle{ SelectedActor != nullptr ? SelectedActor->GetHandle() : FObjectHandle{} };
 
-    Context.mWorld->BuildSceneRenderData(mSceneData);
+    {
+        const Stat::FScopedRenderPreparationStatTimer StageStat{Stat::ERenderPreparationStage::SceneData};
+        Context.mWorld->BuildSceneRenderData(mSceneData);
+    }
     const FRenderScene& RenderScene{Context.mRenderer.SynchronizeScene(mSceneData)};
 
     for (FViewportId Id{}; Id < FViewportHostWindow::MaximumViewportCount; ++Id) {
@@ -53,13 +56,16 @@ void FEditorApplication::TickMode(FApplicationContext& Context, float DeltaTime)
         }
 
         FRenderView View{};
-        View.mTarget = &Viewport->GetRenderSurface();
-        View.mCamera = Camera;
-        View.mSettings = Viewport->GetRenderSettings();
-        View.mRenderMode = static_cast<ERenderMode>(Context.mEditorContext->GetRenderModeState());
-        View.mSelectedActorHandle = SelectedActorHandle;
+        {
+            const Stat::FScopedRenderPreparationStatTimer StageStat{Stat::ERenderPreparationStage::ViewSetup};
+            View.mTarget = &Viewport->GetRenderSurface();
+            View.mCamera = Camera;
+            View.mSettings = Viewport->GetRenderSettings();
+            View.mRenderMode = static_cast<ERenderMode>(Context.mEditorContext->GetRenderModeState());
+            View.mSelectedActorHandle = SelectedActorHandle;
 
-        Context.mEditorView->BuildViewRenderData(View, Camera, Viewport->GetCameraPosition(), Viewport->GetRenderViewport());
+            Context.mEditorView->BuildViewRenderData(View, Camera, Viewport->GetCameraPosition(), Viewport->GetRenderViewport());
+        }
         Context.mRenderer.RenderView(View, RenderScene);
     }
 }

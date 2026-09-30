@@ -144,9 +144,12 @@ void FRenderer::BeginFrame(float DeltaTime) {
     }
 
     mCurrentFrameResource = &FrameResource;
+    ++mFrameSerial;
+    PruneRenderQueues();
 }
 
 const FRenderScene& FRenderer::SynchronizeScene(FSceneRenderData& Scene) {
+    const Stat::FScopedRenderPreparationStatTimer StageStat{Stat::ERenderPreparationStage::SceneSynchronization};
     const Uint64 SceneId{Scene.mSceneId != 0 ? Scene.mSceneId : mTransientSceneId};
     std::unique_ptr<FRenderScene>& RenderScene{mRenderScenes[SceneId]};
     if (RenderScene == nullptr) {
@@ -180,16 +183,28 @@ void FRenderer::RenderView(const FRenderView& View, const FRenderScene& Scene) {
         return;
     }
 
-    mAssetRegistry->FlushMaterialBuffer(mDeviceContext.Get());
-    mRenderQueue.Build(mAssetRegistry, Scene, View);
-    if (!mCurrentFrameResource->PrepareView(mDevice.Get(), mDeviceContext.Get(), View, Scene, mRenderQueue)) {
-        return;
+    {
+        const Stat::FScopedRenderPreparationStatTimer StageStat{Stat::ERenderPreparationStage::MaterialBuffer};
+        mAssetRegistry->FlushMaterialBuffer(mDeviceContext.Get());
+    }
+    FViewRenderQueue& ViewQueue{mRenderQueues[View.mTarget]};
+    ViewQueue.mLastUsedFrame = mFrameSerial;
+    FRenderQueue& Queue{ViewQueue.mQueue};
+    {
+        const Stat::FScopedRenderPreparationStatTimer StageStat{Stat::ERenderPreparationStage::RenderQueue};
+        Queue.Build(mAssetRegistry, Scene, View);
+    }
+    {
+        const Stat::FScopedRenderPreparationStatTimer StageStat{Stat::ERenderPreparationStage::ViewBuffers};
+        if (!mCurrentFrameResource->PrepareView(mDevice.Get(), mDeviceContext.Get(), View, Scene, Queue)) {
+            return;
+        }
     }
 
     const FRenderContext Context{mDeviceContext.Get(), mAssetRegistry, mAssetRegistry->GetMaterialBufferSRV(), mCurrentFrameResource};
     if (View.IsPassEnabled(ERenderPass::SceneGeometry)) {
         const Stat::FScopedSystemStatTimer StageStat{ Stat::ESystemStatStage::Geometry };
-        ExecutePass(ERenderPass::SceneGeometry, Context, View, Scene);
+        ExecutePass(ERenderPass::SceneGeometry, Context, View, Scene, Queue);
     }
 
     {
@@ -197,7 +212,7 @@ void FRenderer::RenderView(const FRenderView& View, const FRenderScene& Scene) {
         constexpr std::array Passes{ ERenderPass::SelectionOutline, ERenderPass::SceneGuides, ERenderPass::Gizmo, ERenderPass::Text, ERenderPass::Billboard, ERenderPass::OrientationAxis };
         for (const ERenderPass Pass : Passes) {
             if (View.IsPassEnabled(Pass)) {
-                ExecutePass(Pass, Context, View, Scene);
+                ExecutePass(Pass, Context, View, Scene, Queue);
             }
         }
     }
@@ -205,16 +220,16 @@ void FRenderer::RenderView(const FRenderView& View, const FRenderScene& Scene) {
     View.mTarget->Bind(mDeviceContext.Get());
 }
 
-void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FRenderScene& Scene) {
+void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FRenderScene& Scene, const FRenderQueue& Queue) {
     View.mTarget->Bind(mDeviceContext.Get());
     BindSamplerStates();
 
     switch (Pass) {
         case ERenderPass::SceneGeometry:
-            mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), View.mRenderMode);
+            mMeshRenderer.Draw(Context, Queue.GetItems(Pass), View.mRenderMode);
             break;
         case ERenderPass::SelectionOutline:
-            mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), ERenderMode::Outline);
+            mMeshRenderer.Draw(Context, Queue.GetItems(Pass), ERenderMode::Outline);
             break;
         case ERenderPass::SceneGuides:
             DrawSceneGuides(View);
@@ -222,7 +237,7 @@ void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, con
         case ERenderPass::Gizmo:
             if (!View.mGizmoProbes.empty()) {
                 View.mTarget->ClearDepth(mDeviceContext.Get());
-                mMeshRenderer.Draw(Context, mRenderQueue.GetItems(Pass), ERenderMode::Lit);
+                mMeshRenderer.Draw(Context, Queue.GetItems(Pass), ERenderMode::Lit);
             }
             break;
         case ERenderPass::Text:
@@ -237,6 +252,13 @@ void FRenderer::ExecutePass(ERenderPass Pass, const FRenderContext& Context, con
         default:
             break;
     }
+}
+
+void FRenderer::PruneRenderQueues() {
+    constexpr Uint64 MaximumUnusedFrames{120};
+    std::erase_if(mRenderQueues, [this](const auto& Entry) {
+        return mFrameSerial - Entry.second.mLastUsedFrame > MaximumUnusedFrames;
+    });
 }
 
 void FRenderer::DrawSceneGuides(const FRenderView& View) {
@@ -293,7 +315,9 @@ void FRenderer::Terminate() {
     mDeviceContext->ClearState();
 
     mLineRenderer.Reset();
+    mRenderQueues.clear();
     mRenderScenes.clear();
+    mFrameSerial = 0;
 
     for (FFrameResource& FrameResource : mFrameResources) {
         FrameResource.Reset();

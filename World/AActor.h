@@ -2,6 +2,7 @@
 #pragma once
 
 #include "Core/Common.h"
+#include <limits>
 
 #include "Core/Base/UObject.h"
 #include "World/Component/UActorComponent.h"
@@ -128,6 +129,8 @@ public:
 
     /// <summary>Actor가 BeginPlay 수명 주기를 완료했는지 반환합니다.</summary>
     bool HasBegunPlay() const;
+    bool IsTickEnabled() const;
+    void SetTickEnabled(bool TickEnabled);
     /// <summary>활성 Component에 프레임 Tick을 전달합니다.</summary>
     /// <param name="DeltaTime">이전 프레임 이후 경과 시간입니다.</param>
     virtual void Tick(float DeltaTime);
@@ -156,16 +159,28 @@ protected:
 
 private:
     friend class UActorComponent;
+    friend class UWorld;
 
     void RemoveOwnedComponent(UActorComponent* Component);
+    void UpdateTickRegistration();
+    void UpdateComponentTickRegistration(UActorComponent* Component);
+    void UnregisterTickComponent(UActorComponent* Component);
+    void FinishComponentTicks(bool WasTicking);
 
+private:
     std::vector<std::unique_ptr<UActorComponent>> mComponents{};
+    TArray<UActorComponent*> mTickComponents{};
+    std::size_t mTickIndex{std::numeric_limits<std::size_t>::max()};
+    std::size_t mTickComponentCount{};
     USceneComponent* mRootComponent{nullptr};
 
     FGuid mPendingRootComponentGuid{};
 
     UWorld* mWorld{nullptr};
     bool mBHasBegunPlay{false};
+    bool mBTickEnabled{};
+    bool mBTickingComponents{};
+    bool mTickComponentsNeedCompaction{};
 };
 
 template <typename T> requires std::is_base_of_v<UActorComponent, T> T* AActor::AddComponent() {

@@ -110,8 +110,12 @@ public:
 
 private:
     friend class FTemporarySceneLoader;
+    friend class AActor;
 
     void ClearActors();
+    void RegisterTickActor(AActor* Actor);
+    void UnregisterTickActor(AActor* Actor);
+    void FinishActorTicks(bool WasTicking);
     void InitializeSubsystems();
     void DeinitializeSubsystems();
 
@@ -122,6 +126,9 @@ private:
 
     TArray<std::unique_ptr<AActor>> mActors{};
     TArray<AActor*> mPendingDestroyActors{};
+    TArray<AActor*> mTickActors{};
+    bool mBTickingActors{};
+    bool mTickActorsNeedCompaction{};
 
     TArray<UStaticMeshComponent*> mRenderableComponents{};
     TArray<TObjectRef<UCollisionComponent>> mCollisionComponents{};

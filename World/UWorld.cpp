@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "UWorld.h"
 #include "FTemporarySceneLoader.h"
+#include "Core/Stat/Stat.h"
 
 #include <algorithm>
 #include <cmath>
@@ -124,6 +125,10 @@ bool UWorld::DestroyActor(AActor* Actor) {
 
 void UWorld::FlushPendingDestroyActors() 
 {
+    if (mBTickingActors) {
+        return;
+    }
+
     bool bRemovedAnyActor = false;
 
     for (AActor* Actor : mPendingDestroyActors) 
@@ -314,13 +319,77 @@ FWorldEditorContext* UWorld::GetEditorContext() const noexcept {
 void UWorld::Tick(float DeltaTime) {
     mTime.Tick(static_cast<double>(DeltaTime));
     const float WorldDeltaTime{static_cast<float>(mTime.GetDeltaSeconds())};
-    if (WorldDeltaTime > 0.0f) {
-        for (const std::unique_ptr<AActor>& Actor : mActors) {
-            Actor->Tick(WorldDeltaTime);
+    if (WorldDeltaTime > 0.0f && !mTickActors.empty()) {
+        const Stat::FScopedWorldTickStatTimer TickStat{0};
+        Stat::FWorldTickStats* TickStats{Stat::GetActiveWorldTickStats()};
+        const bool WasTicking{mBTickingActors};
+        mBTickingActors = true;
+        const std::size_t ActorCount{mTickActors.size()};
+        try {
+            for (std::size_t Index{}; Index < ActorCount && Index < mTickActors.size(); ++Index) {
+                AActor* Actor{mTickActors[Index]};
+                if (Actor == nullptr) {
+                    continue;
+                }
+                if (TickStats != nullptr) {
+                    ++TickStats->mActorTickCount;
+                }
+                if (Actor->IsTickEnabled()) {
+                    Actor->Tick(WorldDeltaTime);
+                } else {
+                    Actor->AActor::Tick(WorldDeltaTime);
+                }
+            }
+        } catch (...) {
+            FinishActorTicks(WasTicking);
+            throw;
         }
+        FinishActorTicks(WasTicking);
     }
 
     FlushPendingDestroyActors();
+}
+
+void UWorld::RegisterTickActor(AActor* Actor) {
+    if (Actor->mTickIndex != std::numeric_limits<std::size_t>::max()) {
+        return;
+    }
+
+    mTickActors.push_back(Actor);
+    Actor->mTickIndex = mTickActors.size() - 1;
+}
+
+void UWorld::UnregisterTickActor(AActor* Actor) {
+    const std::size_t Index{Actor->mTickIndex};
+    if (Index == std::numeric_limits<std::size_t>::max()) {
+        return;
+    }
+
+    Actor->mTickIndex = std::numeric_limits<std::size_t>::max();
+    if (mBTickingActors) {
+        mTickActors[Index] = nullptr;
+        mTickActorsNeedCompaction = true;
+    } else {
+        if (Index + 1 < mTickActors.size()) {
+            AActor* LastActor{mTickActors.back()};
+            mTickActors[Index] = LastActor;
+            LastActor->mTickIndex = Index;
+        }
+        mTickActors.pop_back();
+    }
+}
+
+void UWorld::FinishActorTicks(bool WasTicking) {
+    mBTickingActors = WasTicking;
+    if (WasTicking || !mTickActorsNeedCompaction) {
+        return;
+    }
+
+    std::erase(mTickActors, nullptr);
+    for (std::size_t Index{}; Index < mTickActors.size(); ++Index) {
+        mTickActors[Index]->mTickIndex = Index;
+    }
+    mTickActorsNeedCompaction = false;
 }
 
 FWorldTime& UWorld::GetTime() {

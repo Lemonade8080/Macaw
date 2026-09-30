@@ -61,6 +61,10 @@ Uint64 FRenderScene::GetRevision() const {
     return mRevision;
 }
 
+Uint64 FRenderScene::GetTemplateRevision() const {
+    return mTemplateRevision;
+}
+
 const TArray<FMatrix>& FRenderScene::GetObjectTransforms() const {
     return mObjectTransforms;
 }
@@ -124,6 +128,24 @@ void FRenderScene::CollectVisibleObjects(const FMatrix& ViewProjection, TArray<U
     OutIndices.reserve(mBoundsObjects.size() + mUnboundedObjects.size());
     mBoundsTree.FrustumCull(ViewProjection, OutIndices);
 
+    OutIndices.insert(OutIndices.end(), mUnboundedObjects.begin(), mUnboundedObjects.end());
+}
+
+void FRenderScene::CollectVisibleObjects(const CameraProbe& Camera, TArray<Uint32>& OutIndices, TArray<Uint32>& OutBoundaryPositions) const {
+    const bool Perspective{std::abs(Camera.mProjection.M[2][3]) > 1e-6f};
+    OutIndices.reserve(mBoundsObjects.size() + mUnboundedObjects.size());
+    OutBoundaryPositions.clear();
+    mBoundsTree.FrustumCull(Camera.mViewProjection, OutIndices, Perspective ? &OutBoundaryPositions : nullptr);
+
+    for (const Uint32 Position : OutBoundaryPositions) {
+        if (!Camera.mViewFrustum.Intersects(mObjects[OutIndices[Position]].mWorldOBB)) {
+            OutIndices[Position] = UINT32_MAX;
+        }
+    }
+
+    if (!OutBoundaryPositions.empty()) {
+        std::erase(OutIndices, UINT32_MAX);
+    }
     OutIndices.insert(OutIndices.end(), mUnboundedObjects.begin(), mUnboundedObjects.end());
 }
 
@@ -282,7 +304,11 @@ void FRenderScene::RefreshTemplates(const IAssetRegistry* Registry) {
     const FAssetHandle SkyPipeline{Registry != nullptr ? Registry->FindAsset(FAssetPath{"/Game/Pipeline/SkyDome.json"}) : FAssetHandle{}};
 
     for (FRenderTemplateGroup& Group : mTemplateGroups) {
-        Group.mSky = Group.mKey.mPipelineHandle == SkyPipeline;
+        const bool Sky{Group.mKey.mPipelineHandle == SkyPipeline};
+        if (Group.mSky != Sky) {
+            Group.mSky = Sky;
+            mTemplatesDirty = true;
+        }
         if (Group.mReferenceCount == 0) {
             continue;
         }
@@ -334,6 +360,7 @@ void FRenderScene::RefreshTemplates(const IAssetRegistry* Registry) {
         }
     }
 
+    ++mTemplateRevision;
     mTemplatesDirty = false;
 }
 

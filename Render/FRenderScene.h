@@ -78,6 +78,7 @@ public:
 
     Uint64 GetId() const;
     Uint64 GetRevision() const;
+    Uint64 GetTemplateRevision() const;
     const TArray<FMatrix>& GetObjectTransforms() const;
 
     ERenderUpdateMode CollectChangedObjects(Uint64 SinceRevision, TArray<Uint32>& OutIndices) const;
@@ -92,6 +93,7 @@ public:
 
     void CollectVisibleObjects(const FFrustum& Frustum, TArray<Uint32>& OutIndices) const;
     void CollectVisibleObjects(const FMatrix& ViewProjection, TArray<Uint32>& OutIndices) const;
+    void CollectVisibleObjects(const CameraProbe& Camera, TArray<Uint32>& OutIndices, TArray<Uint32>& OutBoundaryPositions) const;
 
 private:
     void ApplyObjectUpdates(const FSceneRenderData& Scene);
@@ -111,6 +113,7 @@ private:
 private:
     Uint64 mSceneId{};
     Uint64 mRevision{1};
+    Uint64 mTemplateRevision{};
     FRevisionCursor mSourceRevision{};
     Uint64 mJournalFloor{};
 
