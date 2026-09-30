@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "FMaterialBuffer.h"
 #include "UMaterial.h"
 
@@ -60,7 +60,7 @@ bool FMaterialBuffer::RegisterMaterial(UMaterial* Material) {
         Material->mGpuIndices.push_back(Index);
     }
 
-    Material->mBGpuDataDirty = true;
+    Material->MarkGPUDataDirty();
 
     return true;
 }
@@ -81,6 +81,7 @@ void FMaterialBuffer::UnregisterMaterial(UMaterial* Material) {
     }
 
     Material->mGpuIndices.clear();
+    ++Material->mRenderRevision;
     Material->mBGpuDataDirty = false;
 }
 

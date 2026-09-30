@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "Core/Property/IPropertyEditorContext.h"
 #include "UCameraComponent.h"
 
@@ -56,6 +56,7 @@ void UCameraComponent::SetFarPlane(float InFarPlane) {
 
 void UCameraComponent::OnRegister() {
     UActorComponent::OnRegister();
+
     AActor* Owner{GetOwner()};
 
     if (Owner != nullptr && Owner->GetWorld() != nullptr) {
@@ -64,7 +65,7 @@ void UCameraComponent::OnRegister() {
 }
 
 void UCameraComponent::OnUnregister() {
-    UActorComponent::OnUnregister();
+    USceneComponent::OnUnregister();
 
     AActor* Owner{GetOwner()};
 
@@ -91,6 +92,7 @@ float UCameraComponent::GetMoveSensitivity() const {
 
 void UCameraComponent::Serialize(FArchive& Archive) {
     USceneComponent::Serialize(Archive);
+
     Archive.Serialize("FOV", mFov);
     Archive.Serialize("AspectRatio", mAspectRatio);
     Archive.Serialize("NearPlane", mNearPlane);
@@ -99,15 +101,19 @@ void UCameraComponent::Serialize(FArchive& Archive) {
 
 void UCameraComponent::DrawPanels(IPropertyEditorContext* Context) {
     USceneComponent::DrawPanels(Context);
+
     Context->DrawFloat("FOV (Degrees)", DirectX::XMConvertToDegrees(GetFOV()), 0.1f, 1.0f, 179.0f, [this](float FOVDegrees) {
         SetFOV(DirectX::XMConvertToRadians(FOVDegrees));
     });
+
     Context->DrawFloat("Aspect Ratio", GetAspectRatio(), 0.01f, 0.01f, 100.0f, [this](float AspectRatio) {
         SetAspectRatio(AspectRatio);
     });
+
     Context->DrawFloat("Near Plane", GetNearPlane(), 0.01f, 0.001f, GetFarPlane() - 0.001f, [this](float NearPlane) {
         SetNearPlane(NearPlane);
     });
+
     Context->DrawFloat("Far Plane", GetFarPlane(), 1.0f, GetNearPlane() + 0.001f, 1000000.0f, [this](float FarPlane) {
         SetFarPlane(FarPlane);
     });

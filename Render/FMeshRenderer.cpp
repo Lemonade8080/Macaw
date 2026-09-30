@@ -4,67 +4,97 @@
 #include "Asset/UMesh.h"
 #include "Asset/UTexture.h"
 #include "FFrameResource.h"
+#include "RenderConfig.h"
 #include "Core/Stat/Stat.h"
 
-
-#define ENABLE_INSTANCE 
-
-void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawItem>& Items, ERenderMode Mode) {
-    if (Items.empty() || Context.mAssetRegistry == nullptr || Context.mFrameResource == nullptr) {
+void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawBatch>& Items, ERenderMode Mode) {
+    mLastDrawStats = {};
+    if (Items.empty() || Context.mDeviceContext == nullptr || Context.mAssetRegistry == nullptr || Context.mFrameResource == nullptr) {
         return;
     }
+
     ID3D11DeviceContext* DeviceContext{Context.mDeviceContext};
     if (!Context.mFrameResource->BindModels(DeviceContext)) {
         return;
     }
+
     DeviceContext->VSSetShaderResources(1, 1, &Context.mMaterialResource);
     DeviceContext->PSSetShaderResources(1, 1, &Context.mMaterialResource);
 
-    for (std::size_t Begin{}; Begin < Items.size();) {
-        const FMeshDrawItem& First{Items[Begin]};
-        std::size_t End{Begin + 1};
-        while (End < Items.size() && First.HasSameBatch(Items[End]) && Items[End].mModelIndex == static_cast<std::size_t>(First.mModelIndex) + End - Begin && ((First.mProbe.mFlags ^ Items[End].mProbe.mFlags) & static_cast<Uint32>(ERenderObjectFlags::Selected)) == 0) {
-            ++End;
-        }
-        const UPipeline* Pipeline{Context.mAssetRegistry->ResolveAsset<UPipeline>(First.mProbe.mPipelineHandle)};
-        const UMesh* Mesh{Context.mAssetRegistry->ResolveAsset<UMesh>(First.mProbe.mMeshHandle)};
-        if (Pipeline != nullptr && Mesh != nullptr && (Mode != ERenderMode::Outline || Pipeline->RenderModeSettable(Mode))) {
-            const ERenderMode ResolvedMode{Pipeline->ResolveRenderMode(Mode)};
-            const UINT StencilReference{ResolvedMode == ERenderMode::Outline || (First.mProbe.mFlags & static_cast<Uint32>(ERenderObjectFlags::Selected)) != 0 ? 1u : 0u};
-            Pipeline->Bind(DeviceContext, ResolvedMode, StencilReference);
-            std::array<ID3D11ShaderResourceView*, MaxMaterialTextureFields> TextureResources{};
+    const UPipeline* BoundPipeline{};
+    ERenderMode BoundMode{ERenderMode::Lit};
+    Uint32 BoundStencilReference{};
+    const FMaterialChunkSignature* BoundTextures{};
+    const UMesh* BoundMesh{};
+    Uint32 BoundLOD{};
 
-            for (Uint8 Index{}; Index < First.mTextureSignature.mTextureFieldCount; ++Index) {
-                const UTexture* Texture{Context.mAssetRegistry->ResolveAsset<UTexture>(First.mTextureSignature.GetTextureHandle(Index))};
+    for (const FMeshDrawBatch& Item : Items) {
+        const FMeshDrawState& State{Item.mState};
+        const UPipeline* Pipeline{Context.mAssetRegistry->ResolveAsset<UPipeline>(State.mPipelineHandle)};
+        const UMesh* Mesh{Context.mAssetRegistry->ResolveAsset<UMesh>(State.mMeshHandle)};
+        if (Pipeline == nullptr || Mesh == nullptr || Item.mRecordCount == 0 || (Mode == ERenderMode::Outline && !Pipeline->RenderModeSettable(Mode))) {
+            continue;
+        }
+
+        const ERenderMode ResolvedMode{Pipeline->ResolveRenderMode(Mode)};
+        if (!Pipeline->RenderModeSettable(ResolvedMode)) {
+            continue;
+        }
+
+        const Uint32 StencilReference{ResolvedMode == ERenderMode::Outline || (Item.mFlags & static_cast<Uint32>(ERenderObjectFlags::Selected)) != 0 ? 1u : 0u};
+        if (BoundPipeline != Pipeline || BoundMode != ResolvedMode || BoundStencilReference != StencilReference) {
+            Pipeline->Bind(DeviceContext, ResolvedMode, StencilReference);
+            BoundPipeline = Pipeline;
+            BoundMode = ResolvedMode;
+            BoundStencilReference = StencilReference;
+            ++mLastDrawStats.mPipelineBindCount;
+        }
+
+        if (BoundTextures == nullptr || *BoundTextures != State.mTextureSignature) {
+            std::array<ID3D11ShaderResourceView*, MaxMaterialTextureFields> TextureResources{};
+            for (Uint8 Index{}; Index < State.mTextureSignature.mTextureFieldCount; ++Index) {
+                const UTexture* Texture{Context.mAssetRegistry->ResolveAsset<UTexture>(State.mTextureSignature.GetTextureHandle(Index))};
                 TextureResources[Index] = Texture != nullptr ? Texture->GetSRV() : nullptr;
             }
 
             DeviceContext->VSSetShaderResources(3, static_cast<UINT>(TextureResources.size()), TextureResources.data());
             DeviceContext->PSSetShaderResources(3, static_cast<UINT>(TextureResources.size()), TextureResources.data());
+            BoundTextures = &State.mTextureSignature;
+            ++mLastDrawStats.mTextureBindCount;
+        }
 
-            const int LODLevel{static_cast<int>(First.mLODLevel)};
-
+        const int LODLevel{static_cast<int>(State.mLODLevel)};
+        if (BoundMesh != Mesh || BoundLOD != State.mLODLevel) {
             ID3D11Buffer* VertexBuffers[]{Mesh->GetVertexBuffer(EVertexAttribute::Position, LODLevel), Mesh->GetVertexBuffer(EVertexAttribute::Normal, LODLevel), Mesh->GetVertexBuffer(EVertexAttribute::UV, LODLevel), Mesh->GetVertexBuffer(EVertexAttribute::Color, LODLevel)};
             const Uint32 Strides[]{Mesh->GetVertexStride(EVertexAttribute::Position), Mesh->GetVertexStride(EVertexAttribute::Normal), Mesh->GetVertexStride(EVertexAttribute::UV), Mesh->GetVertexStride(EVertexAttribute::Color)};
             const Uint32 Offsets[]{0, 0, 0, 0};
-
             DeviceContext->IASetVertexBuffers(0, _countof(VertexBuffers), VertexBuffers, Strides, Offsets);
             DeviceContext->IASetIndexBuffer(Mesh->GetIndexBuffer(LODLevel), DXGI_FORMAT_R32_UINT, 0);
-#ifdef ENABLE_INSTANCE
-            const Uint32 InstanceCount{static_cast<Uint32>(End - Begin)};
-            DeviceContext->DrawIndexedInstanced(First.mIndexCount, InstanceCount, First.mFirstIndex, 0, First.mModelIndex);
-            const Uint32 OriginalIndexCount{LODLevel > 0 ? Mesh->GetIndexCount(0) : First.mIndexCount};
-            Stat::RecordLODStats(static_cast<Uint32>(LODLevel), static_cast<std::uint64_t>(First.mIndexCount / 3) * InstanceCount, static_cast<std::uint64_t>(OriginalIndexCount / 3) * InstanceCount, 1);
-#else
-            for (std::size_t Index{Begin}; Index < End; ++Index) {
-                if (Context.mFrameResource->BindMeshDraw(DeviceContext, Items[Index].mModelIndex)) {
-                    DeviceContext->DrawIndexed(First.mIndexCount, First.mFirstIndex, 0);
-                    const Uint32 OriginalIndexCount{LODLevel > 0 ? Mesh->GetIndexCount(0) : First.mIndexCount};
-                    Stat::RecordLODStats(static_cast<Uint32>(LODLevel), First.mIndexCount / 3, OriginalIndexCount / 3, 1);
-                }
-            }
-#endif
+            BoundMesh = Mesh;
+            BoundLOD = State.mLODLevel;
+            ++mLastDrawStats.mMeshBindCount;
         }
-        Begin = End;
+
+        const Uint32 OriginalIndexCount{LODLevel > 0 ? Mesh->GetIndexCount(0) : State.mIndexCount};
+#if ENABLE_INSTANCE
+        DeviceContext->DrawIndexedInstanced(State.mIndexCount, Item.mRecordCount, State.mFirstIndex, 0, Item.mFirstRecord);
+        ++mLastDrawStats.mDrawCallCount;
+        Stat::RecordLODStats(State.mLODLevel, static_cast<std::uint64_t>(State.mIndexCount / 3) * Item.mRecordCount, static_cast<std::uint64_t>(OriginalIndexCount / 3) * Item.mRecordCount, 1);
+#else
+        Uint32 DrawCount{};
+        for (Uint32 Index{}; Index < Item.mRecordCount; ++Index) {
+            if (Context.mFrameResource->BindMeshDraw(DeviceContext, Item.mFirstRecord + Index)) {
+                DeviceContext->DrawIndexed(State.mIndexCount, State.mFirstIndex, 0);
+                ++DrawCount;
+            }
+        }
+
+        mLastDrawStats.mDrawCallCount += DrawCount;
+        Stat::RecordLODStats(State.mLODLevel, static_cast<std::uint64_t>(State.mIndexCount / 3) * DrawCount, static_cast<std::uint64_t>(OriginalIndexCount / 3) * DrawCount, DrawCount);
+#endif
     }
+}
+
+const FMeshDrawStats& FMeshRenderer::GetLastDrawStats() const {
+    return mLastDrawStats;
 }

@@ -1,4 +1,4 @@
-﻿#include "pch.h"
+#include "pch.h"
 #include "UMaterial.h"
 
 void UMaterial::BuildGPUData(Uint32 GroupIndex, FMaterialGPUSlot& OutSlot) const {
@@ -46,5 +46,10 @@ Uint32 UMaterial::GetGPUDataCount() const {
 }
 
 void UMaterial::MarkGPUDataDirty() {
+    ++mRenderRevision;
     mBGpuDataDirty = true;
+}
+
+Uint64 UMaterial::GetRenderRevision() const {
+    return mRenderRevision;
 }

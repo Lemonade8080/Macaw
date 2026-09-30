@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "UMeshComponent.h"
 #include "Core/Archive/FArchive.h"
@@ -17,22 +17,27 @@ public:
     void SetMeshHandle(FAssetHandle InHandle) override;
     void SetMaterialHandle(FAssetHandle InHandle);
     void SetPipelineHandle(FAssetHandle InHandle);
+
     void DrawPanels(IPropertyEditorContext* Context) override;
 
     void OnRegister() override;
     void OnUnregister() override;
+
     virtual void MakeRender(FActorProbe& OutProbe) const override;
 
 private:
     void Serialize(FArchive& Archive) override;
+
     void EnsureDefaultRenderAssets();
-    void NotifyRenderStateChanged();
+    void OnRenderStateChanged() override;
 
 private:
     FAssetHandle mMaterialHandle{};
     FAssetHandle mPipelineHandle{};
+
     FAssetPath mMaterialAssetPath{};
     FAssetPath mPipelineAssetPath{};
+
     FGuid mMaterialAssetGuid{};
     FGuid mPipelineAssetGuid{};
 };

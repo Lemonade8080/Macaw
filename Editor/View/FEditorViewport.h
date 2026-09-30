@@ -21,6 +21,7 @@ public:
     FEditorViewport(FEditorViewport&&) = delete;
     FEditorViewport& operator=(FEditorViewport&&) = delete;
 
+public:
     FViewportId GetViewportId() const;
 
     void BeginFrame();
@@ -49,10 +50,12 @@ private:
     void ApplyOrthographicView();
     const char* GetViewModeName() const;
     void ResizeRenderSurface();
+    bool IsCameraProbeCurrent() const;
     void ApplyMouseNavigation(const FViewportMouseNavigationInput& NavigationInput);
     void ApplyKeyboardNavigation(const FViewportKeyboardNavigationInput& NavigationInput);
     D3D11_VIEWPORT BuildInputViewport() const;
 
+private:
     ID3D11Device* mDevice{nullptr};
     FWorldEditorContext* mEditorContext{nullptr};
     FSceneRenderSurface mRenderSurface{};
@@ -73,6 +76,17 @@ private:
     float mNearPlane{0.1f};
     float mFarPlane{1000.0f};
 
+    CameraProbe mCachedCameraProbe{};
+    FVector3 mCachedCameraPosition{};
+    FQuat mCachedCameraRotation{};
+    EProjectionType mCachedProjectionType{};
+    float mCachedFieldOfView{};
+    float mCachedOrthographicWidth{};
+    float mCachedNearPlane{};
+    float mCachedFarPlane{};
+    Uint32 mCachedWidth{};
+    Uint32 mCachedHeight{};
+    bool mHasCachedCameraProbe{};
 
     FRect mDisplayRect{};
     Uint32 mWidth{0};

@@ -14,6 +14,7 @@
 #include "Asset/IRenderAssetRegistry.h"
 #include "FRenderView.h"
 #include "FRenderQueue.h"
+#include "FRenderScene.h"
 #include "FMeshRenderer.h"
 #include "FTextRenderer.h"
 #include "FBillboardRenderer.h"
@@ -36,12 +37,17 @@ public:
     bool Initialize();
 
     void BeginFrame(float DeltaTime);
-    void RenderView(const FRenderView& View, const FSceneRenderData& Scene);
+
+    const FRenderScene& SynchronizeScene(FSceneRenderData& Scene);
+    void RenderView(const FRenderView& View, FSceneRenderData& Scene);
+    void RenderView(const FRenderView& View, const FRenderScene& Scene);
+
     void BeginUiRender();
     void EndFrame();
 
     ID3D11Device* GetDevice() const;
     ID3D11DeviceContext* GetDeviceContext() const;
+
     void BindAssetRegistry(IRenderAssetRegistry* InAssetRegistry);
 
     void ReSize(Uint32 Width, Uint32 Height);
@@ -51,9 +57,11 @@ public:
 private:
     void CreateDeviceAndSwapChain(HWND WindowHandle);
     bool CreateSamplerStates();
+
     void BindSamplerStates();
 
-    void ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FSceneRenderData& Scene);
+    void ExecutePass(ERenderPass Pass, const FRenderContext& Context, const FRenderView& View, const FRenderScene& Scene);
+
     void DrawSceneGuides(const FRenderView& View);
     void DrawOrientationAxis(const FRenderView& View);
 
@@ -63,11 +71,13 @@ private:
 #else
     static constexpr Uint32 mFrameResourceCount{1};
 #endif
+
 #ifdef _DEBUG
     Microsoft::WRL::ComPtr<ID3D11Debug> mDebugInterface{};
 #endif
     Microsoft::WRL::ComPtr<ID3D11Device> mDevice{};
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> mDeviceContext{};
+
 #if EnableFrameResourceFence
     Microsoft::WRL::ComPtr<ID3D11DeviceContext4> mFenceContext{};
     Microsoft::WRL::ComPtr<ID3D11Fence> mFrameFence{};
@@ -76,16 +86,23 @@ private:
     std::array<Uint64, mFrameResourceCount> mCompletionValues{};
     Uint32 mNextFrameResourceIndex{};
 #endif
+
     Microsoft::WRL::ComPtr<IDXGISwapChain> mSwapChain{};
     std::unique_ptr<IRenderSurface> mBackBufferSurface{};
+
     // s0: LinearWrap, s1: LinearClamp, s2: PointClamp, s3: PointWrap, s4: AnisotropicWrap, s5: ShadowCompare.
     std::array<Microsoft::WRL::ComPtr<ID3D11SamplerState>, 6> mSamplerStates{};
+
     IRenderAssetRegistry* mAssetRegistry{nullptr};
 
     std::array<FFrameResource, mFrameResourceCount> mFrameResources{};
     FFrameResource* mCurrentFrameResource{nullptr};
     float mAnimationTime{};
+
+    TMap<Uint64, std::unique_ptr<FRenderScene>> mRenderScenes{};
+    Uint64 mTransientSceneId{AllocateRenderSceneId()};
     FRenderQueue mRenderQueue{};
+
     FMeshRenderer mMeshRenderer{};
     FTextRenderer mTextRenderer{};
     FBillboardRenderer mBillboardRenderer{};

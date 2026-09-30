@@ -10,4 +10,7 @@ public:
 private:
     void InitializeMode(FApplicationContext& Context, HWND WindowHandle) override;
     void TickMode(FApplicationContext& Context, float DeltaTime) override;
+
+private:
+    FSceneRenderData mSceneData{};
 };

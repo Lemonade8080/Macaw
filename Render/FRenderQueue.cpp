@@ -1,94 +1,37 @@
 #include "pch.h"
 #include "FRenderQueue.h"
 #include "Core/Asset/IAssetRegistry.h"
-#include "Asset/FLODSettings.h"
 #include "Asset/UMaterial.h"
 #include "Asset/UMesh.h"
 
-namespace
-{
-    Uint32 SelectLODLevel(
-        const FActorProbe& Probe,
-        const UMesh& Mesh,
-        const CameraProbe& Camera)
-    {
-        const DirectX::BoundingSphere& WorldBounds{Probe.mWorldSphereBounds};
+#include <algorithm>
 
-        const FVector3 Center{
-            WorldBounds.Center.x,
-            WorldBounds.Center.y,
-            WorldBounds.Center.z
-        };
-
-        const float Radius{WorldBounds.Radius};
-        if (Radius <= 1e-4f) { return 0; }
-
-        const FVector3 ViewCenter{Camera.mView.TransformPosition(Center)};
-        const float ProjectionScale{std::abs(Camera.mProjection.M[1][1])};
-        const bool BPerspective{std::abs(Camera.mProjection.M[2][3]) > 1e-6f};
-        const float ScreenSize{BPerspective ? Radius * ProjectionScale / (std::max)(std::abs(ViewCenter.Z), 1e-4f) : Radius * ProjectionScale};
-
-        Uint32 Level{GLODCount - 1};
-
-        // 화면에서 차지하는 크기에 맞는 LOD를 선택한다.
-        for (Uint32 Index{}; Index < GLODCount; ++Index)
-        {
-            if (ScreenSize >= GLODSettings[Index].mScreenSize)
-            {
-                Level = Index;
-                break;
-            }
-        }
-
-        // 요청한 LOD가 없으면 가장 가까운 상위 품질 LOD를 사용한다.
-        while (Level > 0 && !Mesh.HasLOD(Level))
-        {
-            --Level;
-        }
-
-        return Level;
-    }
-}
-
-bool FMeshDrawItem::HasSameBatch(const FMeshDrawItem& Other) const {
-    return mProbe.mPipelineHandle == Other.mProbe.mPipelineHandle && mProbe.mMaterialHandle == Other.mProbe.mMaterialHandle && mProbe.mMeshHandle == Other.mProbe.mMeshHandle && mTextureSignature == Other.mTextureSignature && mMaterialGroupIndex == Other.mMaterialGroupIndex && mFirstIndex == Other.mFirstIndex && mIndexCount == Other.mIndexCount && mLODLevel == Other.mLODLevel;
-}
-
-void FRenderQueue::Build(const IAssetRegistry* Registry, const FSceneRenderData& Scene, const FRenderView& View) {
+void FRenderQueue::Build(const IAssetRegistry* Registry, const FRenderScene& Scene, const FRenderView& View) {
     mSceneItems.clear();
     mOutlineItems.clear();
     mGizmoItems.clear();
-    
+    mGizmoTransforms.clear();
+
     if (View.IsPassEnabled(ERenderPass::SceneGeometry)) {
-        FrustumCulling(Scene.mActorProbes, View.mCamera.mViewFrustum);
-        BuildItems(Registry, mVisibleProbes, mSceneItems, View.mSettings.mBRenderSky, View.mCamera, true);
+        BuildSceneItems(Scene, View);
+    } else {
+        mDrawRecords.clear();
     }
-    if (View.mSelectedActorHandle.IsValid()) {
-        for (FMeshDrawItem& Item : mSceneItems) {
-            if (Item.mProbe.mOwnerHandle == View.mSelectedActorHandle) {
-                Item.mProbe.mFlags |= static_cast<Uint32>(ERenderObjectFlags::Selected);
-            }
-        }
-    }
-    for (std::size_t Index{}; Index < mSceneItems.size(); ++Index) {
-        mSceneItems[Index].mModelIndex = static_cast<Uint32>(Index);
-    }
+
     if (View.IsPassEnabled(ERenderPass::SelectionOutline)) {
-        for (const FMeshDrawItem& Item : mSceneItems) {
-            if ((Item.mProbe.mFlags & static_cast<Uint32>(ERenderObjectFlags::Selected)) != 0) {
+        for (const FMeshDrawBatch& Item : mSceneItems) {
+            if ((Item.mFlags & static_cast<Uint32>(ERenderObjectFlags::Selected)) != 0) {
                 mOutlineItems.push_back(Item);
             }
         }
     }
+
     if (View.IsPassEnabled(ERenderPass::Gizmo)) {
-        BuildItems(Registry, View.mGizmoProbes, mGizmoItems, true, View.mCamera, false);
-        for (std::size_t Index{}; Index < mGizmoItems.size(); ++Index) {
-            mGizmoItems[Index].mModelIndex = static_cast<Uint32>(mSceneItems.size() + Index);
-        }
+        BuildGizmoItems(Registry, View.mGizmoProbes);
     }
 }
 
-const TArray<FMeshDrawItem>& FRenderQueue::GetItems(ERenderPass Pass) const {
+const TArray<FMeshDrawBatch>& FRenderQueue::GetItems(ERenderPass Pass) const {
     switch (Pass) {
         case ERenderPass::SceneGeometry:
             return mSceneItems;
@@ -101,95 +44,151 @@ const TArray<FMeshDrawItem>& FRenderQueue::GetItems(ERenderPass Pass) const {
     }
 }
 
-void FRenderQueue::BuildItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, TArray<FMeshDrawItem>& Items, bool RenderSky, const CameraProbe& Camera, bool BUseLOD) {
+const TArray<FMeshDrawRecord>& FRenderQueue::GetDrawRecords() const {
+    return mDrawRecords;
+}
+
+const TArray<FMatrix>& FRenderQueue::GetGizmoTransforms() const {
+    return mGizmoTransforms;
+}
+
+void FRenderQueue::BuildSceneItems(const FRenderScene& Scene, const FRenderView& View) {
+    const TArray<FRenderSceneObject>& Objects{Scene.GetObjects()};
+    const TArray<FRenderTemplateGroup>& Groups{Scene.GetTemplateGroups()};
+    const TArray<FRenderBatchTemplate>& Templates{Scene.GetTemplates()};
+    if (Templates.empty()) {
+        mDrawRecords.clear();
+        return;
+    }
+
+    const bool Perspective{std::abs(View.mCamera.mProjection.M[2][3]) > 1e-6f};
+    const float ProjectionScale{std::abs(View.mCamera.mProjection.M[1][1])};
+
+    if (Perspective) {
+        Scene.CollectVisibleObjects(View.mCamera.mViewFrustum, mVisibleObjectIndices);
+    } else {
+        Scene.CollectVisibleObjects(View.mCamera.mViewProjection, mVisibleObjectIndices);
+    }
+
+    mVisibleObjects.clear();
+    mVisibleObjects.reserve(mVisibleObjectIndices.size());
+    mBucketCounts.assign(Templates.size() * 2, 0);
+    mBucketWritePositions.resize(mBucketCounts.size());
+
+    constexpr Uint32 SelectedFlag{static_cast<Uint32>(ERenderObjectFlags::Selected)};
+    for (const Uint32 ObjectIndex : mVisibleObjectIndices) {
+        const FRenderSceneObject& Object{Objects[ObjectIndex]};
+        const FRenderTemplateGroup& Group{Groups[Object.mTemplateGroupIndex]};
+        if (!View.mSettings.mBRenderSky && Group.mSky) {
+            continue;
+        }
+
+        const Uint32 LODLevel{Group.mSky || !View.mUseLOD ? 0 : SelectLODLevel(Object, Group, View.mCamera, ProjectionScale, Perspective)};
+        const FRenderTemplateRange& TemplateRange{Group.mTemplateRangesByLOD[LODLevel]};
+        if (TemplateRange.mTemplateCount == 0) {
+            continue;
+        }
+
+        const bool Selected{View.mSelectedActorHandle.IsValid() && Object.mOwnerHandle == View.mSelectedActorHandle};
+        const Uint32 Flags{Object.mFlags | (Selected ? SelectedFlag : 0)};
+        const Uint32 BucketFlag{(Flags & SelectedFlag) != 0 ? 1u : 0u};
+        mVisibleObjects.push_back(FVisibleObject{ObjectIndex, LODLevel, Flags});
+
+        for (Uint32 Index{}; Index < TemplateRange.mTemplateCount; ++Index) {
+            ++mBucketCounts[(TemplateRange.mFirstTemplateIndex + Index) * 2 + BucketFlag];
+        }
+    }
+
+    std::size_t TotalRecords{};
+    for (std::size_t Bucket{}; Bucket < mBucketCounts.size(); ++Bucket) {
+        const Uint32 Count{mBucketCounts[Bucket]};
+        if (Count == 0) {
+            continue;
+        }
+
+        if (TotalRecords > UINT32_MAX - static_cast<std::size_t>(Count)) {
+            mSceneItems.clear();
+            mDrawRecords.clear();
+            return;
+        }
+
+        const FRenderBatchTemplate& Template{Templates[Bucket / 2]};
+        const Uint32 FirstRecord{static_cast<Uint32>(TotalRecords)};
+        const Uint32 Flags{(Bucket & 1u) != 0 ? SelectedFlag : 0};
+        mSceneItems.push_back(FMeshDrawBatch{Template.mState, FirstRecord, Count, Flags});
+        mBucketWritePositions[Bucket] = FirstRecord;
+        TotalRecords += Count;
+    }
+
+    mDrawRecords.resize(TotalRecords);
+    for (const FVisibleObject& VisibleObject : mVisibleObjects) {
+        const FRenderTemplateGroup& Group{Groups[Objects[VisibleObject.mObjectIndex].mTemplateGroupIndex]};
+        const FRenderTemplateRange& TemplateRange{Group.mTemplateRangesByLOD[VisibleObject.mLODLevel]};
+        const Uint32 BucketFlag{(VisibleObject.mFlags & SelectedFlag) != 0 ? 1u : 0u};
+
+        for (Uint32 Index{}; Index < TemplateRange.mTemplateCount; ++Index) {
+            const Uint32 TemplateIndex{TemplateRange.mFirstTemplateIndex + Index};
+            const Uint32 Destination{mBucketWritePositions[TemplateIndex * 2 + BucketFlag]++};
+            mDrawRecords[Destination] = FMeshDrawRecord{VisibleObject.mObjectIndex, Templates[TemplateIndex].mMaterialIndex, VisibleObject.mFlags, 0};
+        }
+    }
+}
+
+void FRenderQueue::BuildGizmoItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes) {
     if (Registry == nullptr) {
         return;
     }
 
-    const FAssetHandle SkyPipelineHandle{Registry->FindAsset(FAssetPath{"/Game/Pipeline/SkyDome.json"})};
-    for (std::size_t Begin{}; Begin < Probes.size();) {
-        const FActorProbe& Source{Probes[Begin]};
-        std::size_t End{Begin + 1};
-        while (End < Probes.size() && Source.mPipelineHandle == Probes[End].mPipelineHandle && Source.mMaterialHandle == Probes[End].mMaterialHandle && Source.mMeshHandle == Probes[End].mMeshHandle) {
-            ++End;
+    mGizmoTransforms.reserve(Probes.size());
+    for (const FActorProbe& Probe : Probes) {
+        const UMesh* Mesh{Registry->ResolveAsset<UMesh>(Probe.mMeshHandle)};
+        const UMaterial* Material{Registry->ResolveAsset<UMaterial>(Probe.mMaterialHandle)};
+        if (Mesh == nullptr || Material == nullptr) {
+            continue;
         }
 
-        const UMesh* Mesh{Registry->ResolveAsset<UMesh>(Source.mMeshHandle)};
-        if ((RenderSky || Source.mPipelineHandle != SkyPipelineHandle) && Mesh != nullptr && Registry->ResolveAsset<UPipeline>(Source.mPipelineHandle) != nullptr) {
-            TArray<Uint32> LODLevels{};
-            LODLevels.reserve(End - Begin);
-
-            for (std::size_t Index{Begin}; Index < End; ++Index) {
-                const bool BSelectLOD{BUseLOD && Source.mPipelineHandle != SkyPipelineHandle};
-                LODLevels.push_back(BSelectLOD ? SelectLODLevel(Probes[Index], *Mesh, Camera) : 0);
-            }
-
-            TArray<FActorProbe> LODProbes{};
-            LODProbes.reserve(End - Begin);
-
-            for (Uint32 Level{}; Level < GLODCount; ++Level) {
-                LODProbes.clear();
-
-                for (std::size_t Index{Begin}; Index < End; ++Index) {
-                    if (LODLevels[Index - Begin] == Level) { LODProbes.push_back(Probes[Index]); }
-                }
-
-                if (LODProbes.empty()) { continue; }
-
-                if (Level > 0) {
-                    AddItems(Registry, LODProbes, 0, LODProbes.size(), 0, 0, Mesh->GetIndexCount(Level), Level, Items);
-                    continue;
-                }
-
-                const TArray<UMesh::FSubMesh>& SubMeshes{Mesh->GetSubMeshes()};
-                if (SubMeshes.empty()) {
-                    AddItems(Registry, LODProbes, 0, LODProbes.size(), 0, 0, static_cast<Uint32>(Mesh->GetIndices().size()), 0, Items);
-                } else {
-                    for (const UMesh::FSubMesh& SubMesh : SubMeshes) {
-                        AddItems(Registry, LODProbes, 0, LODProbes.size(), SubMesh.mMaterialGroupIndex, SubMesh.mFirstIndex, SubMesh.mIndexCount, 0, Items);
-                    }
-                }
-            }
+        mGizmoTemplates.clear();
+        AppendMeshDrawTemplates(*Mesh, *Material, Probe.mPipelineHandle, Probe.mMeshHandle, 0, mGizmoTemplates);
+        if (mGizmoTemplates.empty()) {
+            continue;
         }
-        Begin = End;
+
+        if (mGizmoTransforms.size() >= 0x80000000ull || mGizmoTemplates.size() > UINT32_MAX - mDrawRecords.size()) {
+            break;
+        }
+
+        const Uint32 ObjectIndex{0x80000000u | static_cast<Uint32>(mGizmoTransforms.size())};
+        mGizmoTransforms.push_back(Probe.mWorld);
+
+        for (const FRenderBatchTemplate& Template : mGizmoTemplates) {
+            const Uint32 FirstRecord{static_cast<Uint32>(mDrawRecords.size())};
+            mDrawRecords.push_back(FMeshDrawRecord{ObjectIndex, Template.mMaterialIndex, Probe.mFlags, 0});
+            mGizmoItems.push_back(FMeshDrawBatch{Template.mState, FirstRecord, 1, Probe.mFlags});
+        }
     }
 }
 
-void FRenderQueue::AddItems(const IAssetRegistry* Registry, const TArray<FActorProbe>& Probes, std::size_t Begin, std::size_t End, Uint32 MaterialGroupIndex, Uint32 FirstIndex, Uint32 IndexCount, Uint32 LODLevel, TArray<FMeshDrawItem>& Items) {
-    const UMaterial* Material{Registry->ResolveAsset<UMaterial>(Probes[Begin].mMaterialHandle)};
-    if (Material == nullptr || IndexCount == 0) {
-        return;
-    }
-    const Uint32 GroupIndex{Material->GetGPUIndex(MaterialGroupIndex) != UINT32_MAX ? MaterialGroupIndex : 0u};
-    const Uint32 MaterialIndex{Material->GetGPUIndex(GroupIndex)};
-    if (MaterialIndex == UINT32_MAX) {
-        return;
+Uint32 FRenderQueue::SelectLODLevel(const FRenderSceneObject& Object, const FRenderTemplateGroup& Group, const CameraProbe& Camera, float ProjectionScale, bool Perspective) const {
+    const DirectX::BoundingSphere& Bounds{Object.mWorldSphereBounds};
+    if (Bounds.Radius <= 1e-4f || !std::isfinite(Bounds.Radius)) {
+        return 0;
     }
 
-    const FMaterialChunkSignature TextureSignature{Material->BuildChunkSignature(GroupIndex)};
-    for (std::size_t Index{Begin}; Index < End; ++Index) {
-        const FActorProbe& Probe{Probes[Index]};
-        Items.push_back(FMeshDrawItem{Probe, TextureSignature, MaterialIndex, GroupIndex, FirstIndex, IndexCount, LODLevel});
-    }
-}
+    const FVector3 Center{Bounds.Center.x, Bounds.Center.y, Bounds.Center.z};
+    const FVector3 ViewCenter{Camera.mView.TransformPosition(Center)};
+    const float ScreenSize{Perspective ? Bounds.Radius * ProjectionScale / (std::max)(std::abs(ViewCenter.Z), 1e-4f) : Bounds.Radius * ProjectionScale};
 
-void FRenderQueue::FrustumCulling(const TArray<FActorProbe>& BeforeCullingProbes, const FFrustum& Frustum)
-{
-    mVisibleProbes.clear();
-    mVisibleProbes.reserve(BeforeCullingProbes.size());
-
-    if (BeforeCullingProbes.empty())
-    {
-        return;
+    Uint32 Level{GLODCount - 1};
+    for (Uint32 Index{}; Index < GLODCount; ++Index) {
+        if (ScreenSize >= GLODSettings[Index].mScreenSize) {
+            Level = Index;
+            break;
+        }
     }
 
-    const bool bNeedsRebuiled = mBVHTree.GetNodes().empty() || (mCachedProbeCount != BeforeCullingProbes.size());
-
-    if (bNeedsRebuiled)
-    {
-        mBVHTree.Build(BeforeCullingProbes);
-        mCachedProbeCount = BeforeCullingProbes.size();
+    while (Level > 0 && (Group.mAvailableLODMask & (1u << Level)) == 0) {
+        --Level;
     }
-    
-    mBVHTree.FrustumCull(Frustum, BeforeCullingProbes, mVisibleProbes);
+
+    return Level;
 }

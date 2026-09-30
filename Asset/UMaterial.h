@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "FMaterialChunkSignature.h"
 #include "FMaterialGPUData.h"
@@ -39,6 +39,7 @@ public:
     virtual std::optional<Uint32> FindGroupIndex(const FString& Name) const;
 
     void MarkGPUDataDirty();
+    Uint64 GetRenderRevision() const;
 
 protected:
     void Serialize(FArchive& Ar) override;
@@ -47,5 +48,6 @@ private:
     friend class FMaterialBuffer;
 
     TArray<Uint32> mGpuIndices{};
+    Uint64 mRenderRevision{1};
     bool mBGpuDataDirty{true};
 };

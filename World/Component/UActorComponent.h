@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "Core/Base/UObject.h"
 #include "Core/Archive/FArchive.h"
@@ -29,6 +29,9 @@ public:
     virtual void EndPlay();
     virtual void Tick(float DeltaTime);
     virtual void OnUnregister();
+
+    virtual void OnRenderStateChanged();
+
     virtual void DrawPanels(IPropertyEditorContext* Context);
 
     bool IsActive() const;
@@ -48,7 +51,6 @@ public:
 
     virtual bool ResolveLoadedReferences();
 
-protected:
     void Serialize(FArchive& Archive) override;
 
 private:

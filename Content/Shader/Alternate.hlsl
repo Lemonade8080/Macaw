@@ -1,10 +1,4 @@
-struct FModelContext
-{
-    row_major float4x4 World;
-    uint MaterialIndex;
-    uint Flags;
-};
-
+#include "ModelResource.hlsli"
 
 struct FMaterial
 {
@@ -19,7 +13,6 @@ struct FMaterial
     float4 Parameters6;
 };
 
-StructuredBuffer<FModelContext> ModelContexts : register(t0);
 StructuredBuffer<FMaterial> MaterialBuffer : register(t1);
 #include "Lighting.hlsli"
 
@@ -42,19 +35,21 @@ struct PS_INPUT
     nointerpolation float3 ColorCoefficient : Jungle2;
 };
 
-PS_INPUT mainVS(VS_INPUT Input, uint ModelIndex : MODEL_INDEX)
+PS_INPUT mainVS(VS_INPUT Input, uint DrawRecordIndex : MODEL_INDEX)
 {
     PS_INPUT Output;
-    FModelContext ModelContext = ModelContexts[ModelIndex];
-    float4 WorldPosition = mul(float4(Input.Position, 1.0f), ModelContext.World);
+
+    FModelContext ModelContext = {GetModelContext(DrawRecordIndex)};
+
+    float4 WorldPosition = mul(float4(Input.Position, 1.0f), ModelContext.mWorld);
 
     Output.Position = mul(WorldPosition, ViewProjection);
-    Output.Normal = mul(Input.Normal, (float3x3) ModelContext.World);
+    Output.Normal = mul(Input.Normal, (float3x3) ModelContext.mWorld);
     Output.UV = Input.UV;
     Output.WorldPosition = WorldPosition.xyz;
-    Output.MaterialIndex = ModelContext.MaterialIndex;
+    Output.MaterialIndex = ModelContext.mMaterialIndex;
 
-    if ((ModelContext.Flags & 1) != 0)
+    if ((ModelContext.mFlags & 1) != 0)
     {
         Output.ColorCoefficient = float3(0.5f, 0.5f, 0.5f);
     }
@@ -62,7 +57,6 @@ PS_INPUT mainVS(VS_INPUT Input, uint ModelIndex : MODEL_INDEX)
     {
         Output.ColorCoefficient = float3(1.0f, 1.0f, 1.0f);
     }
-    
     
     return Output;
 }

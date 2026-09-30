@@ -153,6 +153,8 @@ public:
     Uint32 GetIndexCount(int Level = 0) const;
     bool HasLOD(int Level) const;
 
+    Uint64 GetRenderRevision() const;
+
     bool HasVertexAttribute(EVertexAttribute Attribute) const;
 
     Uint32 GetVertexStride(EVertexAttribute Attribute) const;
@@ -239,6 +241,7 @@ private:
     TArray<Uint32> mIndices{};
 
     TArray<FSubMesh> mSubMeshes{};
+    Uint64 mRenderRevision{1};
 
     DirectX::BoundingOrientedBox mBoundingBox{ DirectX::XMFLOAT3{0.f, 0.f, 0.f}, DirectX::XMFLOAT3{0.f, 0.f, 0.f}, DirectX::XMFLOAT4{0.f, 0.f, 0.f, 1.f} };
 

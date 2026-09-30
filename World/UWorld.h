@@ -52,28 +52,35 @@ public:
     bool RenameActor(AActor* Actor, const FName& NewName);
 
     const TArray<std::unique_ptr<AActor>>& GetActors() const;
-    void BuildSceneRenderData(FSceneRenderData& Scene) const;
+
+    void BuildSceneRenderData(FSceneRenderData& Scene);
 
     void SetEditorContext(FWorldEditorContext* InEditorContext);
     FWorldEditorContext* GetEditorContext() const noexcept;
 
     void Tick(float DeltaTime);
+
     FWorldTime& GetTime();
     const FWorldTime& GetTime() const;
 
     URenderSubsystem& GetRenderSubsystem();
     const URenderSubsystem& GetRenderSubsystem() const;
+
     UCollisionSubsystem& GetCollisionSubsystem();
     const UCollisionSubsystem& GetCollisionSubsystem() const;
+
     UPickingSubsystem& GetPickingSubsystem();
     const UPickingSubsystem& GetPickingSubsystem() const;
+
     UCameraSubsystem& GetCameraSubsystem();
     const UCameraSubsystem& GetCameraSubsystem() const;
+
     UBillboardSubsystem& GetBillboardSubsystem();
     const UBillboardSubsystem& GetBillboardSubsystem() const;
 
     UTextSubsystem& GetTextSubsystem();
     const UTextSubsystem& GetTextSubsystem() const;
+
     ULightSubsystem& GetLightSubsystem();
     const ULightSubsystem& GetLightSubsystem() const;
 
@@ -98,8 +105,8 @@ public:
     FName MakeUniqueObjectName(std::string_view SourceName);
     AActor* FindActorByName(FName InName) const;
 
-    void MarkOutlinerDirty() { ++OutlinerRevision; }
-    uint64 GetOutlinerRevision() const { return OutlinerRevision; }
+    void MarkOutlinerDirty();
+    uint64 GetOutlinerRevision() const;
 
 private:
     friend class FTemporarySceneLoader;
@@ -108,10 +115,11 @@ private:
     void InitializeSubsystems();
     void DeinitializeSubsystems();
 
-    uint64 OutlinerRevision = 0;
-
 private:
+    uint64 mOutlinerRevision{};
+
     FWorldTime mTime{};
+
     TArray<std::unique_ptr<AActor>> mActors{};
     TArray<AActor*> mPendingDestroyActors{};
 
