@@ -100,6 +100,7 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
         const double TotalMilliseconds{ Snapshot.mFrame.mAverageFrameMilliseconds };
         AddRow(Rows, RowCount, "STAT RENDER (CPU)", 0, HeadingColor, "ms / frame %%");
         AddRow(Rows, RowCount, "0.5 s average / all views", 0, MutedColor, "");
+        AddRow(Rows, RowCount, "Viewport 0 size", 0, TextColor, "%d x %d", static_cast<int>(Max.x - Min.x), static_cast<int>(Max.y - Min.y));
         AddRow(Rows, RowCount, "Frame time", 0, HeadingColor, "%.3f / %.1f%%", TotalMilliseconds, TotalMilliseconds > 0.0 ? 100.0 : 0.0);
         double CumulativeMilliseconds{};
         double PreviousMicroseconds{};
