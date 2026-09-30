@@ -5,8 +5,8 @@
 #include "Asset/UMesh.h"
 
 void AppendMeshDrawTemplates(const UMesh& Mesh, const UMaterial& Material, FAssetHandle PipelineHandle, FAssetHandle MeshHandle, Uint32 LODLevel, TArray<FRenderBatchTemplate>& OutTemplates) {
-    const TArray<UMesh::FSubMesh>& SubMeshes{Mesh.GetSubMeshes()};
-    const bool UseSubMeshes{LODLevel == 0 && !SubMeshes.empty()};
+    const TArray<UMesh::FSubMesh>& SubMeshes{Mesh.GetSubMeshes(static_cast<int>(LODLevel))};
+    const bool UseSubMeshes{!SubMeshes.empty()};
     const std::size_t SectionCount{UseSubMeshes ? SubMeshes.size() : 1};
 
     for (std::size_t SectionIndex{}; SectionIndex < SectionCount; ++SectionIndex) {
@@ -26,6 +26,8 @@ void AppendMeshDrawTemplates(const UMesh& Mesh, const UMaterial& Material, FAsse
         State.mFirstIndex = FirstIndex;
         State.mIndexCount = IndexCount;
         State.mLODLevel = LODLevel;
+        State.mOriginalIndexCount = UseSubMeshes ?
+            (SubMeshes[SectionIndex].mSourceIndexCount != 0 ? SubMeshes[SectionIndex].mSourceIndexCount : IndexCount) : Mesh.GetIndexCount(0);
 
         OutTemplates.push_back(FRenderBatchTemplate{State, MaterialIndex});
     }

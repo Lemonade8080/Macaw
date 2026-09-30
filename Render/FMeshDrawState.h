@@ -13,6 +13,7 @@ struct FMeshDrawState {
     Uint32 mFirstIndex{};
     Uint32 mIndexCount{};
     Uint32 mLODLevel{};
+    Uint32 mOriginalIndexCount{};
 };
 
 struct FRenderBatchTemplate {

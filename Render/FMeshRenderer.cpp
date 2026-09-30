@@ -75,7 +75,7 @@ void FMeshRenderer::Draw(const FRenderContext& Context, const TArray<FMeshDrawBa
             ++mLastDrawStats.mMeshBindCount;
         }
 
-        const Uint32 OriginalIndexCount{LODLevel > 0 ? Mesh->GetIndexCount(0) : State.mIndexCount};
+        const Uint32 OriginalIndexCount{State.mOriginalIndexCount};
 #if ENABLE_INSTANCE
         DeviceContext->DrawIndexedInstanced(State.mIndexCount, Item.mRecordCount, State.mFirstIndex, 0, Item.mFirstRecord);
         ++mLastDrawStats.mDrawCallCount;

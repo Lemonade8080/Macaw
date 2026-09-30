@@ -169,14 +169,24 @@ void FRenderQueue::BuildGizmoItems(const IAssetRegistry* Registry, const TArray<
 }
 
 Uint32 FRenderQueue::SelectLODLevel(const FRenderSceneObject& Object, const FRenderTemplateGroup& Group, const CameraProbe& Camera, float ProjectionScale, bool Perspective) const {
+    // LOD0만 있는 메시에는 화면 크기 계산이 필요 없다.
+    if ((Group.mAvailableLODMask & ~1u) == 0) {
+        return 0;
+    }
+
     const DirectX::BoundingSphere& Bounds{Object.mWorldSphereBounds};
     if (Bounds.Radius <= 1e-4f || !std::isfinite(Bounds.Radius)) {
         return 0;
     }
 
-    const FVector3 Center{Bounds.Center.x, Bounds.Center.y, Bounds.Center.z};
-    const FVector3 ViewCenter{Camera.mView.TransformPosition(Center)};
-    const float ScreenSize{Perspective ? Bounds.Radius * ProjectionScale / (std::max)(std::abs(ViewCenter.Z), 1e-4f) : Bounds.Radius * ProjectionScale};
+    float ScreenSize{Bounds.Radius * ProjectionScale};
+    if (Perspective) {
+        // LOD 선택에 쓰는 카메라 깊이만 계산한다.
+        const FMatrix& View{Camera.mView};
+        const float ViewDepth{Bounds.Center.x * View.M[0][2] + Bounds.Center.y * View.M[1][2] +
+            Bounds.Center.z * View.M[2][2] + View.M[3][2]};
+        ScreenSize /= (std::max)(std::abs(ViewDepth), 1e-4f);
+    }
 
     Uint32 Level{GLODCount - 1};
     for (Uint32 Index{}; Index < GLODCount; ++Index) {
