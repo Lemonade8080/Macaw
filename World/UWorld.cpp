@@ -479,6 +479,10 @@ bool UWorld::SaveScene(const FString& SceneName, const IAssetRegistry* AssetRegi
 }
 
 bool UWorld::LoadScene(const std::filesystem::path& ScenePath) {
+    const auto FinishLoad = [this]() {
+        if (!GetPickingSubsystem().RebuildAccelerationStructure()) Console::AddLog(Console::STDOutHandle, ELogLevel::Warning, ELogCategory::Etc, "Failed to rebuild the picking acceleration structure after loading the scene.");
+        return true;
+    };
     if (ScenePath.extension() == ".scene") {
         FAssetRegistry* Registry{dynamic_cast<FAssetRegistry*>(mAssetRegistryMutator)};
         if (Registry == nullptr) {
@@ -490,7 +494,7 @@ bool UWorld::LoadScene(const std::filesystem::path& ScenePath) {
         if (!Loaded) {
             Console::AddLog(Console::STDOutHandle, ELogLevel::Error, ELogCategory::Etc, "Failed to load temporary scene: %s", ScenePath.generic_string().c_str());
         }
-        return Loaded;
+        return Loaded ? FinishLoad() : false;
     }
 
     std::ifstream InputFileStream{ScenePath};
@@ -580,7 +584,7 @@ bool UWorld::LoadScene(const std::filesystem::path& ScenePath) {
         Actor->SetWorld(this);
     }
 
-    return true;
+    return FinishLoad();
 }
 
 void UWorld::HandleMousePickRequest(const FMousePickRequestMessage& Message) {

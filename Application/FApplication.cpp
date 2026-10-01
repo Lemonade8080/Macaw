@@ -167,11 +167,6 @@ bool FApplication::InitializeApplication(FLoadingProgress& Progress, HWND Window
     if (!SceneLoaded) {
         Console::AddLog(Console::STDOutHandle, ELogLevel::Warning, ELogCategory::Etc, "The startup scene failed to load. Initialization will continue with an empty world.");
     }
-    if (SceneLoaded) {
-        if (!mContext.mWorld->GetPickingSubsystem().RebuildAccelerationStructure()) {
-            Console::AddLog(Console::STDOutHandle, ELogLevel::Warning, ELogCategory::Etc, "picking subsystem error.");
-        }
-    }
 
     Progress.SetProgress(0.96f, "Finalizing assets");
     mContext.mAssetRegistry->Finalize();
