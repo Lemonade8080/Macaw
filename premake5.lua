@@ -14,6 +14,7 @@ filter "system:windows"
 filter "configurations:Debug"
     defines { "_DEBUG" }
     symbols "On"
+    editandcontinue "Off"
     runtime "Debug"
 
 filter "configurations:Release"

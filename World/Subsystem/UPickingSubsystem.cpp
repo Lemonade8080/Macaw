@@ -371,11 +371,9 @@ void UPickingSubsystem::SynchronizeProxies() const {
 }
 
 bool UPickingSubsystem::Raycast(const FRay& Ray, UPrimitiveComponent*& OutComponent, float& OutDistance, const FMatrix* CameraWorld) const {
+    const Stat::FScopedPickingStatTimer PickingTimer{};
     SynchronizeProxies();
-    const auto Start = std::chrono::steady_clock::now();
     RaycastAccelerationStructure.Raycast(Ray, OutComponent, OutDistance, CameraWorld);
-    const double Milliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - Start).count();
-    Stat::RecordPickingTime(Milliseconds);
     return OutComponent != nullptr;
 }
 

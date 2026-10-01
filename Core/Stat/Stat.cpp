@@ -25,6 +25,7 @@ namespace {
         std::uint64_t mActiveFrameId{};
         bool mFrameActive{};
         bool mFramePending{};
+        bool mPickingTimerActive{};
     };
 
     FStatState& GetStatState() {
@@ -290,6 +291,24 @@ Stat::FScopedSystemStatTimer::~FScopedSystemStatTimer() {
         const double Milliseconds{ std::chrono::duration<double, std::milli>{ CurrentTime - mStartTime }.count() };
         RecordSample(mStage, Milliseconds, mFrameId);
     }
+}
+
+Stat::FScopedPickingStatTimer::FScopedPickingStatTimer()
+	: mActive{!GetStatState().mPickingTimerActive} {
+    if (mActive) {
+        mStartTime = std::chrono::steady_clock::now();
+        GetStatState().mPickingTimerActive = true;
+    }
+}
+
+Stat::FScopedPickingStatTimer::~FScopedPickingStatTimer() {
+    if (!mActive) {
+        return;
+    }
+
+    const double Milliseconds{std::chrono::duration<double, std::milli>{std::chrono::steady_clock::now() - mStartTime}.count()};
+    GetStatState().mPickingTimerActive = false;
+    RecordPickingTime(Milliseconds);
 }
 
 Stat::FScopedWorldTickStatTimer::FScopedWorldTickStatTimer(std::size_t ActorTickCount)

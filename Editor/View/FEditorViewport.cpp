@@ -13,6 +13,7 @@
 #include "Core/Asset/IAssetRegistry.h"
 #include "Asset/UMesh.h"
 #include "Core/Base/FTransform.h"
+#include "Core/Stat/Stat.h"
 #include "World/AActor.h"
 #include "World/Component/UCameraComponent.h"
 #include "World/FWorldEditorContext.h"
@@ -232,6 +233,7 @@ bool FEditorViewport::TryCalculateDropPosition(const ImVec2& ScreenPosition, FVe
         return false;
     }
 
+    const Stat::FScopedPickingStatTimer PickingTimer{};
     CameraProbe Camera{};
     if (!BuildCameraProbe(Camera)) {
         return false;

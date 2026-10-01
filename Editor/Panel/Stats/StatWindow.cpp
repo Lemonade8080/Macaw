@@ -154,12 +154,12 @@ void DrawStatOverlay(const ImVec2& Min, const ImVec2& Max, FStatDisplayFlags Sta
         const Stat::FPickingStatAverage& Picking{Snapshot.mPicking};
         const Stat::FPickingStats PickingStats{Stat::GetPickingStats()};
         AddRow(Rows, RowCount, "STAT PICKING", 0, HeadingColor, "");
-        AddRow(Rows, RowCount, "Average picking (0.5 s)", 0, TextColor, "%.3f ms", Picking.mAverageMilliseconds);
+        AddRow(Rows, RowCount, "Average picking (0.5 s)", 0, TextColor, "%.5f ms", Picking.mAverageMilliseconds);
         AddRow(Rows, RowCount, "Picking attempts / frame", 0, TextColor, "%.2f", Picking.mAttemptsPerFrame);
-        AddRow(Rows, RowCount, "Picking time / frame", 0, TextColor, "%.3f ms", Picking.mMillisecondsPerFrame);
-        AddRow(Rows, RowCount, "Last picking", 0, TextColor, "%.3f ms", PickingStats.mLastMilliseconds);
+        AddRow(Rows, RowCount, "Picking time / frame", 0, TextColor, "%.5f ms", Picking.mMillisecondsPerFrame);
+        AddRow(Rows, RowCount, "Last picking", 0, TextColor, "%.5f ms", PickingStats.mLastMilliseconds);
         AddRow(Rows, RowCount, "Picking attempts", 0, TextColor, "%llu", static_cast<unsigned long long>(PickingStats.mAttemptCount));
-        AddRow(Rows, RowCount, "Picking total", 0, TextColor, "%.3f ms", PickingStats.mTotalMilliseconds);
+        AddRow(Rows, RowCount, "Picking total", 0, TextColor, "%.5f ms", PickingStats.mTotalMilliseconds);
     }
 
     if (StatFlags.mBObjectSystem) {

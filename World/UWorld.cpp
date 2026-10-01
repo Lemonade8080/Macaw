@@ -585,6 +585,7 @@ bool UWorld::LoadScene(const std::filesystem::path& ScenePath) {
 
 void UWorld::HandleMousePickRequest(const FMousePickRequestMessage& Message) {
     if (Message.mViewportWidth != 0 && Message.mViewportHeight != 0) {
+        const Stat::FScopedPickingStatTimer PickingTimer{};
         const float NdcX{(2.0f * (static_cast<float>(Message.mScreenX) - static_cast<float>(Message.mViewportLeft)) / static_cast<float>(Message.mViewportWidth)) - 1.0f};
         const float NdcY{1.0f - (2.0f * (static_cast<float>(Message.mScreenY) - static_cast<float>(Message.mViewportTop)) / static_cast<float>(Message.mViewportHeight))};
 
@@ -604,9 +605,12 @@ void UWorld::HandleMousePickRequest(const FMousePickRequestMessage& Message) {
             FMatrix CameraWorld{};
             if (!Message.mView.TryInverse(CameraWorld))
                 return;
-            if (GetPickingSubsystem().Raycast(FRay{RayOrigin.ToSimpleMath(), RayDirection.ToSimpleMath()}, NearestPrimitive, NearestDistance, &CameraWorld)) {
+            GetPickingSubsystem().Raycast(FRay{RayOrigin.ToSimpleMath(), RayDirection.ToSimpleMath()}, NearestPrimitive, NearestDistance, &CameraWorld);
+#if defined(MacawEnablePickingLog) && MacawEnablePickingLog
+            if (NearestPrimitive != nullptr) {
                 Console::AddLog(Console::STDOutHandle, ELogLevel::Log, ELogCategory::Etc, "Raycast hit primitive component %f", NearestDistance);
             }
+#endif
 
             AActor* PreviousActor{mEditorContext != nullptr ? mEditorContext->GetSelectedActor() : nullptr};
             AActor* SelectedActor{NearestPrimitive != nullptr ? NearestPrimitive->GetOwner() : nullptr};

@@ -214,6 +214,20 @@ namespace Stat {
         bool mActive{};
     };
 
+    class FScopedPickingStatTimer {
+    public:
+        FScopedPickingStatTimer();
+        ~FScopedPickingStatTimer();
+        FScopedPickingStatTimer(const FScopedPickingStatTimer&) = delete;
+        FScopedPickingStatTimer& operator=(const FScopedPickingStatTimer&) = delete;
+        FScopedPickingStatTimer(FScopedPickingStatTimer&&) = delete;
+        FScopedPickingStatTimer& operator=(FScopedPickingStatTimer&&) = delete;
+
+    private:
+        std::chrono::steady_clock::time_point mStartTime{};
+        bool mActive{};
+    };
+
     class FScopedWorldTickStatTimer {
     public:
         explicit FScopedWorldTickStatTimer(std::size_t ActorTickCount);
